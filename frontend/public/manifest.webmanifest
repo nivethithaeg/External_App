@@ -1,0 +1,21 @@
+{
+  "name": "KickOff: Book sports turfs",
+  "short_name": "KickOff",
+  "description": "Discover and book football, cricket, badminton and more sports turfs near you.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#151515",
+  "theme_color": "#151515",
+  "categories": ["sports", "lifestyle"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Find a turf", "short_name": "Explore", "url": "/venues", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "My bookings", "short_name": "Bookings", "url": "/bookings", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
