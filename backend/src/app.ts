@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { ownerStaffRoutes, staffRoutes } from './routes/staff.js';
 import express from 'express';
@@ -25,7 +26,9 @@ export function createApp(ctx: Ctx) {
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  // the website is served from here too: Google sign-in, Razorpay and Maps load their own scripts and popups,
+  // so the default script-only-from-self policy and the strict opener policy would break them
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' }, contentSecurityPolicy: false, crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, crossOriginEmbedderPolicy: false }));
   const origins = ctx.cfg.CORS_ORIGINS.split(',').map((s) => s.trim());
   app.use(cors({ origin: origins, credentials: true }));
 
@@ -78,6 +81,12 @@ export function createApp(ctx: Ctx) {
   if (!ctx.cfg.SUPABASE_URL) {
     // Local development storage only. Production uses Supabase Storage public URLs.
     app.use('/uploads', express.static(path.resolve('uploads'), { setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff') }));
+  }
+  // The built website (frontend/dist) on every path that is not the API: one address for the site and the API.
+  const site = process.env.FRONTEND_DIST ? path.resolve(process.env.FRONTEND_DIST) : path.resolve('..', 'frontend', 'dist');
+  if (ctx.cfg.NODE_ENV === 'production' && fs.existsSync(path.join(site, 'index.html'))) {
+    app.use(express.static(site, { index: false, maxAge: '1h', setHeaders: (res, file) => { if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); } }));
+    app.get(/^\/(?!api(\/|$)|socket\.io(\/|$)|uploads\/).*/, (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.sendFile(path.join(site, 'index.html')); });
   }
   app.use(notFoundHandler);
   app.use(errorHandler);
