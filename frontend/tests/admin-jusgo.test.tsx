@@ -72,7 +72,7 @@ describe('admin sidebar groups (like JusGo)', () => {
     expect(adminGroups.map((g) => g.label)).toEqual(['Dashboard', 'Venue Owner Approvals', 'Venues & Owners', 'Customers', 'Logs & Reports', 'System']);
     const all = adminGroups.flatMap((g) => g.items.map((i) => i.to));
     expect(new Set(all).size).toBe(all.length);
-    expect(adminGroups[1].items.map((i) => i.label)).toEqual(['Owner applications', 'Profile changes', 'Venue approvals', 'Playing area approvals', 'Listing changes']);
+    expect(adminGroups[1].items.map((i) => i.label)).toEqual(['Owner applications', 'Profile changes', 'Business type changes', 'Venue approvals', 'Playing area approvals', 'Listing changes']);
     expect(adminGroups[3].items.map((i) => i.label)).toEqual(['Customers', 'Bookings', 'Payments', 'Refunds', 'Wallets', 'Reviews', 'Complaints', 'Coupons']);
     expect(all).toEqual(expect.arrayContaining(['/admin/sports', '/admin/revenue', '/admin/team', '/admin/audit']));
   });
@@ -111,5 +111,55 @@ describe('admin verifies the bank account', () => {
     await userEvent.click(within(box).getByRole('button', { name: 'Verify bank account' }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/owners/o1/bank-verification', { verified: true }));
     expect(await within(box).findByText('Verified')).toBeInTheDocument();
+  });
+});
+
+describe('playing area delete requests', () => {
+  it('lists requests with the reason and bookings, approves after a confirm, and turning down needs a reason', async () => {
+    vi.mocked(api.get).mockImplementation((async (url: string, params?: any) => url === '/admin/areas' && params?.deletion === 'pending'
+      ? { areas: [{ id: 'a9', name: 'Court 3', approvalStatus: 'approved', venueId: 'v1', venueName: 'Green Arena', city: 'Erode', ownerName: 'Asha Rao', sports: [], capacity: null, priceRules: 1,
+          deletionStatus: 'pending', deletionReason: 'Turning it into parking', deletionRequestedAt: '2030-01-02T00:00:00Z', upcomingBookings: 2, totalBookings: 9 }] }
+      : { areas: [] }) as any);
+    wrap(<AdminAreaApprovals />);
+    await userEvent.selectOptions(await screen.findByLabelText('Show'), 'del:pending');
+    expect(await screen.findByText('Court 3')).toBeInTheDocument();
+    expect(screen.getByText("Owner's reason: Turning it into parking")).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('2 upcoming bookings are still booked here');
+    window.confirm = () => { throw new Error('no browser confirm box'); };
+    await userEvent.click(screen.getByRole('button', { name: 'Approve delete' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Delete Court 3?' });
+    expect(within(dlg).getByText('No one can book this area anymore.')).toBeInTheDocument(); expect(within(dlg).getByText('Its booking history is kept.')).toBeInTheDocument();
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Delete playing area' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/areas/a9/deletion', { decision: 'approve' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reject request' }));
+    const rej = await screen.findByRole('dialog', { name: 'Reject the delete request for Court 3?' });
+    expect(within(rej).getByText(/not deleted/)).toBeInTheDocument();
+    expect(within(rej).getByRole('button', { name: 'Reject request' })).toBeDisabled();
+    await userEvent.type(within(rej).getByLabelText(/Reason/), 'Has bookings next week');
+    await userEvent.click(within(rej).getByRole('button', { name: 'Reject request' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/areas/a9/deletion', { decision: 'reject', note: 'Has bookings next week' }));
+  });
+});
+
+describe('business type changes', () => {
+  it('shows the old and new type with the details, approves in a pop-up, and rejecting needs a reason', async () => {
+    const { AdminBusinessChanges } = await import('../src/pages/admin/AdminJusgo');
+    vi.mocked(api.get).mockImplementation((async (url: string) => url === '/admin/business-changes'
+      ? { changes: [{ id: 'c1', status: 'pending', fromType: 'individual', toType: 'partnership_pvt_ltd', reason: 'We formed a partnership', ownerId: 'o1', ownerName: 'Arun Kumar', ownerEmail: 'a@x.co', ownerCode: 'VO000012', currentBusinessName: 'Arun Kumar',
+          details: { businessName: 'Arun Sports LLP', pan: 'ABCDE1234F', city: 'Erode', partners: [{ name: 'Meena Ravi', pan: 'BCDEF2345G', aadhaarLast4: '1234', phone: '9876543211' }] } }] }
+      : {}) as any);
+    wrap(<AdminBusinessChanges />);
+    expect(await screen.findByText('Arun Kumar')).toBeInTheDocument();
+    expect(screen.getByText('Partnership / Private Limited Company')).toBeInTheDocument();
+    expect(screen.getByText(/Meena Ravi \(PAN BCDEF2345G, Aadhaar ••••1234/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Approve change' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/business-changes/c1/decision', { decision: 'approve' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    const dlg = await screen.findByRole('dialog');
+    expect(within(dlg).getByRole('button', { name: 'Reject change' })).toBeDisabled();
+    await userEvent.type(within(dlg).getByLabelText(/Reason/), 'Upload the deed');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Reject change' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/business-changes/c1/decision', { decision: 'reject', note: 'Upload the deed' }));
   });
 });

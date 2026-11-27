@@ -27,7 +27,7 @@ const appData = (over: any = {}) => ({
 
 let user: any = OWNER; let app: any = appData(); let routes: Record<string, any> = {};
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('kickoff_token', 't'); user = OWNER; app = appData(); routes = {};
+  vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('playnx_token', 't'); user = OWNER; app = appData(); routes = {};
   vi.mocked(api.post).mockResolvedValue({}); vi.mocked(api.put).mockResolvedValue({});
   vi.mocked(api.get).mockImplementation(async (url: string) => {
     if (url in routes) return routes[url];
@@ -45,15 +45,16 @@ describe('owner entry points', () => {
 
   it('signup validates every field client-side, including matching passwords and a valid mobile number', async () => {
     localStorage.clear(); sessionStorage.clear(); renderAt('/owner/register');
-    const name = await screen.findByLabelText('Full name') as HTMLInputElement;
+    const name = await screen.findByLabelText('First Name') as HTMLInputElement;
     await userEvent.type(name, 'R2D2');
     expect(name.value).toBe('RD'); expect(screen.getByText(/Only letters, spaces, apostrophes/)).toBeInTheDocument(); // digits are not typed, and the reason shows
-    await userEvent.type(screen.getByLabelText('Mobile number'), '123');
-    await userEvent.type(screen.getByLabelText('Email address'), 'nope');
+    await userEvent.type(screen.getByLabelText('Mobile Number'), '123');
+    await userEvent.type(screen.getByLabelText('Email'), 'nope');
     await userEvent.type(screen.getByLabelText('Password'), 'weak');
-    await userEvent.type(screen.getByLabelText('Confirm password'), 'different');
+    await userEvent.type(screen.getByLabelText('Confirm Password'), 'different');
     await userEvent.click(screen.getByRole('button', { name: /Create account/ }));
-    for (const m of [/valid 10-digit mobile/, /valid email/, /At least 8 characters/, /do not match/]) expect(await screen.findByText(m)).toBeInTheDocument();
+    for (const m of [/your last name/, /valid 10-digit mobile/, /valid email/, /At least 8 characters/, /do not match/, /accept the Terms and Conditions/]) expect(await screen.findByText(m)).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
     expect(document.body.textContent).toMatch(/Step 1 of 4/);
   });
 
@@ -88,7 +89,7 @@ describe('owner entry points', () => {
 const refuseChange = async () => {
   const { api } = await import('../src/lib/api');
   const keep = api.defaults.adapter;
-  api.defaults.adapter = async (cfg: any) => { const err: any = new Error('refused'); err.config = cfg; err.response = { status: 403, data: { error: { code: 'owner_not_approved', message: 'Your owner account must be approved by KickOff first.' } }, config: cfg, headers: {} }; throw err; };
+  api.defaults.adapter = async (cfg: any) => { const err: any = new Error('refused'); err.config = cfg; err.response = { status: 403, data: { error: { code: 'owner_not_approved', message: 'Your owner account must be approved by PlaynX first.' } }, config: cfg, headers: {} }; throw err; };
   try { await api.post('/owner/venues', { name: 'x' }); } catch { /* the pop-up is the answer */ } finally { api.defaults.adapter = keep; }
 };
 
@@ -181,8 +182,8 @@ describe('registration wizard', () => {
     await userEvent.click(screen.getByRole('radio', { name: /Partnership \/ Private Limited Company/ }));
     expect(screen.getByLabelText('Registered Business Name')).toBeInTheDocument(); expect(screen.getByLabelText('Business PAN Number')).toBeInTheDocument();
     expect(screen.getByLabelText("Authorized Person's Full Name")).toBeInTheDocument(); expect(screen.getByLabelText("Authorized Person's Phone Number")).toBeInTheDocument();
-    expect(screen.getByLabelText('CIN (Private Limited Company only)')).toBeInTheDocument(); expect(screen.getByText(/Partner \/ Director Details/)).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText('Registered Business Name'), 'Mehta & Co'); await userEvent.type(screen.getByLabelText('Business PAN Number'), 'BAD'); await userEvent.type(screen.getByLabelText('CIN (Private Limited Company only)'), 'XX');
+    expect(screen.getByLabelText('CIN (optional, Private Limited Company only)')).toBeInTheDocument(); expect(screen.getByText(/Partner \/ Director Details/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Registered Business Name'), 'Mehta & Co'); await userEvent.type(screen.getByLabelText('Business PAN Number'), 'BAD'); await userEvent.type(screen.getByLabelText('CIN (optional, Private Limited Company only)'), 'XX');
     await userEvent.type(screen.getByLabelText('Registered Business Address'), '12 Park Road, Bengaluru');
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
     expect(await screen.findByText(/valid PAN, e.g./)).toBeInTheDocument(); expect(screen.getByText(/valid 21-character CIN/)).toBeInTheDocument();
@@ -191,7 +192,7 @@ describe('registration wizard', () => {
     expect(await screen.findByText('Select the state')).toBeInTheDocument(); expect(screen.getByText(/valid 6-digit PIN/)).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('State'), 'Karnataka'); await userEvent.selectOptions(screen.getByLabelText('City'), 'Bengaluru'); await userEvent.type(screen.getByLabelText('PIN code'), '560038');
     await userEvent.clear(screen.getByLabelText('Business PAN Number')); await userEvent.type(screen.getByLabelText('Business PAN Number'), 'abcde1234f');
-    await userEvent.clear(screen.getByLabelText('CIN (Private Limited Company only)'));
+    await userEvent.clear(screen.getByLabelText('CIN (optional, Private Limited Company only)'));
     await userEvent.type(screen.getByLabelText("Authorized Person's Full Name"), ' Arjun Mehta'); await userEvent.type(screen.getByLabelText("Authorized Person's Phone Number"), '9876543210');
     await userEvent.type(screen.getByLabelText('Name'), 'Arjun Mehta'); await userEvent.type(screen.getByLabelText('PAN'), 'abcde1234f'); await userEvent.type(screen.getByLabelText('Aadhaar'), '123456789012'); await userEvent.type(screen.getByLabelText('Contact Number'), '9876543210');
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
@@ -205,20 +206,20 @@ describe('registration wizard', () => {
     renderAt('/owner/application');
     expect(await screen.findByRole('heading', { name: 'Documents' })).toBeInTheDocument();
     expect(screen.getByText(/PDF, JPG, JPEG or PNG, up to 10 MB each/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Authorized person's Aadhaar Card Number", { exact: false })).toBeInTheDocument();
-    expect(screen.getByLabelText("Upload Authorized person's Aadhaar Card Copy", { exact: false })).toBeInTheDocument();
+    expect(screen.getByLabelText("Authorized person's Aadhaar", { exact: false })).toBeInTheDocument();
+    expect(screen.getByLabelText('Upload Aadhaar / Government ID Copy', { exact: false })).toBeInTheDocument();
     expect(screen.queryByLabelText('Identity proof type')).not.toBeInTheDocument(); expect(screen.queryByLabelText(/Upload PAN card/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
     expect(await screen.findByText('Enter the 12-digit Aadhaar number')).toBeInTheDocument(); expect(api.put).not.toHaveBeenCalled();
-    await userEvent.type(screen.getByLabelText("Authorized person's Aadhaar Card Number", { exact: false }), '123412341234');
+    await userEvent.type(screen.getByLabelText("Authorized person's Aadhaar", { exact: false }), '123412341234');
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Aadhaar Card Copy is required/); expect(api.put).not.toHaveBeenCalled(); // the copy is still missing
+    expect(await screen.findByRole('alert')).toHaveTextContent('Aadhaar / Government ID Copy is required'); expect(api.put).not.toHaveBeenCalled(); // the copy is still missing
   });
 
   it('step 5: submit stays disabled until the terms and declaration are accepted, then shows the reference', async () => {
     app = appData({ contact: { ...appData().contact, emailVerified: true }, missing: [], business: { type: 'sole_proprietorship', name: 'Mehta Sports', panMasked: 'AB•••••4F', hasPan: true, address: '12 Park Rd', representativeName: 'Arjun Mehta' },
       identity: { type: 'aadhaar_masked', consentGiven: true, aadhaarMasked: 'XXXXXXXX1234' }, documents: [{ id: 'd1', docType: 'identity_proof', label: 'Aadhaar / Government ID copy', status: 'pending' }] });
-    vi.mocked(api.post).mockImplementation(async (url: string) => (url === '/owner/application/submit' ? { reference: 'KOA-20301201-ZZ99AA', message: 'Your KICKOFF Venue Owner application has been submitted successfully. Our verification team will review your information and notify you about the approval status.' } : {}));
+    vi.mocked(api.post).mockImplementation(async (url: string) => (url === '/owner/application/submit' ? { reference: 'KOA-20301201-ZZ99AA', message: 'Your PlaynX Venue Owner application has been submitted successfully. Our verification team will review your information and notify you about the approval status.' } : {}));
     renderAt('/owner/application');
     expect(await screen.findByRole('heading', { name: 'Review & Submit' })).toBeInTheDocument();
     expect(screen.queryByText('Venue')).not.toBeInTheDocument(); expect(screen.getByText('AB•••••4F')).toBeInTheDocument(); // masked PAN in the summary, no venue block
@@ -277,7 +278,7 @@ describe('a step opens only once the earlier steps are filled in', () => {
     expect(screen.getByLabelText('PAN Number', { exact: false })).not.toHaveAttribute('readonly'); // first entered on this page
     await userEvent.click(screen.getByRole('button', { name: /Edit them in Personal details/ }));
     expect(await screen.findByRole('heading', { name: 'Personal details' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Legal full name', { exact: false })).not.toHaveAttribute('readonly'); // editable on the page where it was first filled
+    expect(screen.getByLabelText('Legal Full Name', { exact: false })).not.toHaveAttribute('readonly'); // editable on the page where it was first filled
     await userEvent.click(await stepButton(/Documents/));
     expect(await screen.findByRole('heading', { name: 'Documents' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Date of Birth', { exact: false })).not.toBeInTheDocument(); // the Documents page does not ask for them again
@@ -368,11 +369,12 @@ describe('reasons are shown at the field', () => {
     localStorage.clear(); sessionStorage.clear();
     vi.mocked(api.post).mockRejectedValue({ response: { data: { error: { code: 'email_taken', message: 'An account with this email address already exists. Log in instead.', details: { field: 'email' } } } } });
     renderAt('/owner/register');
-    await userEvent.type(await screen.findByLabelText('Full name'), 'Arjun Mehta'); await userEvent.type(screen.getByLabelText('Mobile number'), '+919876543210');
-    await userEvent.type(screen.getByLabelText('Email address'), 'taken@x.co'); await userEvent.type(screen.getByLabelText('Password'), 'Passw0rd1'); await userEvent.type(screen.getByLabelText('Confirm password'), 'Passw0rd1');
+    await userEvent.type(await screen.findByLabelText('First Name'), 'Arjun'); await userEvent.type(screen.getByLabelText('Last Name'), 'Mehta'); await userEvent.type(screen.getByLabelText('Mobile Number'), '+919876543210');
+    await userEvent.type(screen.getByLabelText('Email'), 'taken@x.co'); await userEvent.type(screen.getByLabelText('Password'), 'Passw0rd1'); await userEvent.type(screen.getByLabelText('Confirm Password'), 'Passw0rd1');
+    await userEvent.click(screen.getByRole('checkbox', { name: /Terms and Conditions/ }));
     await userEvent.click(screen.getByRole('button', { name: /Create account/ }));
     expect(await screen.findByText('An account with this email address already exists. Log in instead.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Email address')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true');
   });
 });
 
@@ -603,7 +605,7 @@ describe('state → city dropdowns and required markers', () => {
   it('marks the signup and login fields', async () => {
     localStorage.clear(); sessionStorage.clear(); renderAt('/owner/register');
     const star = "after:content-['*']";
-    for (const l of ['Full name', 'Mobile number', 'Email address', 'Password', 'Confirm password']) expect(await screen.findByText(l), l).toHaveClass(star);
+    for (const l of ['First Name', 'Last Name', 'Mobile Number', 'Email', 'Password', 'Confirm Password']) expect(await screen.findByText(l), l).toHaveClass(star);
   });
 });
 
@@ -613,14 +615,14 @@ describe('personal details step', () => {
     app = personalApp(); vi.mocked(api.put).mockResolvedValue({ saved: true });
     renderAt('/owner/application');
     expect(await screen.findByRole('heading', { name: 'Personal details' })).toBeInTheDocument();
-    expect((screen.getByLabelText('Legal full name') as HTMLInputElement).value).toBe('Arjun Mehta'); // from the account
-    expect((screen.getByLabelText('Phone number') as HTMLInputElement).value).toBe('+919800000000');
+    expect((screen.getByLabelText('Legal Full Name') as HTMLInputElement).value).toBe('Arjun Mehta'); // from the account
+    expect((screen.getByLabelText('Phone Number') as HTMLInputElement).value).toBe('+919800000000');
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
     expect(await screen.findByText('Enter your date of birth')).toBeInTheDocument(); expect(screen.getByText('Enter the address')).toBeInTheDocument(); expect(api.put).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText(/^Date of birth/), { target: { value: '1990-05-17' } });
-    await userEvent.type(screen.getByLabelText(/^Address line 1/), '12 Park Road, Indiranagar');
+    fireEvent.change(screen.getByLabelText(/^Date of Birth/), { target: { value: '1990-05-17' } });
+    await userEvent.type(screen.getByLabelText(/^Address Line 1/), '12 Park Road, Indiranagar');
     await userEvent.selectOptions(screen.getByLabelText('State'), 'Karnataka'); await userEvent.selectOptions(screen.getByLabelText('City'), 'Bengaluru');
-    await userEvent.type(screen.getByLabelText('PIN code'), '560038');
+    await userEvent.type(screen.getByLabelText('PIN / Postal Code'), '560038');
     // saving moves on to the business step, which now shows the saved answers
     app = personalApp({ personal: { done: true }, business: { type: null, name: 'Arjun Mehta', hasPan: false, panMasked: null, representativeName: 'Arjun Mehta', dob: '1990-05-17', phone: '+919800000000', address: '12 Park Road, Indiranagar', state: 'Karnataka', city: 'Bengaluru', pincode: '560038', country: 'India' } });
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
@@ -683,10 +685,10 @@ describe('Google accounts create a password in personal details', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
     expect(await screen.findByText('Passwords do not match')).toBeInTheDocument();
     await userEvent.clear(screen.getByLabelText(/^Confirm password/)); await userEvent.type(screen.getByLabelText(/^Confirm password/), 'Passw0rdNew1');
-    fireEvent.change(screen.getByLabelText(/^Date of birth/), { target: { value: '1990-05-17' } });
-    await userEvent.type(screen.getByLabelText(/^Address line 1/), '12 Park Road, Indiranagar');
+    fireEvent.change(screen.getByLabelText(/^Date of Birth/), { target: { value: '1990-05-17' } });
+    await userEvent.type(screen.getByLabelText(/^Address Line 1/), '12 Park Road, Indiranagar');
     await userEvent.selectOptions(screen.getByLabelText('State'), 'Karnataka'); await userEvent.selectOptions(screen.getByLabelText('City'), 'Bengaluru');
-    await userEvent.type(screen.getByLabelText('PIN code'), '560038');
+    await userEvent.type(screen.getByLabelText('PIN / Postal Code'), '560038');
     await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/auth/set-password', { newPassword: 'Passw0rdNew1', confirmPassword: 'Passw0rdNew1' }));
     await waitFor(() => expect(api.put).toHaveBeenCalledWith('/owner/application/personal', expect.objectContaining({ legalName: 'Arjun Mehta' })));
@@ -707,7 +709,7 @@ describe('the bank account pop-up after approval', () => {
     vi.mocked(api.put).mockImplementation((async () => { routes['/owner/bank'] = { accountName: 'Mehta Sports', accountNumber: '••••••••9012', ifsc: 'HDFC0001234', upi: null, verified: false }; return { profile: {} }; }) as any);
     renderAt('/owner/customers');
     const dlg = await screen.findByRole('dialog', { name: 'Add your bank account details' });
-    expect(within(dlg).getByText(/You need to do this to use the portal/)).toBeInTheDocument();
+    expect(within(dlg).getByText('You cannot skip this step.')).toBeInTheDocument(); expect(within(dlg).queryByText(/Your application is approved/)).toBeNull();
     expect(within(dlg).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(screen.getByRole('dialog', { name: 'Add your bank account details' })).toBeInTheDocument(); // Escape does not skip it
@@ -716,6 +718,12 @@ describe('the bank account pop-up after approval', () => {
     expect(within(dlg).getByText(/valid IFSC code/)).toBeInTheDocument(); expect(api.put).not.toHaveBeenCalled();
     await userEvent.type(within(dlg).getByLabelText(/^Account holder name/), 'Mehta Sports'); await userEvent.type(within(dlg).getByLabelText(/^Account number/), '123456789012'); await userEvent.type(within(dlg).getByLabelText(/^IFSC code/), 'hdfc0001234');
     await userEvent.click(within(dlg).getByRole('button', { name: 'Save bank details and continue' }));
+    expect(await within(dlg).findByText('Choose how customers pay when they book.')).toBeInTheDocument(); expect(api.put).not.toHaveBeenCalled(); // asked here, with the bank details
+    await userEvent.click(within(dlg).getByRole('radio', { name: /Advance amount only/ }));
+    await userEvent.type(within(dlg).getByLabelText(/Advance percentage/), '30');
+    expect(within(dlg).getByText(/You have chosen advance payment/).parentElement).toHaveTextContent('they pay only 30%');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Save bank details and continue' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/owner/payment-collection', { mode: 'advance', advancePercent: 30 }));
     await waitFor(() => expect(api.put).toHaveBeenCalledWith('/owner/profile', { bankAccountName: 'Mehta Sports', bankAccountNumber: '123456789012', bankIfsc: 'HDFC0001234' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add your bank account details' })).not.toBeInTheDocument());
   });

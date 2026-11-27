@@ -27,7 +27,7 @@ let calls: { method: string; url: string; body?: any }[] = [];
 let fail: Record<string, any> = {};
 
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('kickoff_token', 't'); calls = []; fail = {};
+  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('playnx_token', 't'); calls = []; fail = {};
   vi.mocked(api.get).mockImplementation(async (url: string) => ({
     '/auth/me': { user: OWNER }, '/owner/application': ACTIVE, '/me/notifications': { notifications: [], unread: 0 }, '/owner/venues/v9': { venue: VENUE }, '/owner/venues': { venues: [] }, '/owner/bank': { accountName: 'Mehta Sports', accountNumber: '••••••••9012', ifsc: 'HDFC0001234', upi: null, verified: false },
     '/sports': { sports: [{ id: 1, name: 'Football' }, { id: 2, name: 'Cricket' }] }, '/facilities': { facilities: [{ id: 1, name: 'Parking' }, { id: 2, name: 'Floodlights' }] },
@@ -214,7 +214,7 @@ describe('the same single page edits a saved venue', () => {
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Send for approval' })).not.toBeInTheDocument();
   });
 
-  it('once KickOff approves it, the owner (not the admin) publishes it, and can unpublish it', async () => {
+  it('once PlaynX approves it, the owner (not the admin) publishes it, and can unpublish it', async () => {
     await open({ status: 'ready' });
     expect(screen.queryByRole('button', { name: 'Send for approval' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Publish venue' }));

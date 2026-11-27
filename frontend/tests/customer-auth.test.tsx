@@ -147,7 +147,7 @@ describe('login page', () => {
 describe('verify account page', () => {
   const login = async () => { vi.mocked(api.post).mockResolvedValueOnce({ token: 't', user: customer }); };
   it('only asks for the email code when the server has no SMS provider, and does not show a mobile box', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     vi.mocked(api.get).mockImplementation(async (url: string) => (url === '/auth/me' ? { user: customer } : url === '/auth/verification-options' ? { email: true, sms: false } : {}));
     wrap(<VerifyAccountPage />, { pathname: '/verify-account', state: { fresh: true } });
     expect(await screen.findByLabelText('Email verification code')).toBeInTheDocument();
@@ -155,11 +155,11 @@ describe('verify account page', () => {
     expect(screen.queryByTestId('verify-phone')).toBeNull();
   });
   it('cannot be skipped: Continue stays disabled until the email is verified, and there is no "verify later"', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     let verified = false;
     vi.mocked(api.get).mockImplementation(async (url: string) => (url === '/auth/me' ? { user: { ...customer, emailVerified: verified } } : url === '/auth/verification-options' ? { email: true, sms: false } : {}));
     vi.mocked(api.post).mockImplementation(async (url: string) => { if (url === '/auth/otp/verify') verified = true; return {}; });
-    wrap(<Routes><Route path="/verify-account" element={<VerifyAccountPage />} /><Route path="/" element={<p>home page</p>} /></Routes>, { pathname: '/verify-account', state: { fresh: true } });
+    wrap(<Routes><Route path="/verify-account" element={<VerifyAccountPage />} /><Route path="/home" element={<p>home page</p>} /></Routes>, { pathname: '/verify-account', state: { fresh: true } });
     const cont = await screen.findByRole('button', { name: 'Continue' });
     expect(cont).toBeDisabled(); expect(screen.queryByRole('button', { name: /later/i })).toBeNull();
     await userEvent.type(await screen.findByLabelText('Email verification code'), '123456'); await userEvent.click(screen.getByRole('button', { name: 'Verify email' }));
@@ -168,20 +168,20 @@ describe('verify account page', () => {
     expect(await screen.findByText('home page')).toBeInTheDocument();
   });
   it('someone who logs in unverified gets a "Send code" button instead of a code that was never sent', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     vi.mocked(api.get).mockImplementation(async (url: string) => (url === '/auth/me' ? { user: customer } : url === '/auth/verification-options' ? { email: true, sms: false } : {}));
     wrap(<VerifyAccountPage />);
     expect(await screen.findByRole('button', { name: 'Send code' })).toBeInTheDocument(); expect(screen.getByText(/We will send a 6-digit code/)).toBeInTheDocument();
   });
   it('lets people through when the server has no email provider at all, since no code could ever arrive', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     vi.mocked(api.get).mockImplementation(async (url: string) => (url === '/auth/me' ? { user: customer } : url === '/auth/verification-options' ? { email: false, sms: false } : {}));
     wrap(<VerifyAccountPage />);
     expect(await screen.findByText(/cannot send email yet/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
   it('verifies the email only after the server accepts the code', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     let verified = false;
     vi.mocked(api.get).mockImplementation(async (url: string) => (url === '/auth/me' ? { user: { ...customer, emailVerified: verified } } : url === '/auth/verification-options' ? { email: true, sms: true } : {}));
     vi.mocked(api.post).mockImplementation(async (url: string, body: any) => { if (url === '/auth/otp/verify') { if (body.code !== '123456') throw { response: { data: { error: { message: 'Incorrect code' } } } }; verified = true; } return {}; });
@@ -226,16 +226,16 @@ describe('returning to the booking after login', () => {
     const first = wrap(<BookingWidget venueId="v1" venueName="Green Arena" areas={areas} />, '/venues/v1');
     await userEvent.click((await screen.findAllByRole('option', { name: /AM|PM/i }))[0]);
     await userEvent.click(screen.getByRole('button', { name: /Log in to book/ }));
-    const saved = JSON.parse(sessionStorage.getItem('kickoff_booking_draft')!);
+    const saved = JSON.parse(sessionStorage.getItem('playnx_booking_draft')!);
     expect(saved).toMatchObject({ venueId: 'v1', areaId: 'a1', sportId: 1, startsAt: slots[0].startsAt });
     expect(screen.getByTestId('where')).toHaveTextContent('/login');
     first.unmount();
     wrap(<BookingWidget venueId="v1" venueName="Green Arena" areas={areas} />, '/venues/v1');
     expect(await screen.findByText('Total')).toBeInTheDocument(); // slot is selected again without the customer doing anything
-    expect(sessionStorage.getItem('kickoff_booking_draft')).toBeNull();
+    expect(sessionStorage.getItem('playnx_booking_draft')).toBeNull();
   });
   it('does not restore a draft that belongs to a different venue', async () => {
-    sessionStorage.setItem('kickoff_booking_draft', JSON.stringify({ venueId: 'other', areaId: 'a1', sportId: 1, date: '2030-01-01', duration: 60, startsAt: slots[0].startsAt, savedAt: Date.now() }));
+    sessionStorage.setItem('playnx_booking_draft', JSON.stringify({ venueId: 'other', areaId: 'a1', sportId: 1, date: '2030-01-01', duration: 60, startsAt: slots[0].startsAt, savedAt: Date.now() }));
     vi.mocked(api.get).mockResolvedValue({ slots, timezone: 'Asia/Kolkata' });
     wrap(<BookingWidget venueId="v1" venueName="Green Arena" areas={areas} />);
     await screen.findAllByRole('option', { name: /AM|PM/i });
@@ -245,7 +245,7 @@ describe('returning to the booking after login', () => {
 
 describe('complete profile (Google sign-up)', () => {
   it('asks a phone-less customer for a valid mobile, saves it, then offers verification', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     const g = { ...customer, phone: null, emailVerified: true };
     vi.mocked(api.get).mockImplementation(async (url: string) => (url === '/auth/me' ? { user: g } : url === '/sports' ? sports : url === '/auth/verification-options' ? { email: true, sms: true } : {}));
     vi.mocked(api.put).mockResolvedValue({ user: { ...g, phone: '+919876543210' } });
@@ -275,17 +275,17 @@ describe('unverified customers are held at the email step', () => {
     expect(await screen.findByText('verify page')).toBeInTheDocument();
   });
   it('keeps an unverified customer out of customer pages and sends them to verify', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     wrap(pages(true), '/bookings');
     expect(await screen.findByText('verify page')).toBeInTheDocument(); expect(screen.queryByText('my bookings')).toBeNull();
   });
   it('does not lock customers out when the server cannot send email', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     wrap(pages(false), '/bookings');
     expect(await screen.findByText('my bookings')).toBeInTheDocument();
   });
   it('lets a verified customer straight in', async () => {
-    sessionStorage.setItem('kickoff_token', 't');
+    sessionStorage.setItem('playnx_token', 't');
     vi.mocked(api.get).mockImplementation(async (url: string) => (url === '/auth/me' ? { user: { ...customer, emailVerified: true } } : url === '/auth/verification-options' ? { email: true, sms: false } : {}));
     wrap(<Routes><Route path="/bookings" element={<RequireRole role="customer"><p>my bookings</p></RequireRole>} /></Routes>, '/bookings');
     expect(await screen.findByText('my bookings')).toBeInTheDocument();

@@ -15,7 +15,7 @@ interface Slot { startsAt: string; endsAt: string; price: number | null; availab
 interface Lock { lockId: string; expiresAt: string; startsAt: string; endsAt: string; price: number }
 
 /** The customer's choices are kept for a few minutes while they log in or sign up, then restored when they come back to this venue. */
-const DRAFT_KEY = 'kickoff_booking_draft';
+const DRAFT_KEY = 'playnx_booking_draft';
 interface Draft { venueId: string; areaId: string; sportId: number; date: string; duration: number; startsAt: string; savedAt: number }
 const readDraft = (venueId: string): Draft | null => {
   try { const d = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null') as Draft | null; if (!d || d.venueId !== venueId || Date.now() - d.savedAt > 30 * 60_000) return null; return d; } catch { return null; }
@@ -23,7 +23,7 @@ const readDraft = (venueId: string): Draft | null => {
 
 const REASON: Record<string, string> = { past: 'Passed', booked: 'Booked', held: 'Booked', blocked: 'Closed', unpriced: 'N/A' };
 
-export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolkata', areaId: wantedArea, onAreaChange, discountPercent = 0, wide = false, startDate, timeFrom, timeTo }: { wide?: boolean; startDate?: string; timeFrom?: string; timeTo?: string; venueId: string; venueName: string; areas: AreaInfo[]; timezone?: string; discountPercent?: number; areaId?: string; onAreaChange?(id: string): void }) {
+export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolkata', areaId: wantedArea, onAreaChange, discountPercent = 0, wide = false, startDate, timeFrom, timeTo, advancePercent }: { wide?: boolean; advancePercent?: number | null; startDate?: string; timeFrom?: string; timeTo?: string; venueId: string; venueName: string; areas: AreaInfo[]; timezone?: string; discountPercent?: number; areaId?: string; onAreaChange?(id: string): void }) {
   const { user } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
@@ -56,7 +56,7 @@ export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolk
     return [s];
   });
   const bookMinutes = selected ? Math.round((new Date(selected.endsAt).getTime() - new Date(selected.startsAt).getTime()) / 60000) : 0;
-  const [coupon, setCoupon] = useState(() => { try { const c = sessionStorage.getItem('kickoff_coupon') ?? ''; if (c) sessionStorage.removeItem('kickoff_coupon'); return c; } catch { return ''; } }); /* a code picked on the Offers page */ const [couponInfo, setCouponInfo] = useState<{ code: string; discount: number } | null>(null);
+  const [coupon, setCoupon] = useState(() => { try { const c = sessionStorage.getItem('playnx_coupon') ?? ''; if (c) sessionStorage.removeItem('playnx_coupon'); return c; } catch { return ''; } }); /* a code picked on the Offers page */ const [couponInfo, setCouponInfo] = useState<{ code: string; discount: number } | null>(null);
   const [couponErr, setCouponErr] = useState('');
   const [lock, setLock] = useState<Lock | null>(null);
   const [busy, setBusy] = useState<'' | 'lock' | 'pay' | 'coupon'>('');
@@ -113,8 +113,12 @@ export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolk
   const disc = (n: number) => Math.round((n - Math.round(n * discountPercent) / 100) * 100) / 100;
   const seriesTotal = Math.round(weekRows.reduce((n, w) => n + (w.price != null ? disc(w.price) : 0), 0) * 100) / 100;
   const grand = weeks > 1 ? seriesTotal : total;
-  const walletApply = useWallet ? Math.min(walletQ.data?.balance ?? 0, grand) : 0;
-  const cardDue = Math.round((grand - walletApply) * 100) / 100;
+  // the venue takes only an advance online: pay that now, the rest at the venue after the game (single bookings)
+  const advanceNow = weeks === 1 && advancePercent && total > 0 ? Math.round(total * Number(advancePercent)) / 100 : null;
+  const payAtVenue = advanceNow != null ? Math.round((total - advanceNow) * 100) / 100 : 0;
+  const dueNow = advanceNow ?? grand;
+  const walletApply = useWallet ? Math.min(walletQ.data?.balance ?? 0, dueNow) : 0;
+  const cardDue = Math.round((dueNow - walletApply) * 100) / 100;
   const requireLogin = () => {
     try { if (selected) sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ venueId, areaId, sportId, date, duration, startsAt: selected.startsAt, savedAt: Date.now() } satisfies Draft)); } catch { /* the customer simply picks the slot again */ }
     nav('/login', { state: { from: loc.pathname + loc.search } });
@@ -150,7 +154,7 @@ export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolk
       bookingId = b.bookingId;
       if (b.order) {
         setBusy('pay');
-        const res = await openCheckout({ keyId: b.order.keyId, orderId: b.order.id, amount: b.order.amount, name: 'KickOff', description: `${venueName} · ${area.name}`, prefill: { name: user.fullName, email: user.email, contact: user.phone ?? undefined } });
+        const res = await openCheckout({ keyId: b.order.keyId, orderId: b.order.id, amount: b.order.amount, name: 'PlaynX', description: `${venueName} · ${area.name}`, prefill: { name: user.fullName, email: user.email, contact: user.phone ?? undefined } });
         await post(`/bookings/${b.bookingId}/verify-payment`, res);
       }
       if (b.order || (b.walletUsed ?? 0) > 0) celebratePayment(); // only now, after the server has confirmed the payment
@@ -190,6 +194,7 @@ export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolk
   return (
     <div className={wide ? 'space-y-5' : 'card space-y-4 p-5'} aria-label="Book a slot">
       <h2 className="text-3xl font-bold">Book a slot</h2>
+      {!!advancePercent && <p role="note" className="rounded-xl border border-brand/40 bg-brand/10 p-3 text-sm"><b>Pay {Number(advancePercent)}% now, the rest at the venue.</b> This venue takes an advance of {Number(advancePercent)}% when you book. You pay the remaining {100 - Number(advancePercent)}% at the venue after your game.</p>}
       <div className={wide ? 'grid grid-cols-2 gap-3 lg:max-w-3xl' : 'grid grid-cols-2 gap-3'}>
         {area?.instant_booking === false && <p role="status" className="col-span-2 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>Booking through the venue.</b> This playing area does not take online payments. Please contact {venueName} to book it.</p>}
         <div className="col-span-2"><Select label="Playing area" value={areaId} onChange={(e) => pickArea(e.target.value)}>{areas.map((a) => <option key={a.id} value={a.id}>{a.name}{a.surface ? ` · ${a.surface}` : ''}{a.sports.length ? ` (${a.sports.map((x) => x.name).join(', ')})` : ''}</option>)}</Select></div>
@@ -240,7 +245,7 @@ export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolk
       {lock && <p className="rounded-xl bg-warn/10 px-3 py-2 text-center text-sm text-warn" role="timer">Slot held for you: {mm}:{ss}</p>}
       {error && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
       <Button className="w-full !py-3 text-base" disabled={!selected || area?.instant_booking === false} loading={busy === 'lock' || busy === 'pay'} onClick={() => (user ? setSummary(true) : book())}>
-        {!user ? 'Log in to book' : busy === 'pay' ? 'Complete payment…' : total === 0 && selected ? 'Review free booking' : `Review & pay ${selected ? money(total) : ''}`}
+        {!user ? 'Log in to book' : busy === 'pay' ? 'Complete payment…' : total === 0 && selected ? 'Review free booking' : `Review & pay ${selected ? money(advanceNow ?? total) : ''}`}
       </Button>
       <Modal open={summary && !!selected && !!area} onClose={() => setSummary(false)} title="Confirm your booking">
         {selected && area && (<div className="space-y-4">
@@ -270,8 +275,12 @@ export function BookingWidget({ venueId, venueName, areas, timezone = 'Asia/Kolk
               <div className="flex justify-between"><dt className="text-muted">Price</dt><dd>{money(subtotal)}</dd></div>
               {venueDiscount > 0 && <div className="flex justify-between text-ok"><dt>Venue discount ({discountPercent}% off)</dt><dd>−{money(venueDiscount)}</dd></div>}
               {couponInfo && <div className="flex justify-between text-ok"><dt>Coupon ({couponInfo.code})</dt><dd>−{money(couponInfo.discount)}</dd></div>}</>)}
+            {advanceNow != null && (<>
+              <div className="flex justify-between border-t border-line pt-2"><dt className="text-muted">Booking total</dt><dd>{money(total)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Pay now: advance ({Number(advancePercent)}%)</dt><dd>{money(advanceNow)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Pay at the venue after the game</dt><dd>{money(payAtVenue)}</dd></div></>)}
             {walletApply > 0 && <div className="flex justify-between text-ok"><dt>From your wallet</dt><dd>−{money(walletApply)}</dd></div>}
-            <div className="flex justify-between border-t border-line pt-2 text-lg font-bold"><dt>Total to pay</dt><dd className="font-display text-2xl text-[rgb(var(--brand-text))]">{money(cardDue)}</dd></div></dl>
+            <div className="flex justify-between border-t border-line pt-2 text-lg font-bold"><dt>{advanceNow != null ? 'Pay now' : 'Total to pay'}</dt><dd className="font-display text-2xl text-[rgb(var(--brand-text))]">{money(cardDue)}</dd></div></dl>
           <p className="text-xs text-muted">The slot is held for you while you pay. Free cancellation up to the venue's cancellation window; payments are secured by Razorpay.</p>
           <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setSummary(false)}>Back</Button>
             <Button disabled={weeks > 1 && (seriesLoading || seriesBad > 0)} onClick={() => { setSummary(false); book(); }}>{cardDue === 0 ? 'Confirm booking' : `Confirm and pay ${money(cardDue)}`}</Button></div>

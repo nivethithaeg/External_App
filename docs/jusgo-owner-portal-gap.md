@@ -1,9 +1,9 @@
-# JusGo venue-owner portal vs KickOff
+# JusGo venue-owner portal vs PlaynX
 
 Source: the public JS of https://jusgo.in (owner nav, page titles, form labels). ✅ done · 🟡 partly · ❌ not built.
 
 ## Sign-up and onboarding
-| JusGo | KickOff |
+| JusGo | PlaynX |
 |---|---|
 | Sign-up form (first/last name, email, mobile, password, confirm, terms, email OTP) | ✅ |
 | Google sign-up creates an owner account on owner pages | ✅ |
@@ -17,7 +17,7 @@ Source: the public JS of https://jusgo.in (owner nav, page titles, form labels).
 | 30-day free trial and Subscription plans | 🟡 trial + plans from admin + payment history shown; paying is "checkout unavailable" like JusGo before prices are set; nothing is locked after the trial |
 
 ## Portal pages
-| JusGo page | KickOff | |
+| JusGo page | PlaynX | |
 |---|---|---|
 | Dashboard | Overview (cards, open slots today, revenue, status chart, shortcuts) | ✅ |
 | Venues | My venues | ✅ |

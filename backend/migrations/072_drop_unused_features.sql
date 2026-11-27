@@ -1,4 +1,4 @@
--- Features KickOff does not use, removed with their tables:
+-- Features PlaynX does not use, removed with their tables:
 --   add-ons (extras sold with a booking): venue_addons, booking_addons
 --   Find a Game: open_games, open_game_players
 --   split payments (already removed from the app): booking_shares, and payments.share_id that pointed at it

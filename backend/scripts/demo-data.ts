@@ -4,14 +4,14 @@ import type { Db } from '../src/db.js';
 /**
  * OPTIONAL development data so the UI has something to show: one verified owner, two approved venues with
  * areas, pricing and opening hours, and one admin. Never run automatically in production.
- * Logins: admin@kickoff.local / owner@kickoff.local (password from DEMO_PASSWORD, default shown in the console).
+ * Logins: admin@playnx.local / owner@playnx.local (password from DEMO_PASSWORD, default shown in the console).
  */
-export async function seedDemo(db: Db, password = 'Kickoff@12345') {
-  const exists = await db.query(`SELECT 1 FROM users WHERE email='owner@kickoff.local'`);
+export async function seedDemo(db: Db, password = 'PlaynX@12345') {
+  const exists = await db.query(`SELECT 1 FROM users WHERE email='owner@playnx.local'`);
   if (exists.rows[0]) return false;
   const hash = await bcrypt.hash(password, 10);
-  await db.query(`INSERT INTO users (email, password_hash, full_name, role, admin_role, email_verified) VALUES ('admin@kickoff.local',$1,'Platform Admin','admin','super_admin',true)`, [hash]);
-  const owner = (await db.query(`INSERT INTO users (email, password_hash, full_name, role, email_verified, phone) VALUES ('owner@kickoff.local',$1,'Arjun Mehta','owner',true,'+919800000001') RETURNING id`, [hash])).rows[0];
+  await db.query(`INSERT INTO users (email, password_hash, full_name, role, admin_role, email_verified) VALUES ('admin@playnx.local',$1,'Platform Admin','admin','super_admin',true)`, [hash]);
+  const owner = (await db.query(`INSERT INTO users (email, password_hash, full_name, role, email_verified, phone) VALUES ('owner@playnx.local',$1,'Arjun Mehta','owner',true,'+919800000001') RETURNING id`, [hash])).rows[0];
   await db.query(`INSERT INTO owner_profiles (user_id, business_name, verification_status) VALUES ($1,'Mehta Sports Ventures','verified')`, [owner.id]);
   const sports = Object.fromEntries((await db.query('SELECT id, slug FROM sports')).rows.map((s: any) => [s.slug, s.id]));
   const facilities = (await db.query('SELECT id FROM facilities')).rows.map((f: any) => f.id);

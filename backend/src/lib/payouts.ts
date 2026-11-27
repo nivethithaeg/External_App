@@ -30,7 +30,7 @@ export function createRazorpayXPayouts(cfg: Config): PayoutProvider {
         const contact = await call('/contacts', { name: r.name, type: 'vendor', reference_id: r.ownerId });
         fund = (await call('/fund_accounts', { contact_id: contact.id, account_type: 'bank_account', bank_account: { name: r.name, ifsc: r.ifsc, account_number: r.accountNumber } })).id as string;
       }
-      const p = await call('/payouts', { account_number: cfg.RAZORPAYX_ACCOUNT_NUMBER, fund_account_id: fund, amount: Math.round(r.amountInr * 100), currency: 'INR', mode: 'IMPS', purpose: 'payout', queue_if_low_balance: true, reference_id: r.payoutId, narration: 'KickOff payout' }, r.payoutId);
+      const p = await call('/payouts', { account_number: cfg.RAZORPAYX_ACCOUNT_NUMBER, fund_account_id: fund, amount: Math.round(r.amountInr * 100), currency: 'INR', mode: 'IMPS', purpose: 'payout', queue_if_low_balance: true, reference_id: r.payoutId, narration: 'PlaynX payout' }, r.payoutId);
       return { id: p.id as string, status: p.status as string, fundAccountId: fund };
     },
   };
@@ -79,7 +79,7 @@ export async function settlePayout(ctx: Ctx, gatewayPayoutId: string, outcome: {
   const row = r.rows[0];
   if (!row) return;
   await ctx.notifier.notify(row.owner_id, { title: outcome.ok ? 'Payout sent' : 'Payout failed', type: 'payout', email: true,
-    body: outcome.ok ? `Your payout of ₹${row.amount} has been sent to your bank account.` : `Your payout of ₹${row.amount} could not be completed (${outcome.reason}). KickOff will retry.` });
+    body: outcome.ok ? `Your payout of ₹${row.amount} has been sent to your bank account.` : `Your payout of ₹${row.amount} could not be completed (${outcome.reason}). PlaynX will retry.` });
 }
 
 /** Optional scheduled job: pays every owner whose released balance reaches the minimum. Off unless an admin turns it on and the bank account is set up. */

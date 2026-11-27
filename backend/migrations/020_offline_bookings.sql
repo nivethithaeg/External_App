@@ -1,5 +1,5 @@
 -- Offline (walk-in) bookings: an owner books a slot for someone who is not using the app. There is no customer account and no online
--- payment, so the customer's details are kept on the booking itself, and KickOff takes no commission and owes the owner nothing for it.
+-- payment, so the customer's details are kept on the booking itself, and PlaynX takes no commission and owes the owner nothing for it.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'online' CHECK (source IN ('online','offline'));
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS walkin_name text;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS walkin_phone text;

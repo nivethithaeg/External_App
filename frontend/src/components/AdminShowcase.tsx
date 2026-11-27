@@ -3,11 +3,11 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { CountUp } from './Motion';
 import { cx } from '../lib/utils';
 
-export const ORANGE = '#FF6A00';
-export const AMBER = '#FF8C32';
+export const ORANGE = '#7200FF';
+export const AMBER = '#A100FF';
 
 /* ------------------------------------------------------------------ Intro */
-const SEEN = 'kickoff_admin_intro_seen';
+const SEEN = 'playnx_admin_intro_seen';
 /** One short opening per browser session: black screen, "Welcome to Admin Portal" fading up with an orange glow, then the dashboard zooms in underneath. Click or Esc skips it. */
 export function useAdminIntro(): { active: boolean; base: number; overlay: React.ReactNode } {
   const reduce = useReducedMotion();
@@ -17,11 +17,11 @@ export function useAdminIntro(): { active: boolean; base: number; overlay: React
   const overlay = (
     <AnimatePresence>
       {active && (
-        <motion.div key="intro" aria-hidden="true" onClick={done} className="fixed inset-0 z-[90] grid cursor-pointer place-items-center bg-[#080808]" initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: 'easeInOut' }}>
-          <motion.div className="pointer-events-none absolute h-72 w-72 rounded-full blur-3xl" style={{ background: 'rgb(255 106 0 / .28)' }} initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1.15 }} transition={{ duration: 1.8, ease: 'easeOut' }} />
+        <motion.div key="intro" aria-hidden="true" onClick={done} className="fixed inset-0 z-[90] grid cursor-pointer place-items-center bg-[#070D33]" initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: 'easeInOut' }}>
+          <motion.div className="pointer-events-none absolute h-72 w-72 rounded-full blur-3xl" style={{ background: 'rgb(114 0 255 / .28)' }} initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1.15 }} transition={{ duration: 1.8, ease: 'easeOut' }} />
           <motion.div className="relative text-center" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ scale: 1.08 }} transition={{ duration: 0.9, ease: 'easeOut' }}>
             <p className="mb-2 text-sm font-semibold uppercase tracking-[.35em] text-white/60 sm:text-base">Welcome to</p>
-            <h1 className="font-display text-6xl font-extrabold tracking-tight text-white sm:text-8xl">Admin <span style={{ color: ORANGE, textShadow: '0 0 28px rgb(255 106 0 / .6)' }}>Portal</span></h1>
+            <h1 className="font-display text-6xl font-extrabold tracking-tight text-white sm:text-8xl">Admin <span style={{ color: ORANGE, textShadow: '0 0 28px rgb(114 0 255 / .6)' }}>Portal</span></h1>
           </motion.div>
         </motion.div>)}
     </AnimatePresence>);
@@ -69,8 +69,8 @@ export function LineChart({ labels, series, focus, delay = 0, height = 260 }: { 
               {s.area && <motion.path d={s.area} fill={`url(#${uid}-${s.key})`} initial={{ opacity: 0 }} animate={{ opacity: on ? 1 : 0.5 }} transition={reduce ? { duration: 0 } : { duration: 1, delay: delay + 1.1 }} />}
               <motion.path d={s.line} fill="none" stroke={s.color} strokeWidth={on ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" style={{ filter: on ? `drop-shadow(0 0 6px ${s.color}88)` : undefined }} initial={{ pathLength: reduce ? 1 : 0 }} animate={{ pathLength: 1 }} transition={t(0)} />
             </g>); })}
-          {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={top} y2={bottom} stroke="#FF6A00" strokeOpacity=".5" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
-          {hover !== null && shaped.map((s) => <circle key={s.key} cx={x(hover)} cy={s.pts[hover]?.[1] ?? bottom} r="4.5" fill="#080808" stroke={s.color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" />)}
+          {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={top} y2={bottom} stroke="#7200FF" strokeOpacity=".5" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+          {hover !== null && shaped.map((s) => <circle key={s.key} cx={x(hover)} cy={s.pts[hover]?.[1] ?? bottom} r="4.5" fill="#070D33" stroke={s.color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" />)}
         </svg>
         <AnimatePresence>{hover !== null && (
           <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }} className="pointer-events-none absolute top-1 rounded-xl border border-line bg-[#121212]/95 px-3 py-2 text-xs shadow-[0_8px_24px_-8px_#000]" style={{ left: `${(x(hover) / W) * 100}%`, transform: `translateX(${hover > n / 2 ? '-105%' : '5%'})` }} aria-hidden="true">
@@ -92,7 +92,7 @@ export function ProgressRing({ value, label, hint, delay = 0, size = 132 }: { va
     <div className="flex items-center gap-4">
       <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`${label}: ${Math.round(pct)} percent`}>
         <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90"><circle cx="60" cy="60" r={r} fill="none" stroke="#2a2a2a" strokeWidth="10" />
-          <motion.circle cx="60" cy="60" r={r} fill="none" stroke={ORANGE} strokeWidth="10" strokeLinecap="round" strokeDasharray={c} style={{ filter: 'drop-shadow(0 0 6px rgb(255 106 0 / .55))' }}
+          <motion.circle cx="60" cy="60" r={r} fill="none" stroke={ORANGE} strokeWidth="10" strokeLinecap="round" strokeDasharray={c} style={{ filter: 'drop-shadow(0 0 6px rgb(114 0 255 / .55))' }}
             initial={{ strokeDashoffset: reduce ? c * (1 - pct / 100) : c }} animate={{ strokeDashoffset: c * (1 - pct / 100) }} transition={reduce ? { duration: 0 } : { duration: 1.4, delay, ease: 'easeOut' }} /></svg>
         <div className="absolute inset-0 grid place-items-center font-display text-3xl font-bold text-white"><span><CountUp value={pct} format={(n) => `${Math.round(n)}%`} duration={1.4} /></span></div>
       </div>
@@ -103,5 +103,5 @@ export function ProgressRing({ value, label, hint, delay = 0, size = 132 }: { va
 
 /** A thin orange line that sweeps across the top of a card when it is the focused one. */
 export function AccentLine({ on }: { on: boolean }) {
-  return <span aria-hidden="true" className={cx('absolute inset-x-5 top-0 h-[2px] origin-left rounded bg-gradient-to-r from-[#FF6A00] to-[#FF8C32] transition-transform duration-700 ease-out', on ? 'scale-x-100' : 'scale-x-0')} />;
+  return <span aria-hidden="true" className={cx('absolute inset-x-5 top-0 h-[2px] origin-left rounded bg-gradient-to-r from-[#7200FF] to-[#A100FF] transition-transform duration-700 ease-out', on ? 'scale-x-100' : 'scale-x-0')} />;
 }

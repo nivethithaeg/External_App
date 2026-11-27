@@ -137,7 +137,7 @@ export function VenueForm({ venue }: { venue?: any }) {
       try { await p.fn(); m.done.add(p.key); mark(p.key, 'done'); } catch (err) { mark(p.key, 'failed', apiError(err)); setBusy(false); return; }
     }
     qc.invalidateQueries({ queryKey: ['owner-venues'] }); qc.invalidateQueries({ queryKey: ['owner-overview'] }); qc.invalidateQueries({ queryKey: ['owner-areas'] }); qc.invalidateQueries({ queryKey: ['owner-venue', m.venueId] });
-    toast(m.published ? 'Sent for approval. Now set its prices and opening hours while KickOff reviews it' : editing && ['approved', 'ready'].includes(venue.status) ? (m.contactOnly ? 'Contact numbers updated. They are live now' : m.pending === false ? 'Changes saved' : 'Changes sent for approval. Customers keep seeing the current version until KickOff approves them. Contact numbers are not held back: they are live now') : 'Changes saved');
+    toast(m.published ? 'Sent for approval. Now set its prices and opening hours while PlaynX reviews it' : editing && ['approved', 'ready'].includes(venue.status) ? (m.contactOnly ? 'Contact numbers updated. They are live now' : m.pending === false ? 'Changes saved' : 'Changes sent for approval. Customers keep seeing the current version until PlaynX approves them. Contact numbers are not held back: they are live now') : 'Changes saved');
     if (editing) { made.current = { venueId: m.venueId, areaId: m.areaId, done: new Set() }; setMedia([]); setBill(null); setLand(null); setGeoVideo(null); setPano(null); setExtra({ ...extra, file: null }); setSteps(null); setBusy(false); }
     else { toast('Venue created. Send it for approval when it is ready. You can add playing areas, prices and hours meanwhile.'); nav('/owner/venues'); }
   }
@@ -154,9 +154,9 @@ export function VenueForm({ venue }: { venue?: any }) {
   return (
     <div className="space-y-6">
       {!editing && <><PageHeader title="Add venue" subtitle="The details needed to create your venue, on one page. Fields marked * are required." />
-        <p className="rounded-xl border border-line bg-surface p-3 text-sm">Fill in the details, then press <b>Create venue</b>. KickOff checks the photos and documents before your venue goes live; the venue stays inactive until it is approved. Playing areas, prices and opening hours can be added at any time (they are needed before you publish).</p></>}
-      {editing && venue.pendingChange && <p role="status" className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>Changes waiting for approval.</b> Customers still see the approved version of this venue. They will see your changes once KickOff approves them.</p>}
-      {locked && <p role="status" className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>Sent for approval.</b> Your details were sent to KickOff and can't be changed while they are reviewed. Set the venue's <Link className="font-semibold underline" to={`/owner/pricing?venue=${venue.id}`}>prices</Link> and <Link className="font-semibold underline" to={`/owner/hours?venue=${venue.id}`}>opening hours</Link> now; the admin needs them to approve. You'll be told the decision. If changes are needed, the venue opens for editing again.</p>}
+        <p className="rounded-xl border border-line bg-surface p-3 text-sm">Fill in the details, then press <b>Create venue</b>. PlaynX checks the photos and documents before your venue goes live; the venue stays inactive until it is approved. Playing areas, prices and opening hours can be added at any time (they are needed before you publish).</p></>}
+      {editing && venue.pendingChange && <p role="status" className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>Changes waiting for approval.</b> Customers still see the approved version of this venue. They will see your changes once PlaynX approves them.</p>}
+      {locked && <p role="status" className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>Sent for approval.</b> Your details were sent to PlaynX and can't be changed while they are reviewed. Set the venue's <Link className="font-semibold underline" to={`/owner/pricing?venue=${venue.id}`}>prices</Link> and <Link className="font-semibold underline" to={`/owner/hours?venue=${venue.id}`}>opening hours</Link> now; the admin needs them to approve. You'll be told the decision. If changes are needed, the venue opens for editing again.</p>}
       {editing && <p className="text-sm text-muted">Everything about this venue is on this page. Change what you need and press save. Fields marked <span className="font-bold text-danger">*</span> are required.</p>}
 
       <fieldset disabled={locked} aria-label="Venue details form" className={`m-0 min-w-0 space-y-6 border-0 p-0 ${locked ? 'opacity-70' : ''}`}>
@@ -191,7 +191,7 @@ export function VenueForm({ venue }: { venue?: any }) {
         <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Facilities</p><Chips items={facQ.data?.facilities ?? []} value={facilityIds} onChange={setFacilityIds} /></div>
       </Section>}
 
-      <Section n={editing ? 4 : 3} title={editing ? 'Photos & video' : 'Photos and documents'} required hint={editing ? 'At least one photo is required. The first photo becomes the cover. JPG, PNG or WebP up to 8 MB; MP4 or WebM video up to 50 MB.' : "KickOff checks these before your venue goes live. The venue stays inactive until it is approved. Venue photos: at least 1 (the first is the cover), JPG, PNG or WebP up to 8 MB."}>
+      <Section n={editing ? 4 : 3} title={editing ? 'Photos & video' : 'Photos and documents'} required hint={editing ? 'At least one photo is required. The first photo becomes the cover. JPG, PNG or WebP up to 8 MB; MP4 or WebM video up to 50 MB.' : "PlaynX checks these before your venue goes live. The venue stays inactive until it is approved. Venue photos: at least 1 (the first is the cover), JPG, PNG or WebP up to 8 MB."}>
         <div data-invalid={errs.photos ? 'true' : undefined}>
           {savedImages.length > 0 && <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5" aria-label="Saved photos">{savedImages.map((m) => (
             <div key={m.id} className="group relative aspect-video overflow-hidden rounded-lg border border-line">{m.kind === 'video' ? <video src={m.url} className="h-full w-full object-cover" muted /> : <img src={m.url} alt="Saved venue" className="h-full w-full object-cover" />}
@@ -205,7 +205,7 @@ export function VenueForm({ venue }: { venue?: any }) {
         </div>
       </Section>
 
-      <Section n={editing ? 5 : 4} title="Documents" hint="Reviewed by KickOff. PDF, JPG or PNG up to 10 MB. Stored privately.">
+      <Section n={editing ? 5 : 4} title="Documents" hint="Reviewed by PlaynX. PDF, JPG or PNG up to 10 MB. Stored privately.">
         <div className="space-y-3">
           <GeoVideoCapture value={geoVideo} onChange={setGeoVideo} error={errs.geoVideo} disabled={busy} />
           {savedGeoVideo && !geoVideo && <p className="text-xs text-ok">✓ A geo-tagged video is already saved for this venue.</p>}

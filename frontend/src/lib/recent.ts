@@ -1,6 +1,6 @@
 /** Venues this customer looked at recently. Kept in the browser only: it is a convenience, not an account record. */
 export interface RecentVenue { id: string; name: string; city: string; cover: string | null }
-const KEY = 'kickoff_recent_venues';
+const KEY = 'playnx_recent_venues';
 
 export function recentVenues(): RecentVenue[] {
   try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v.slice(0, 4) : []; } catch { return []; }

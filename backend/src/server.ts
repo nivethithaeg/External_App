@@ -1,3 +1,5 @@
+import { withFileEncryption } from './lib/fileCrypto.js';
+import { createJusgoClient } from './lib/jusgo.js';
 import http from 'node:http';
 import { loadConfig } from './config.js';
 import { createPgDb } from './db.js';
@@ -25,7 +27,7 @@ const realtime = { current: noopRealtime };
 const proxyRealtime = { toVenue: (...a: [string, string, unknown]) => realtime.current.toVenue(...a), toUser: (...a: [string, string, unknown]) => realtime.current.toUser(...a) };
 const mailer = createMailer(cfg);
 const ctx: Ctx = {
-  db, cfg, google: createGoogleVerifier(cfg), mailer, sms: createSms(cfg), gateway: createRazorpayGateway(cfg), storage: createStorage(cfg),
+  db, cfg, google: createGoogleVerifier(cfg), mailer, sms: createSms(cfg), gateway: createRazorpayGateway(cfg), storage: withFileEncryption(createStorage(cfg), cfg.DATA_ENCRYPTION_KEY || cfg.JWT_SECRET, [cfg.JWT_SECRET]), jusgo: createJusgoClient(cfg),
   realtime: proxyRealtime, notifier: createNotifier(db, proxyRealtime, mailer, createPush(cfg)), now: () => new Date(),
   payouts: cfg.PAYOUTS_TEST_MODE === 'true' && cfg.NODE_ENV !== 'production' && !cfg.RAZORPAYX_ACCOUNT_NUMBER ? createTestPayouts() : createRazorpayXPayouts(cfg),
 };
@@ -38,7 +40,7 @@ realtime.current = attachRealtime(server, cfg);
 const payoutTimer = setInterval(() => runAutoPayouts(ctx).catch((e) => console.error('[auto-payouts]', e)), 60 * 60_000);
 setTimeout(() => runAutoPayouts(ctx).then((n) => n && console.log(`[auto-payouts] ${n} payout(s)${ctx.payouts?.test ? ' (TEST, no real transfer)' : ''}`)).catch((e) => console.error('[auto-payouts]', e)), 15_000); // and once soon after start
 const timer = setInterval(() => runMaintenance(ctx).catch((e) => console.error('[maintenance]', e)), 30_000);
-server.listen(cfg.PORT, () => console.log(`KickOff API listening on :${cfg.PORT} (${cfg.NODE_ENV})`));
+server.listen(cfg.PORT, () => console.log(`PlaynX API listening on :${cfg.PORT} (${cfg.NODE_ENV})`));
 
 const shutdown = () => { clearInterval(timer); server.close(() => db.close().then(() => process.exit(0))); setTimeout(() => process.exit(1), 10_000).unref(); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

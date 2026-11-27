@@ -57,13 +57,33 @@ export function CountUp({ value, format = (n: number) => String(Math.round(n)), 
   return <span ref={ref}>{format(n)}</span>;
 }
 
+/**
+ * A dashboard number: counts up from 0 the first time it is on screen, then glides from the old value to the new one
+ * whenever the data changes (a refresh). It never runs on its own. Reduced motion shows the value at once.
+ */
+export function AnimatedNumber({ value, format = (n: number) => String(Math.round(n)), duration = 1.1 }: { value: number; format?: (n: number) => string; duration?: number }) {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLSpanElement>(null);
+  const seen = useSeen(ref);
+  const still = reduce || !canAnimate();
+  const [n, setN] = useState(still ? value : 0);
+  const shown = useRef(still ? value : 0);
+  useEffect(() => {
+    if (still) { shown.current = value; setN(value); return; }
+    if (!seen || shown.current === value) return;
+    const c = animate(shown.current, value, { duration, ease: [0.22, 1, 0.36, 1], onUpdate: (x) => { shown.current = x; setN(x); } });
+    return () => c.stop();
+  }, [seen, value, still, duration]);
+  return <span ref={ref} className="tabular-nums">{format(n)}</span>;
+}
+
 /** Cycles through a list of words with a small slide, for headlines like "Find your next ___ turf". */
 export function RotatingWord({ words, every = 2200 }: { words: string[]; every?: number }) {
   const reduce = useReducedMotion();
   const [i, setI] = useState(0);
   useEffect(() => { if (reduce || words.length < 2) return; const t = setInterval(() => setI((x) => (x + 1) % words.length), every); return () => clearInterval(t); }, [words.length, every, reduce]);
   if (words.length === 0) return null;
-  return <span key={words[i % words.length]} className="inline-block animate-rise font-extrabold text-[#FF6B22]">{words[i % words.length]}</span>;
+  return <span key={words[i % words.length]} className="inline-block animate-rise font-extrabold text-[#7200FF]">{words[i % words.length]}</span>;
 }
 
 /** An icon that pops in with a little wiggle when it first appears. */
@@ -96,7 +116,7 @@ export function CopyCode({ code }: { code: string }) {
   return (
     <button type="button" aria-label={`Copy code ${code}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard?.writeText(code).then(() => { setDone(true); setBurst((n) => n + 1); setTimeout(() => setDone(false), 1800); }).catch(() => {}); }}
       className="relative rounded-md border border-line px-2 py-0.5 text-[11px] font-semibold text-muted transition hover:border-brand hover:text-ink active:scale-95">
-      {done ? <span key="ok" className="inline-block animate-pop text-ok">✓ Copied</span> : 'Copy'}<Burst fire={burst} glyphs={['■', '▮', '★']} colors={['#43C85A', '#FF6B22', '#FFFFFF', '#B8BCC2']} count={12} size={8} /></button>
+      {done ? <span key="ok" className="inline-block animate-pop text-ok">✓ Copied</span> : 'Copy'}<Burst fire={burst} glyphs={['■', '▮', '★']} colors={['#43C85A', '#7200FF', '#FFFFFF', '#B8BCC2']} count={12} size={8} /></button>
   );
 }
 
@@ -119,7 +139,7 @@ export function useTilt(max = 5) {
 }
 
 /** A short burst of particles from the middle of its parent. Change `fire` to set it off. */
-export function Burst({ fire, glyphs = ['♥'], colors = ['#FF6B22', '#43C85A', '#FFFFFF'], count = 8, size = 12 }: { fire: number; glyphs?: string[]; colors?: string[]; count?: number; size?: number }) {
+export function Burst({ fire, glyphs = ['♥'], colors = ['#7200FF', '#43C85A', '#FFFFFF'], count = 8, size = 12 }: { fire: number; glyphs?: string[]; colors?: string[]; count?: number; size?: number }) {
   const reduce = useReducedMotion();
   if (!fire || reduce) return null;
   return (

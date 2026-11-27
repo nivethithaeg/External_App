@@ -9,6 +9,9 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  APP_URL: z.string().default(''), // the website address used in email links and images; defaults to the first CORS origin
+  SUPPORT_EMAIL: z.string().default('playnx.official@gmail.com'), // shown in emails as "Need help? Contact us at ..."
+  SUPPORT_PHONE: z.string().default('+91 90958 21333'), // shown in emails next to the support email
   PUBLIC_API_URL: z.string().default('http://localhost:4000'),
   SUPABASE_URL: z.string().default(''),
   SUPABASE_SERVICE_ROLE_KEY: z.string().default(''),
@@ -34,12 +37,18 @@ const schema = z.object({
   ERROR_WEBHOOK_URL: z.string().default(''), // optional: post server errors to a Slack/Discord/Teams webhook
   // test payouts: with no RazorpayX account, money ready for an owner is marked paid automatically as a TEST (no real transfer). Never in production.
   PAYOUTS_TEST_MODE: z.enum(['true', 'false']).default('false'),
+  ADMIN_MFA: z.enum(['true', 'false']).default('true'), // admins sign in with password + an authenticator app code
+  JUSGO_API_URL: z.string().default('https://api.jusgo.in/functions/v1/partner-api'),
+  JUSGO_API_KEY: z.string().default(''), // <client_id>.<secret> (jsg_live_ / jsg_test_); backend only
+  JUSGO_WEBHOOK_SECRET: z.string().default(''), // whsec_... from JusGo → API Setup → Webhook
+  DATA_ENCRYPTION_KEY: z.string().default(''), // encrypts private documents and imported profiles; falls back to JWT_SECRET. Back it up: lost key = unreadable files
+  MFA_ENCRYPTION_KEY: z.string().default(''), // encrypts authenticator secrets; falls back to JWT_SECRET (set this before going live so rotating JWT_SECRET does not reset 2FA)
   RAZORPAYX_ACCOUNT_NUMBER: z.string().default(''), // the business current account that payouts are sent from; empty = payouts stay manual
   SMTP_HOST: z.string().default(''),
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_USER: z.string().default(''),
   SMTP_PASS: z.string().default(''),
-  SMTP_FROM: z.string().default('KickOff <no-reply@localhost>'),
+  SMTP_FROM: z.string().default('PlaynX <no-reply@localhost>'),
   FIREBASE_SERVICE_ACCOUNT_JSON: z.string().default(''),
   SMS_WEBHOOK_URL: z.string().default(''),
   SMS_WEBHOOK_TOKEN: z.string().default(''),
@@ -49,6 +58,8 @@ const schema = z.object({
 export type Config = z.infer<typeof schema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  // JUSGO_API_BASE_URL is accepted as another name for JUSGO_API_URL
+  if (!env.JUSGO_API_URL && env.JUSGO_API_BASE_URL) env = { ...env, JUSGO_API_URL: env.JUSGO_API_BASE_URL };
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');

@@ -47,7 +47,7 @@ export function adminRoutes(ctx: Ctx) {
     res.json({ totals: totals.rows[0], revenue: revenue.rows[0], trend: trend.rows, pendingVenues: pendingVenues.rows[0].n, pendingOwners: pendingOwners.rows[0].n, openTickets: tickets.rows[0].n, topVenues: topVenues.rows, bookingsBySport: sports.rows });
   });
 
-  /** What each venue brought in and what KickOff kept from it, for any period. */
+  /** What each venue brought in and what PlaynX kept from it, for any period. */
   r.get('/reports/commission-by-venue', P('reports'), async (req, res) => {
     const f = parse(z.object({ from: z.iso.date(), to: z.iso.date(), format: z.enum(['json', 'csv']).default('json') }), req.query);
     const { rows } = await ctx.db.query(
@@ -78,7 +78,8 @@ export function adminRoutes(ctx: Ctx) {
 
   // ---------------- users, owners
   r.get('/users', P('users:read'), async (req, res) => {
-    const f = parse(z.object({ role: z.enum(['customer', 'owner', 'admin']).optional(), q: z.string().max(100).optional(), active: z.enum(['true', 'false']).optional() }), req.query);
+    const blankToUndef = Object.fromEntries(Object.entries(req.query).filter(([, v]) => v !== '')); // "All" in a filter is sent as an empty value
+    const f = parse(z.object({ role: z.enum(['customer', 'owner', 'admin']).optional(), q: z.string().max(100).optional(), active: z.enum(['true', 'false']).optional() }), blankToUndef);
     const { limit, offset } = page(req.query, 100);
     const { rows } = await ctx.db.query(
       `SELECT u.id, u.email, u.phone, u.full_name, u.role, u.admin_role, u.email_verified, u.phone_verified, u.is_active, u.created_at,
@@ -263,7 +264,7 @@ export function adminRoutes(ctx: Ctx) {
       else if (!(await walletDebit(q, { userId: id, amount: -amount, kind: 'admin_debit', note: b.reason, createdBy: req.user!.id, now }))) throw conflict('The customer does not have that much wallet balance', 'insufficient_wallet');
     });
     await audit(ctx.db, req, amount > 0 ? 'wallet.credit' : 'wallet.debit', 'user', id, { amount, reason: b.reason });
-    if (amount > 0) await ctx.notifier.notify(id, { title: 'Wallet credit added', type: 'wallet', body: `₹${amount} was added to your KickOff wallet: ${b.reason}`, data: { link: '/wallet' } });
+    if (amount > 0) await ctx.notifier.notify(id, { title: 'Wallet credit added', type: 'wallet', body: `₹${amount} was added to your PlaynX wallet: ${b.reason}`, data: { link: '/wallet' } });
     res.json({ balance: await walletBalance(ctx.db, id, ctx.now()) });
   });
 
@@ -418,7 +419,7 @@ export function adminRoutes(ctx: Ctx) {
     const bank = (await ctx.db.query('SELECT bank_verified FROM owner_profiles WHERE user_id=$1', [b.ownerId])).rows[0];
     if (!bank?.bank_verified) throw conflict('Verify the owner\'s bank account before creating a payout', 'bank_unverified');
     const available = await payableNow(ctx, b.ownerId);
-    if (b.amount > available + 0.005) throw conflict(`Only ₹${available} can be released to this owner now. Money stays with KickOff for ${await holdHours(ctx.db)} hours after the game, and while the customer has an open complaint.`, 'not_released');
+    if (b.amount > available + 0.005) throw conflict(`Only ₹${available} can be released to this owner now. Money stays with PlaynX for ${await holdHours(ctx.db)} hours after the game, and while the customer has an open complaint.`, 'not_released');
     const { rows } = await ctx.db.query(`INSERT INTO owner_payouts (owner_id, amount, period_start, period_end) VALUES ($1,$2,$3,$4) RETURNING *`, [b.ownerId, b.amount, b.periodStart, b.periodEnd]);
     await audit(ctx.db, req, 'payout.create', 'payout', rows[0].id, { amount: b.amount });
     res.status(201).json({ payout: rows[0] });
@@ -497,7 +498,7 @@ export function adminRoutes(ctx: Ctx) {
               COALESCE((SELECT sum(r.amount) FROM refunds r WHERE r.booking_id=b.id AND r.status <> 'failed'),0)::float8 AS refunded
          FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN playing_areas a ON a.id=b.area_id WHERE b.id=$1`, [t.booking_id])).rows[0] ?? null : null;
     const money2 = (x: any) => ({ ...x, refundable: Math.max(0, Math.round((x.paid - x.refunded) * 100) / 100) });
-    // no booking named on the ticket: the customer's paid KickOff bookings, so the admin can choose the one to refund
+    // no booking named on the ticket: the customer's paid PlaynX bookings, so the admin can choose the one to refund
     const bookings = booking ? undefined : (await ctx.db.query(
       `SELECT b.id, b.reference, b.status, b.total::float8 AS total, lower(b.during) AS starts_at, v.name AS venue_name, a.name AS area_name,
               COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.booking_id=b.id AND p.razorpay_payment_id IS NOT NULL AND p.status IN ('captured','partially_refunded','refunded')),0)::float8 AS paid,
@@ -505,7 +506,13 @@ export function adminRoutes(ctx: Ctx) {
          FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN playing_areas a ON a.id=b.area_id
         WHERE b.customer_id=$1 AND EXISTS (SELECT 1 FROM payments p WHERE p.booking_id=b.id AND p.razorpay_payment_id IS NOT NULL AND p.status IN ('captured','partially_refunded'))
         ORDER BY lower(b.during) DESC LIMIT 30`, [t.user_id])).rows.map(money2).filter((x: any) => x.refundable > 0);
-    res.json({ ticket: t, messages, booking: booking ? money2(booking) : null, bookings });
+    const attachments = (await ctx.db.query('SELECT id, kind, content_type, size_bytes, created_at FROM ticket_attachments WHERE ticket_id=$1 ORDER BY created_at', [id])).rows;
+    res.json({ ticket: t, messages, booking: booking ? money2(booking) : null, bookings, attachments });
+  });
+  r.get('/tickets/:id/attachments/:attId/file', P('tickets'), async (req, res) => {
+    const a = (await ctx.db.query('SELECT file_ref FROM ticket_attachments WHERE id=$1 AND ticket_id=$2', [parse(z.uuid(), req.params.attId), parse(z.uuid(), req.params.id)])).rows[0];
+    if (!a) throw notFound('File not found');
+    await sendStoredFile(ctx, res, a.file_ref);
   });
   r.post('/tickets/:id/reply', P('tickets'), async (req, res) => {
     const id = parse(z.uuid(), req.params.id);
@@ -613,7 +620,7 @@ export function adminRoutes(ctx: Ctx) {
     res.json({ coupons: rows });
   });
   r.get('/team', P('admins'), async (_req, res) =>
-    res.json({ admins: (await ctx.db.query(`SELECT id, full_name, email, admin_role, admin_permissions, is_active, created_at FROM users WHERE role='admin' ORDER BY created_at`)).rows, permissions: ADMIN_PERMISSION_CATALOGUE }));
+    res.json({ admins: (await ctx.db.query(`SELECT id, full_name, email, admin_role, admin_permissions, is_active, created_at, (totp_enabled_at IS NOT NULL) AS mfa_enabled FROM users WHERE role='admin' ORDER BY created_at`)).rows, permissions: ADMIN_PERMISSION_CATALOGUE }));
   r.post('/team', P('admins'), async (req, res) => {
     const b = parse(z.object({ email: z.email(), fullName: z.string().trim().min(2).max(100), password: z.string().min(10).max(72), adminRole: z.enum(['super_admin', 'operations', 'finance', 'support']), permissions: permList.optional() }), req.body);
     const hash = await bcrypt.hash(b.password, ctx.cfg.NODE_ENV === 'test' ? 4 : 12);
@@ -622,6 +629,16 @@ export function adminRoutes(ctx: Ctx) {
     await audit(ctx.db, req, 'admin.create', 'user', rows[0].id, { adminRole: b.adminRole });
     await syncAccount(ctx.db, rows[0].id);
     res.status(201).json({ admin: rows[0] });
+  });
+  /** An admin lost their phone: clear their authenticator so they set it up again at the next sign-in. Signs them out everywhere. */
+  r.post('/team/:id/reset-mfa', P('admins'), async (req, res) => {
+    const id = parse(z.uuid(), req.params.id);
+    if (id === req.user!.id) throw forbidden('Ask another admin to reset your two-step sign-in');
+    const { rows } = await ctx.db.query(`UPDATE users SET totp_secret_enc=NULL, totp_enabled_at=NULL, totp_last_step=NULL, mfa_failed_count=0, mfa_locked_until=NULL, token_version=token_version+1 WHERE id=$1 AND role='admin' RETURNING id`, [id]);
+    if (!rows[0]) throw notFound('Admin not found');
+    await audit(ctx.db, req, 'admin.mfa_reset', 'user', id);
+    await ctx.notifier.notify(id, { title: 'Two-step sign-in was reset', type: 'security', email: true, body: 'Another admin reset your authenticator. Set it up again with a new QR code the next time you sign in.' });
+    res.json({ reset: true });
   });
   r.patch('/team/:id', P('admins'), async (req, res) => {
     const id = parse(z.uuid(), req.params.id);

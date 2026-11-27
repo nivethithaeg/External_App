@@ -7,15 +7,43 @@ import { parse } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
 import { sendStoredFile } from '../lib/private-file.js';
 import { BANK_COLUMNS, FIELD_LABEL, describeChange } from '../lib/ownerProfile.js';
-import { BUSINESS_DOCS, DOC_LABEL, IDENTITY_DOCS, REQUIRED_DOCS, sectionOfDoc, type BusinessType } from './ownerApplication.js';
+import { BUSINESS_DOCS, DOC_LABEL, IDENTITY_DOCS, REQUIRED_DOCS, saveBusiness, sectionOfDoc, type BusinessType } from './ownerApplication.js';
 
 const REVIEW = ['submitted', 'under_review', 'info_required', 'resubmission_required'];
 
 export function adminApplicationRoutes(ctx: Ctx) {
   const r = Router();
-  r.use(['/applications', '/owner-documents', '/profile-changes'], authenticate(ctx), requireRole('admin'), requirePermission('users')); // scoped: this router shares the /api/admin mount
+  r.use(['/applications', '/owner-documents', '/profile-changes', '/business-changes'], authenticate(ctx), requireRole('admin'), requirePermission('users')); // scoped: this router shares the /api/admin mount
 
   // ---- changes an approved owner made to sensitive profile details; nothing goes live until it is approved here
+  // ---------------- business type changes asked for by approved owners
+  r.get('/business-changes', async (req, res) => {
+    const status = parse(z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(), req.query.status);
+    const { rows } = await ctx.db.query(
+      `SELECT c.id, c.status, c.from_type AS "fromType", c.to_type AS "toType", c.details, c.reason, c.review_note AS "reviewNote", c.created_at AS "createdAt", c.reviewed_at AS "reviewedAt",
+              u.id AS "ownerId", u.full_name AS "ownerName", u.email AS "ownerEmail", u.account_code AS "ownerCode", p.business_name AS "currentBusinessName"
+         FROM business_change_requests c JOIN users u ON u.id=c.owner_id LEFT JOIN owner_profiles p ON p.user_id=c.owner_id
+        WHERE ($1::text IS NULL OR c.status=$1) ORDER BY (c.status='pending') DESC, c.created_at DESC LIMIT 200`, [status ?? null]);
+    res.json({ changes: rows });
+  });
+  r.post('/business-changes/:id/decision', async (req, res) => {
+    const id = parse(z.uuid(), req.params.id);
+    const b = parse(z.object({ decision: z.enum(['approve', 'reject']), note: z.string().trim().max(300).optional() })
+      .refine((x) => x.decision === 'approve' || (x.note && x.note.length >= 3), { message: 'Tell the owner why it was rejected', path: ['note'] }), req.body);
+    const c = await ctx.db.tx(async (q) => {
+      const c = (await q.query(`UPDATE business_change_requests SET status=$2, review_note=$3, reviewed_by=$4, reviewed_at=now() WHERE id=$1 AND status='pending' RETURNING *`,
+        [id, b.decision === 'approve' ? 'approved' : 'rejected', b.note ?? null, req.user!.id])).rows[0];
+      if (!c) throw notFound('No business type change waiting with this id');
+      if (b.decision === 'approve') await saveBusiness(q, c.owner_id, c.details, true); // the admin has checked the new details
+      return c;
+    });
+    await audit(ctx.db, req, b.decision === 'approve' ? 'admin.business_type_change_approved' : 'admin.business_type_change_rejected', 'user', c.owner_id, { from: c.from_type, to: c.to_type, note: b.note ?? null });
+    const t = (x: string | null) => String(x ?? '').replace(/_/g, ' ');
+    await ctx.notifier.notify(c.owner_id, { title: b.decision === 'approve' ? 'Business type changed' : 'Business type change not approved', type: 'application', email: true, data: { link: '/owner/account/business' },
+      body: b.decision === 'approve' ? `Your business type is now ${t(c.to_type)}. Your business details have been updated.` : `Your request to change your business type to ${t(c.to_type)} was rejected: ${b.note}. Your business details stay as they were.` });
+    res.json({ id, status: c.status });
+  });
+
   r.get('/profile-changes', async (req, res) => {
     const status = z.enum(['pending', 'all']).default('pending').parse(req.query.status ?? 'pending');
     const { rows } = await ctx.db.query(
@@ -40,7 +68,7 @@ export function adminApplicationRoutes(ctx: Ctx) {
       return { ownerId: c.owner_id as string, cols, bank };
     });
     await ctx.notifier.notify(out.ownerId, { title: 'Your profile changes were approved', type: 'application', email: true, data: { link: '/owner/account/business' },
-      body: `${out.cols.map((k) => FIELD_LABEL[k]).join(', ')} ${out.cols.length === 1 ? 'is' : 'are'} now updated on your account.${out.bank ? ' New payout details are verified by KickOff finance before the next settlement.' : ''}` });
+      body: `${out.cols.map((k) => FIELD_LABEL[k]).join(', ')} ${out.cols.length === 1 ? 'is' : 'are'} now updated on your account.${out.bank ? ' New payout details are verified by PlaynX finance before the next settlement.' : ''}` });
     if (out.bank) await ctx.notifier.notifyAdmins('payouts', { title: 'Owner bank details need verification', body: "An owner's new payout details were approved. Verify them before paying out.", type: 'admin_bank_changed', email: true, data: { link: '/admin/owners' } });
     res.json({ approved: true });
   });

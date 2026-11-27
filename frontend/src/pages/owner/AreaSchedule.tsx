@@ -56,6 +56,9 @@ export function ScheduleModal({ area, sports, onClose, onSaved }: { area: any; s
 
   const unpriced = unpricedCount(prices, days, step, !!def);
   const pricedToday = slots.filter((m) => priceOf('all', dow, m) !== undefined && (defSlot === undefined || priceOf('all', dow, m) !== defSlot)).length;
+  // the sport chosen in "Prices for": how many slots have a price of their own for that sport
+  const sportPriced = scope === 'all' ? 0 : slots.filter((m) => priceOf(scope, dow, m) !== undefined).length;
+  const scopeName = scope === 'all' ? '' : (sports.find((x) => x.id === scope)?.name ?? 'this sport');
 
   const applyFill = () => {
     const v = Number(fill.value); if (fill.value === '' || !(v >= 0)) return setErr('Enter the price to set for every slot');
@@ -126,7 +129,7 @@ export function ScheduleModal({ area, sports, onClose, onSaved }: { area: any; s
               <label className="flex items-center gap-1.5 pb-2 text-xs"><input type="checkbox" checked={fill.every} onChange={(e) => setFill({ ...fill, every: e.target.checked })} />every open day</label>
               <Button type="button" variant="ghost" className="!py-1.5" onClick={applyFill}>Apply</Button>
             </div>
-            <p className="ml-auto pb-2 text-xs text-muted">{def ? `Every slot is filled with the default ₹${defSlot}. ${pricedToday} of ${slots.length} changed to a different price` : `${pricedToday} of ${slots.length} slots priced`}</p>
+            <p className="ml-auto pb-2 text-xs text-muted">{scope !== 'all' ? `${sportPriced} of ${slots.length} slot${slots.length === 1 ? ' has' : 's have'} a ${scopeName} price of ${sportPriced === 1 ? 'its' : 'their'} own; the others use the all-sports price` : def ? `Every slot is filled with the default ₹${defSlot}. ${pricedToday} of ${slots.length} changed to a different price` : `${pricedToday} of ${slots.length} slots priced`}</p>
           </div>
           {scope !== 'all' && <p className="text-xs text-muted">Leave a slot empty to use the all-sports price shown in grey. Only fill it in where {sportName(scope)} costs something different.</p>}
 

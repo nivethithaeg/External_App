@@ -32,13 +32,13 @@ export function AdminDashboard() {
   return (
     <div className="relative overflow-x-clip" onPointerMove={parallax}>
       {intro.overlay}
-      <div ref={glow} aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-[#FF6A00]/10 blur-3xl transition-transform duration-700 ease-out" />
+      <div ref={glow} aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-[#7200FF]/10 blur-3xl transition-transform duration-700 ease-out" />
       <motion.div className="relative" initial={reduce || !intro.active ? false : { opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.9, delay: Math.max(0, at - 0.4), ease: 'easeOut' }}>
         <PageHeader title="Dashboard" subtitle="What needs you today, and how the platform is doing" />
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <SlidingTabs<Tab> id="admin-tabs" label="Dashboard sections" value={tab} onChange={go} options={TABS} />
           <form role="search" aria-label="Search bookings" onSubmit={(e) => { e.preventDefault(); nav(`/admin/bookings${term.trim() ? `?q=${encodeURIComponent(term.trim())}` : ''}`); }}
-            className="flex w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 transition focus-within:border-[#FF6A00] focus-within:shadow-[0_0_0_3px_rgb(255_106_0/.18)] sm:w-80">
+            className="flex w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 transition focus-within:border-[#7200FF] focus-within:shadow-[0_0_0_3px_rgb(255_106_0/.18)] sm:w-80">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-muted"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             <input aria-label="Search bookings by reference, customer or venue" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search bookings, customers, venues" className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted/70" /></form>
         </div>
@@ -66,14 +66,14 @@ export function AdminDashboard() {
                   {todo.length === 0
                     ? <motion.p role="status" {...enter(reduce, at, 0)} className="rounded-xl border border-ok/30 bg-ok/10 p-3 text-sm"><b>Nothing needs your attention.</b> No pending venues, owner applications or complaints.</motion.p>
                     : <section aria-label="Needs your attention"><h2 className="mb-2 text-2xl font-bold">Needs your attention</h2>
-                        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{todo.map((t, i) => <motion.li key={t.to} {...enter(reduce, at, i)}><Link to={t.to} className="card group flex items-center justify-between gap-3 border-[#FF6A00]/40 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-[#FF6A00] hover:shadow-[0_0_24px_-8px_rgb(255_106_0/.6)]"><span><b className="font-display text-3xl text-[#FF8C32]">{t.n}</b> <span className="text-sm text-muted">{t.n === 1 ? t.one : t.many}</span></span><span aria-hidden="true" className="text-[#FF6A00] transition group-hover:translate-x-1">→</span></Link></motion.li>)}</ul></section>}
+                        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{todo.map((t, i) => <motion.li key={t.to} {...enter(reduce, at, i)}><Link to={t.to} className="card group flex items-center justify-between gap-3 border-[#7200FF]/40 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-[#7200FF] hover:shadow-[0_0_24px_-8px_rgb(255_106_0/.6)]"><span><b className="font-display text-3xl text-[#A100FF]">{t.n}</b> <span className="text-sm text-muted">{t.n === 1 ? t.one : t.many}</span></span><span aria-hidden="true" className="text-[#7200FF] transition group-hover:translate-x-1">→</span></Link></motion.li>)}</ul></section>}
                   <section aria-label="Key numbers"><ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {kpis.map((k, i) => { const on = focus === k.id; return (
                       <motion.li key={k.id} {...enter(reduce, at + 0.15, i)}>
-                        <button type="button" aria-pressed={on} onClick={() => setFocus(k.id)} className={cx('card relative block w-full overflow-hidden p-5 text-left transition duration-300 hover:-translate-y-1', on ? 'border-[#FF6A00]/70 shadow-[0_0_28px_-8px_rgb(255_106_0/.55)]' : 'hover:border-[#FF6A00]/40')}>
+                        <button type="button" aria-pressed={on} onClick={() => setFocus(k.id)} className={cx('card relative block w-full overflow-hidden p-5 text-left transition duration-300 hover:-translate-y-1', on ? 'border-[#7200FF]/70 shadow-[0_0_28px_-8px_rgb(255_106_0/.55)]' : 'hover:border-[#7200FF]/40')}>
                           <AccentLine on={on} />
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted">{k.label}</p>
-                          <p className={cx('mt-1 font-display text-4xl font-bold transition-colors duration-300', on ? 'text-[#FF6A00]' : 'text-white')} style={on ? { textShadow: '0 0 22px rgb(255 106 0 / .35)' } : undefined}>{k.node}</p>
+                          <p className={cx('mt-1 font-display text-4xl font-bold transition-colors duration-300', on ? 'text-[#7200FF]' : 'text-white')} style={on ? { textShadow: '0 0 22px rgb(114 0 255 / .35)' } : undefined}>{k.node}</p>
                           {k.hint && <p className="mt-1 text-xs text-muted">{k.hint}</p>}
                         </button></motion.li>); })}</ul></section>
                   <motion.div {...enter(reduce, at + 0.3, 0)}><Card className="p-5">
@@ -84,20 +84,20 @@ export function AdminDashboard() {
                 </>)}
                 {tab === 'performance' && (<>
                   <div className="grid gap-5 lg:grid-cols-2">
-                    <motion.div {...enter(reduce, 0, 0)}><Card className="p-6"><ProgressRing value={take} label="Commission rate" hint="Share of booking value that KickOff keeps as commission." /></Card></motion.div>
+                    <motion.div {...enter(reduce, 0, 0)}><Card className="p-6"><ProgressRing value={take} label="Commission rate" hint="Share of booking value that PlaynX keeps as commission." /></Card></motion.div>
                     <motion.div {...enter(reduce, 0, 1)}><Card className="p-6"><ProgressRing value={monthShare} delay={0.15} label="This month's share" hint="How much of all booking value so far was booked this month." /></Card></motion.div>
                   </div>
                   <div className="grid gap-5 lg:grid-cols-2">
-                    <motion.div {...enter(reduce, 0, 2)}><Card className="p-5"><h2 className="mb-3 text-2xl font-bold">Top venues</h2>{d.topVenues.length === 0 ? <p className="text-sm text-muted">No bookings yet.</p> : <ul className="divide-y divide-line text-sm">{d.topVenues.map((v: any, i: number) => <li key={v.id} className="flex items-center justify-between gap-3 py-2.5"><span className="flex items-center gap-3"><span className="grid h-7 w-7 place-items-center rounded-full bg-surface2 text-xs font-bold text-[#FF8C32]">{i + 1}</span>{v.name} <span className="text-muted">({v.bookings})</span></span><b>{money(v.gmv)}</b></li>)}</ul>}</Card></motion.div>
-                    <motion.div {...enter(reduce, 0, 3)}><Card className="p-5"><h2 className="mb-3 text-2xl font-bold">Bookings by sport</h2>{d.bookingsBySport.length === 0 ? <p className="text-sm text-muted">No bookings yet.</p> : <ul className="space-y-3 text-sm">{(() => { const max = Math.max(...d.bookingsBySport.map((s: any) => s.bookings)); return d.bookingsBySport.map((s: any, i: number) => <li key={s.name}><div className="flex justify-between"><span>{s.name}</span><b>{s.bookings}</b></div><div className="mt-1 h-2 overflow-hidden rounded-full bg-surface2"><motion.div className="h-2 rounded-full bg-gradient-to-r from-[#FF6A00] to-[#FF8C32]" initial={reduce ? false : { width: 0 }} animate={{ width: `${(s.bookings / max) * 100}%` }} transition={{ duration: 0.9, delay: 0.25 + i * 0.08, ease: 'easeOut' }} /></div></li>); })()}</ul>}</Card></motion.div></div>
+                    <motion.div {...enter(reduce, 0, 2)}><Card className="p-5"><h2 className="mb-3 text-2xl font-bold">Top venues</h2>{d.topVenues.length === 0 ? <p className="text-sm text-muted">No bookings yet.</p> : <ul className="divide-y divide-line text-sm">{d.topVenues.map((v: any, i: number) => <li key={v.id} className="flex items-center justify-between gap-3 py-2.5"><span className="flex items-center gap-3"><span className="grid h-7 w-7 place-items-center rounded-full bg-surface2 text-xs font-bold text-[#A100FF]">{i + 1}</span>{v.name} <span className="text-muted">({v.bookings})</span></span><b>{money(v.gmv)}</b></li>)}</ul>}</Card></motion.div>
+                    <motion.div {...enter(reduce, 0, 3)}><Card className="p-5"><h2 className="mb-3 text-2xl font-bold">Bookings by sport</h2>{d.bookingsBySport.length === 0 ? <p className="text-sm text-muted">No bookings yet.</p> : <ul className="space-y-3 text-sm">{(() => { const max = Math.max(...d.bookingsBySport.map((s: any) => s.bookings)); return d.bookingsBySport.map((s: any, i: number) => <li key={s.name}><div className="flex justify-between"><span>{s.name}</span><b>{s.bookings}</b></div><div className="mt-1 h-2 overflow-hidden rounded-full bg-surface2"><motion.div className="h-2 rounded-full bg-gradient-to-r from-[#7200FF] to-[#A100FF]" initial={reduce ? false : { width: 0 }} animate={{ width: `${(s.bookings / max) * 100}%` }} transition={{ duration: 0.9, delay: 0.25 + i * 0.08, ease: 'easeOut' }} /></div></li>); })()}</ul>}</Card></motion.div></div>
                 </>)}
                 {tab === 'activity' && (
-                  <Card className="p-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-2xl font-bold">Recent bookings</h2><Link to="/admin/bookings" className="text-sm font-semibold text-[#FF8C32] hover:underline">View all →</Link></div>
+                  <Card className="p-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-2xl font-bold">Recent bookings</h2><Link to="/admin/bookings" className="text-sm font-semibold text-[#A100FF] hover:underline">View all →</Link></div>
                     {recent.isLoading ? <Loading /> : recent.isError ? <ErrorBox error={recent.error} retry={() => recent.refetch()} /> : (recent.data?.bookings.length ?? 0) === 0 ? <p className="text-sm text-muted">No bookings yet.</p> : (
                       <ul className="divide-y divide-line">{recent.data!.bookings.map((b, i) => (
                         <motion.li key={b.id} initial={reduce ? false : { opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: i * 0.05 }}>
                           <Link to={`/admin/bookings?q=${encodeURIComponent(b.reference)}`} className="flex items-center gap-3 py-3 transition hover:bg-surface2/60">
-                            <span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface2 font-display text-lg font-bold text-[#FF8C32] ring-1 ring-[#FF6A00]/30">{(b.customer_name ?? '?').trim().charAt(0).toUpperCase()}</span>
+                            <span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface2 font-display text-lg font-bold text-[#A100FF] ring-1 ring-[#7200FF]/30">{(b.customer_name ?? '?').trim().charAt(0).toUpperCase()}</span>
                             <span className="min-w-0 flex-1"><b className="block truncate">{b.customer_name ?? 'Walk-in'}</b><span className="block truncate text-xs text-muted">{b.venue_name} · {b.area_name} · {fmtDateTime(b.starts_at)}</span></span>
                             <span className="text-right"><b className="block">{money(b.total)}</b><Badge status={b.status} /></span></Link></motion.li>))}</ul>)}
                   </Card>)}
@@ -206,7 +206,7 @@ function ApprovalChecklist({ data, onTick, busy }: { data: { checklist: Checklis
       <div className="border-t border-line pt-2"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">You confirm</p>
         {c.manual.map((m) => (
           <label key={m.id} className="fx-check group flex cursor-pointer items-center gap-2.5 py-1 text-sm"><input type="checkbox" className="sr-only" checked={m.checked} disabled={busy} onChange={(e) => onTick(m.id, e.target.checked)} />
-            <span className="fx-box grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 border-line" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#101010" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+            <span className="fx-box grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 border-line" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#0B1340" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
             <span>{m.label}{m.checked && m.by && <span className="ml-2 text-xs text-muted">ticked by {m.by}</span>}</span></label>))}</div>
     </section>);
 }

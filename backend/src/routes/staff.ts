@@ -190,7 +190,7 @@ export function staffRoutes(ctx: Ctx) {
     const { rows } = await ctx.db.query(
       `SELECT v.id, v.name, v.timezone,
               (SELECT COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name, 'slotMinutes', a.slot_minutes, 'minDuration', a.min_duration_minutes, 'maxDuration', a.max_duration_minutes,
-                  'sports', (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id)) ORDER BY a.name), '[]')
+                  'sports', (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.sort_order, sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id)) ORDER BY a.name), '[]')
                  FROM playing_areas a WHERE a.venue_id=v.id AND a.is_active) AS areas
          FROM venues v WHERE v.owner_id=$1${only(o)} AND v.status='approved' ORDER BY v.name`, [o.owner_id]);
     res.json({ venues: rows });

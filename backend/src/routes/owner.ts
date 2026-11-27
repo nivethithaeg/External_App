@@ -76,7 +76,7 @@ export function ownerRoutes(ctx: Ctx) {
     if (!waitingBefore) await alertAdminsOfChange(v, ownerName, 'details');
     return true;
   }
-  const LOCKED = 'This venue is under approval and cannot be changed until KickOff reviews it';
+  const LOCKED = 'This venue is under approval and cannot be changed until PlaynX reviews it';
   /** Details are frozen while the venue waits for admin approval. */
   const unlocked = (v: { status: string }) => { if (v.status === 'pending') throw conflict(LOCKED, 'venue_locked'); };
   async function ownArea(areaId: string, ownerId: string) {
@@ -168,7 +168,7 @@ export function ownerRoutes(ctx: Ctx) {
       ctx.db.query('SELECT id, url, kind, is_cover, sort_order, is_pending, delete_requested, area_id, geo_lat, geo_lng, geo_distance_m, geo_address FROM venue_images WHERE venue_id=$1 ORDER BY is_cover DESC, sort_order', [v.id]),
       ctx.db.query('SELECT facility_id FROM venue_facilities WHERE venue_id=$1', [v.id]),
       ctx.db.query(
-        `SELECT a.*, (SELECT COALESCE(json_agg(s.sport_id), '[]') FROM playing_area_sports s WHERE s.playing_area_id=a.id) AS sport_ids,
+        `SELECT a.*, (SELECT COALESCE(json_agg(s.sport_id ORDER BY (SELECT sort_order FROM sports WHERE id=s.sport_id), s.sport_id), '[]') FROM playing_area_sports s WHERE s.playing_area_id=a.id) AS sport_ids,
            (SELECT COALESCE(json_agg(json_build_object('id', p.id, 'sportId', p.sport_id, 'dayType', p.day_type, 'dayOfWeek', p.day_of_week, 'startTime', to_char(p.start_time,'HH24:MI'), 'endTime', to_char(p.end_time,'HH24:MI'), 'pricePerHour', p.price_per_hour) ORDER BY p.start_time), '[]') FROM pricing_rules p WHERE p.area_id=a.id) AS pricing,
            (SELECT COALESCE(json_agg(json_build_object('dayOfWeek', d.day_of_week, 'openTime', to_char(d.open_time,'HH24:MI'), 'closeTime', to_char(d.close_time,'HH24:MI'), 'isClosed', d.is_closed) ORDER BY d.day_of_week), '[]') FROM playing_area_hours d WHERE d.playing_area_id=a.id) AS availability,
            (SELECT COALESCE(json_agg(json_build_object('date', e.exception_date::text, 'closed', e.closed, 'openTime', to_char(e.open_time,'HH24:MI'), 'closeTime', to_char(e.close_time,'HH24:MI'), 'reason', e.reason) ORDER BY e.exception_date), '[]') FROM playing_area_hour_exceptions e WHERE e.playing_area_id=a.id AND e.exception_date >= current_date) AS hour_exceptions
@@ -179,7 +179,7 @@ export function ownerRoutes(ctx: Ctx) {
     // The owner sees their own pending edits in the form; customers still see the approved values.
     const wantCover = ch?.fields?.cover_image_id as string | undefined;
     const { cover_image_id: _c, ...ownFields } = (ch?.fields ?? {}) as Record<string, unknown>;
-    const sportIds = (await ctx.db.query('SELECT sport_id FROM venue_sports WHERE venue_id=$1 ORDER BY sport_id', [v.id])).rows.map((r: any) => r.sport_id);
+    const sportIds = (await ctx.db.query('SELECT vs.sport_id FROM venue_sports vs JOIN sports sp ON sp.id=vs.sport_id WHERE vs.venue_id=$1 ORDER BY sp.sort_order, sp.name', [v.id])).rows.map((r: any) => r.sport_id);
     res.json({ venue: { ...v, ...ownFields, sportIds, images: wantCover ? images.rows.map((i: any) => ({ ...i, is_cover: i.id === wantCover })) : images.rows, facilityIds: ch?.facility_ids ?? facilities.rows.map((f: any) => f.facility_id), areas: areas.rows, documents: docs.rows, pendingChange: ch ? { fields: ch.fields, facilityIds: ch.facility_ids, updatedAt: ch.updated_at } : null } });
   });
 
@@ -258,7 +258,7 @@ export function ownerRoutes(ctx: Ctx) {
     }
     if (!Object.keys(req.body ?? {}).some((k) => !(k in CONTACT_COLS))) return void res.json({ venue: current, contactUpdated: Object.keys(contact).length > 0, pendingChange: await hasWaiting(v.id) }); // only contact numbers were changed
     unlocked(v);
-    if (isLiveVenue(v)) { // approved: the other changes wait for KickOff; customers keep seeing the approved version
+    if (isLiveVenue(v)) { // approved: the other changes wait for PlaynX; customers keep seeing the approved version
       const fields: Record<string, unknown> = {};
       for (const [k, col] of Object.entries(FIELD_COLS)) { const val = (b as any)[k]; if (val !== undefined) fields[col] = val; } // holdChange drops the ones equal to the live value
       const pending = await holdChange(current, req.user!.fullName, { fields });
@@ -304,12 +304,12 @@ export function ownerRoutes(ctx: Ctx) {
     res.json({ sportIds });
   });
 
-  // Publishing sends the venue to KickOff for approval. It stays under approval (hidden from customers) until an admin approves it.
+  // Publishing sends the venue to PlaynX for approval. It stays under approval (hidden from customers) until an admin approves it.
   r.post('/venues/:id/send-for-approval', async (req, res) => {
     const v = await ownVenue(parse(z.uuid(), req.params.id), uid(req));
     if (v.status === 'pending') throw conflict('This venue is already under approval');
     if (['ready', 'approved'].includes(v.status)) throw conflict('This venue is already approved');
-    if (v.status === 'suspended') throw conflict('This venue was suspended by KickOff. Contact support');
+    if (v.status === 'suspended') throw conflict('This venue was suspended by PlaynX. Contact support');
     const chk = (await ctx.db.query(
       `SELECT (SELECT count(*)::int FROM venue_images WHERE venue_id=$1 AND area_id IS NULL AND kind='image') AS images,
               (SELECT count(*)::int FROM venue_documents WHERE venue_id=$1 AND doc_type='Electricity bill' AND status <> 'rejected') AS docs,
@@ -333,11 +333,11 @@ export function ownerRoutes(ctx: Ctx) {
     res.json({ status: 'pending' });
   });
 
-  // Publishing is the owner's own choice: once KickOff has approved the venue, the owner decides when it appears to customers.
+  // Publishing is the owner's own choice: once PlaynX has approved the venue, the owner decides when it appears to customers.
   r.post('/venues/:id/publish', async (req, res) => {
     const v = await ownVenue(parse(z.uuid(), req.params.id), uid(req));
     if (v.status === 'approved') throw conflict('This venue is already published');
-    if (v.status !== 'ready') throw conflict('KickOff must approve this venue before you can publish it', 'not_approved');
+    if (v.status !== 'ready') throw conflict('PlaynX must approve this venue before you can publish it', 'not_approved');
     const ready = await ctx.db.query(`SELECT 1 FROM playing_areas a WHERE a.venue_id=$1 AND a.is_active AND EXISTS (SELECT 1 FROM pricing_rules p WHERE p.area_id=a.id) AND EXISTS (SELECT 1 FROM playing_area_hours d WHERE d.playing_area_id=a.id AND NOT d.is_closed) LIMIT 1`, [v.id]);
     if (!ready.rows[0]) throw badRequest('Set the prices and opening hours of a playing area before publishing, so customers can book it', 'venue_not_ready');
     await ctx.db.query(`UPDATE venues SET status='approved', updated_at=now() WHERE id=$1`, [v.id]);
@@ -540,7 +540,7 @@ export function ownerRoutes(ctx: Ctx) {
       if (b.defaultPrice) await q.query(`INSERT INTO pricing_rules (area_id, sport_id, day_type, day_of_week, start_time, end_time, price_per_hour) VALUES ($1,NULL,'all',NULL,'00:00','24:00',$2)`, [a.id, b.defaultPrice]);
       return a;
     });
-    await ctx.notifier.notifyAdmins('venues', { title: 'Playing area awaiting approval', body: `${req.user!.fullName} added "${a.name}" to "${v.name}". Review it before customers can book it.`, type: 'admin_area_created', data: { link: '/admin/area-approvals' } });
+    await ctx.notifier.notifyAdmins('venues', { title: 'Playing area awaiting approval', body: `${req.user!.fullName} added "${a.name}" to "${v.name}". Review it before customers can book it.`, type: 'admin_area_created', email: true, data: { link: '/admin/area-approvals' } });
     res.status(201).json({ area: a });
   });
   /** The bookings still to be played in an area: what closing it would affect. */
@@ -553,6 +553,7 @@ export function ownerRoutes(ctx: Ctx) {
   });
   r.put('/areas/:id', async (req, res) => {
     const a = await ownArea(parse(z.uuid(), req.params.id), uid(req));
+    if (a.deletion_status) throw conflict(a.deletion_status === 'deleted' ? 'This playing area is deleted.' : 'This playing area is waiting for deletion approval. Cancel the request to change it.', 'area_deleting');
     unlocked({ status: a.venue_status });
     const b = parse(areaSchema.partial().extend({ bookings: z.enum(['cancel', 'keep']).optional() }), req.body);
     let cancelledBookings = 0;
@@ -581,14 +582,31 @@ export function ownerRoutes(ctx: Ctx) {
     const discount = ac.venue.discount_percent ? Math.round(qt.price * ac.venue.discount_percent) / 100 : 0;
     res.json({ price: qt.price, startsAt: qt.startsAt, endsAt: qt.endsAt, durationMinutes: b.durationMinutes, perHour: Math.round((qt.price / b.durationMinutes) * 60 * 100) / 100, venueDiscount: discount });
   });
+  /**
+   * Delete a playing area: it is closed for booking and greyed out at once, and an admin approves the deletion.
+   * The area and all its bookings stay in the database.
+   */
   r.delete('/areas/:id', async (req, res) => {
     const a = await ownArea(parse(z.uuid(), req.params.id), uid(req));
-    unlocked({ status: a.venue_status });
-    const used = await ctx.db.query(`SELECT 1 FROM bookings WHERE area_id=$1 AND status<>'blocked' LIMIT 1`, [a.id]);
-    if (used.rows[0]) throw conflict('This area has booking history. Deactivate it instead of deleting.', 'has_bookings');
-    await ctx.db.query('DELETE FROM bookings WHERE area_id=$1', [a.id]); // only owner blocks remain
-    await ctx.db.query('DELETE FROM playing_areas WHERE id=$1', [a.id]);
-    res.status(204).end();
+    const b = parse(z.object({ reason: z.string().trim().max(300).optional() }).default({}), req.body ?? {});
+    if (a.deletion_status === 'pending') throw conflict('This playing area is already waiting for deletion approval.', 'deletion_pending');
+    if (a.deletion_status === 'deleted') throw conflict('This playing area is already deleted.', 'deleted');
+    const upcoming = (await ctx.db.query(`SELECT count(*)::int AS n FROM bookings WHERE area_id=$1 AND status IN ('pending','confirmed') AND lower(during) > now()`, [a.id])).rows[0].n;
+    await ctx.db.query(`UPDATE playing_areas SET deletion_status='pending', deletion_requested_at=now(), deletion_reason=$2, deletion_note=NULL, active_before_delete=is_active, is_active=false WHERE id=$1`, [a.id, b.reason ?? null]);
+    await audit(ctx.db, req, 'area.deletion_requested', 'area', a.id, { upcoming });
+    const v = (await ctx.db.query('SELECT name FROM venues WHERE id=$1', [a.venue_id])).rows[0];
+    await ctx.notifier.notifyAdmins('venues', { title: 'Playing area deletion requested', type: 'admin_area_deletion', email: true, data: { link: '/admin/area-approvals?view=deletions' },
+      body: `${req.user!.fullName} asked to delete "${a.name}" at "${v?.name ?? ''}".${upcoming ? ` It has ${upcoming} upcoming booking${upcoming === 1 ? '' : 's'}.` : ''}${b.reason ? ` Reason: ${b.reason}` : ''}` });
+    res.status(202).json({ deletionStatus: 'pending', upcomingBookings: upcoming });
+  });
+  /** take back a deletion request that an admin has not decided yet */
+  r.post('/areas/:id/cancel-deletion', async (req, res) => {
+    const a = await ownArea(parse(z.uuid(), req.params.id), uid(req));
+    const { rows } = await ctx.db.query(`UPDATE playing_areas SET deletion_status=NULL, deletion_requested_at=NULL, deletion_reason=NULL, is_active=COALESCE(active_before_delete, is_active), active_before_delete=NULL
+      WHERE id=$1 AND deletion_status='pending' RETURNING id`, [a.id]);
+    if (!rows[0]) throw conflict('There is no deletion request to cancel.', 'no_request');
+    await audit(ctx.db, req, 'area.deletion_cancelled', 'area', a.id);
+    res.json({ deletionStatus: null });
   });
   const priceRule = z.object({
     sportId: z.number().int().positive().nullable().default(null), dayType: z.enum(['all', 'weekday', 'weekend']).default('all'), dayOfWeek: z.number().int().min(0).max(6).nullable().default(null),
@@ -816,7 +834,7 @@ export function ownerRoutes(ctx: Ctx) {
     }), req.query);
     const { limit, offset } = page(req.query, 100);
     const sql = BOOKING_SELECT
-      .replace('SELECT b.id,', 'SELECT COALESCE(u.full_name, b.walkin_name) AS customer_name, COALESCE(u.email, b.walkin_email) AS customer_email, COALESCE(u.phone, b.walkin_phone) AS customer_phone, b.walkin_phone, b.walkin_city, b.notes AS booking_notes, b.owner_amount, b.commission_amount, b.source AS booking_source, b.sport_id, b.amount_paid::float8 AS amount_paid, COALESCE(b.payment_discount,0)::float8 AS payment_discount, b.payment_method, b.opponent1_name, b.opponent1_phone, b.opponent1_city, b.opponent_name, b.opponent_phone, b.opponent_city, b.refund_amount::float8 AS refund_amount, b.refund_mode, b.cancel_reason, (SELECT environment FROM playing_areas pa WHERE pa.id=b.area_id) AS area_environment, count(*) OVER()::int AS total_rows, b.id,')
+      .replace('SELECT b.id,', 'SELECT COALESCE(u.full_name, b.walkin_name) AS customer_name, COALESCE(u.email, b.walkin_email) AS customer_email, COALESCE(u.phone, b.walkin_phone) AS customer_phone, b.walkin_phone, b.walkin_city, b.notes AS booking_notes, b.owner_amount, b.commission_amount, b.source AS booking_source, b.sport_id, b.amount_paid::float8 AS amount_paid, b.advance_amount::float8 AS advance_amount, COALESCE(b.payment_discount,0)::float8 AS payment_discount, b.payment_method, b.opponent1_name, b.opponent1_phone, b.opponent1_city, b.opponent_name, b.opponent_phone, b.opponent_city, b.refund_amount::float8 AS refund_amount, b.refund_mode, b.cancel_reason, (SELECT environment FROM playing_areas pa WHERE pa.id=b.area_id) AS area_environment, count(*) OVER()::int AS total_rows, b.id,')
       .replace('FROM bookings b', 'FROM bookings b LEFT JOIN users u ON u.id=b.customer_id');
     const like = f.q ? '%' + f.q.replace(/[%_\\]/g, '\\$&') + '%' : null;
     const { rows } = await ctx.db.query(
@@ -832,7 +850,7 @@ export function ownerRoutes(ctx: Ctx) {
     res.json({ bookings: rows.map(({ total_rows, ...r }: any) => r), total: rows[0]?.total_rows ?? 0 });
   });
 
-  /** Gate check-in: look a booking up by its reference (for example KO-AB12CD) to see if it is good for entry. */
+  /** Gate check-in: look a booking up by its reference (for example PX-AB12CD) to see if it is good for entry. */
   r.post('/bookings/verify', async (req, res) => {
     const { reference } = parse(z.object({ reference: z.string().trim().min(6).max(20).transform((x) => x.toUpperCase()) }), req.body);
     const { rows } = await ctx.db.query(
@@ -863,7 +881,7 @@ export function ownerRoutes(ctx: Ctx) {
     const b = (await q.query(`SELECT b.*, v.owner_id, lower(b.during) AS s, upper(b.during) AS e FROM bookings b JOIN venues v ON v.id=b.venue_id WHERE b.id=$1 FOR UPDATE OF b`, [id])).rows[0];
     if (!b) throw notFound('Booking not found');
     if (b.owner_id !== ownerId) throw forbidden();
-    if (b.source !== 'offline') throw badRequest('Only bookings you made yourself can be edited here. Online bookings are paid through KickOff.', 'not_offline');
+    if (b.source !== 'offline') throw badRequest('Only bookings you made yourself can be edited here. Online bookings are paid through PlaynX.', 'not_offline');
     return b;
   };
   const cityField = z.string().trim().min(2).max(80);
@@ -976,9 +994,9 @@ export function ownerRoutes(ctx: Ctx) {
       .refine((x) => x.amount > 0 || x.discount > 0, { message: 'Enter an amount received or a discount', path: ['amount'] })
       .refine((x) => x.amount === 0 || !!x.mode, { message: 'Choose the mode of payment', path: ['mode'] }), req.body);
     const out = await ctx.db.tx(async (q) => {
-      const bk = (await q.query(`SELECT b.id, b.total, COALESCE(b.amount_paid,0) AS paid, COALESCE(b.payment_discount,0) AS disc, b.status, b.source, b.event_kind FROM bookings b JOIN venues v ON v.id=b.venue_id WHERE b.id=$1 AND v.owner_id=$2 FOR UPDATE OF b`, [id, uid(req)])).rows[0];
+      const bk = (await q.query(`SELECT b.id, b.total, COALESCE(b.amount_paid,0) AS paid, COALESCE(b.payment_discount,0) AS disc, b.status, b.source, b.event_kind, b.advance_amount FROM bookings b JOIN venues v ON v.id=b.venue_id WHERE b.id=$1 AND v.owner_id=$2 FOR UPDATE OF b`, [id, uid(req)])).rows[0];
       if (!bk) throw notFound('Booking not found');
-      if (bk.source !== 'offline') throw badRequest('Online bookings are paid through KickOff. Only walk-in bookings can have payments recorded here.', 'not_offline');
+      if (bk.source !== 'offline' && bk.advance_amount == null) throw badRequest('Online bookings are paid through PlaynX. Only walk-in bookings can have payments recorded here.', 'not_offline');
       if (!['confirmed', 'completed'].includes(bk.status) && !(bk.status === 'blocked' && bk.event_kind)) throw badRequest('This booking is not active', 'not_active');
       const due = Math.round((Number(bk.total) - Number(bk.paid) - Number(bk.disc)) * 100) / 100;
       if (b.amount + b.discount > due + 0.001) throw badRequest(`Only ₹${due} is pending on this booking`, 'overpayment');
@@ -1011,15 +1029,15 @@ export function ownerRoutes(ctx: Ctx) {
   r.get('/payouts', async (req, res) =>
     res.json({ payouts: (await ctx.db.query('SELECT * FROM owner_payouts WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 100', [uid(req)])).rows }));
   /**
-   * Account: where the money of each KickOff booking stands. Gross value is what the customer pays. The owner's share waits
+   * Account: where the money of each PlaynX booking stands. Gross value is what the customer pays. The owner's share waits
    * "On hold" until the hold time after the game has passed; then it is "Ready to pay" (the gross value less the platform fee),
-   * or, when the customer raised a complaint on that booking, the full amount stays with KickOff under "Dispute" until it is
+   * or, when the customer raised a complaint on that booking, the full amount stays with PlaynX under "Dispute" until it is
    * settled (what is refunded to the customer is shown there).
    */
   r.get('/payout-status', async (req, res) => {
     const hours = await holdHours(ctx.db); const now = ctx.now();
     const { rows } = await ctx.db.query(
-      `SELECT b.id, b.reference, b.status, lower(b.during) AS starts_at, upper(b.during) AS ends_at, b.total::float8 AS gross, COALESCE(b.commission_amount,0)::float8 AS fee, COALESCE(b.owner_amount,0)::float8 AS owner_amount,
+      `SELECT b.id, b.reference, b.status, lower(b.during) AS starts_at, upper(b.during) AS ends_at, COALESCE(b.advance_amount, b.total)::float8 AS gross, COALESCE(b.commission_amount,0)::float8 AS fee, (CASE WHEN b.advance_amount IS NOT NULL THEN GREATEST(0, b.advance_amount - COALESCE(b.commission_amount,0)) ELSE COALESCE(b.owner_amount,0) END)::float8 AS owner_amount,
               v.name AS venue_name, a.name AS area_name, COALESCE(u.full_name, b.walkin_name) AS customer_name,
               EXISTS (SELECT 1 FROM support_tickets t WHERE t.booking_id=b.id AND t.user_id=b.customer_id AND t.status IN ('open','in_progress')) AS disputed,
               (SELECT COALESCE(sum(r.amount),0)::float8 FROM refunds r JOIN payments p ON p.id=r.payment_id WHERE p.booking_id=b.id AND r.status='processed') AS refunded,
@@ -1062,7 +1080,7 @@ export function ownerRoutes(ctx: Ctx) {
     res.json({ transactions: rows.map(({ total_rows, razorpay_payment_id, disputed, ...t }: any) => ({ ...t, commission_amount: money2(t.commission_amount, kept(t)), owner_amount: money2(t.owner_amount, kept(t)), transaction_id: razorpay_payment_id ? '…' + String(razorpay_payment_id).slice(-8) : t.id.slice(0, 8),
       release_at: releaseOf(t.ends_at, now, hours, t.booking_status, disputed).releaseAt, release_state: releaseOf(t.ends_at, now, hours, t.booking_status, disputed).state })), total: rows[0]?.total_rows ?? 0 });
   });
-  /** One month of the owner's online earnings as a CSV: what each booking made, what KickOff kept, and when each payout is released. */
+  /** One month of the owner's online earnings as a CSV: what each booking made, what PlaynX kept, and when each payout is released. */
   r.get('/statements/monthly.csv', async (req, res) => {
     const f = parse(z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }), req.query);
     const hours = await holdHours(ctx.db); const now = ctx.now();
@@ -1075,10 +1093,10 @@ export function ownerRoutes(ctx: Ctx) {
           AND to_char(lower(b.during) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM')=$2 ORDER BY lower(b.during)`, [uid(req), f.month]);
     const out: Record<string, unknown>[] = rows.map((r: any) => { const rel = releaseOf(r.ends_at, now, hours, r.status, r.disputed);
       return { booking: r.reference, game_date: new Date(r.starts_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), venue: r.venue_name, area: r.area_name, customer: r.customer_name,
-        booking_amount: r.subtotal, discount: r.discount, customer_paid: r.total, kickoff_commission: r.commission_amount, you_earn: r.owner_amount,
+        booking_amount: r.subtotal, discount: r.discount, customer_paid: r.total, playnx_commission: r.commission_amount, you_earn: r.owner_amount,
         release_date: rel.releaseAt ? new Date(rel.releaseAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '', payout_status: rel.state }; });
     const sum = (k: string) => Math.round(rows.reduce((n: number, r: any) => n + Number(r[k]), 0) * 100) / 100;
-    if (out.length) out.push({ booking: 'TOTAL', game_date: '', venue: '', area: '', customer: '', booking_amount: sum('subtotal'), discount: sum('discount'), customer_paid: sum('total'), kickoff_commission: sum('commission_amount'), you_earn: sum('owner_amount'), release_date: '', payout_status: '' });
+    if (out.length) out.push({ booking: 'TOTAL', game_date: '', venue: '', area: '', customer: '', booking_amount: sum('subtotal'), discount: sum('discount'), customer_paid: sum('total'), playnx_commission: sum('commission_amount'), you_earn: sum('owner_amount'), release_date: '', payout_status: '' });
     res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="statement-${f.month}.csv"`);
     res.send(out.length ? csv(out) : 'No online bookings this month');
   });

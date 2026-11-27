@@ -6,5 +6,5 @@ firebase.initializeApp({ apiKey: p.get('apiKey'), authDomain: p.get('authDomain'
 const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const n = payload.notification || {};
-  self.registration.showNotification(n.title || 'KickOff', { body: n.body, icon: '/favicon.svg' });
+  self.registration.showNotification(n.title || 'PlaynX', { body: n.body, icon: '/favicon.png' });
 });

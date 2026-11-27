@@ -8,7 +8,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('appinstalled', () => { saved = null; listeners.forEach((l) => l()); });
 }
 
-/** `canInstall` is true only when the browser is offering to install KickOff (Chrome, Edge and Android). `install()` shows its own install prompt. */
+/** `canInstall` is true only when the browser is offering to install PlaynX (Chrome, Edge and Android). `install()` shows its own install prompt. */
 export function useInstallApp() {
   const [, tick] = useState(0);
   useEffect(() => { const l = () => tick((n) => n + 1); listeners.add(l); return () => { listeners.delete(l); }; }, []);

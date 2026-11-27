@@ -1,3 +1,5 @@
+import { AnimatedNumber } from './Motion';
+import { Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { memo, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, createContext, useContext } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -81,7 +83,7 @@ export function PasswordInput({ label, error, hint, mandatory, filter, ...p }: O
     <Field label={label} error={error} soft={soft} hint={hint} mandatory={mandatory || p.required}>{(id) => (
       <div className="relative">
         <input id={id} type={show ? 'text' : 'password'} aria-required={mandatory || p.required ? true : undefined} aria-invalid={error ? true : undefined} aria-describedby={error ? `${id}-error` : undefined} {...p} className={cx('field !pr-16', error && 'border-danger', p.className)} />
-        <button type="button" aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show} onClick={() => setShow((x) => !x)} className="absolute inset-y-0 right-3 text-xs font-semibold text-muted hover:text-ink">{show ? 'Hide' : 'Show'}</button>
+        <button type="button" aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show} onClick={() => setShow((x) => !x)} className="absolute inset-y-0 right-3 text-xs font-semibold text-muted hover:text-ink"><span key={String(show)} className="eye-flip inline-block">{show ? 'Hide' : 'Show'}</span></button>
       </div>)}</Field>
   );
 }
@@ -150,11 +152,11 @@ export function Modal({ open, onClose, title, children, wide, locked }: { open: 
     return () => document.removeEventListener('keydown', h);
   }, [open, onClose, locked, inline]);
   if (!open) return null;
-  if (inline) return <section aria-label={title} className="card p-5"><h2 className="mb-4 text-2xl font-bold">{title}</h2><InlineModalCtx.Provider value={false}>{children}</InlineModalCtx.Provider></section>;
+  if (inline) return <section aria-label={title} className="card m-settle p-5"><h2 className="mb-4 text-2xl font-bold">{title}</h2><InlineModalCtx.Provider value={false}>{children}</InlineModalCtx.Provider></section>;
   // drawn at the top level of the page, so no page layer (a sticky column, an animated card, the footer) can ever paint over it
   return createPortal(
-    <div className={cx('fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4', themeClass())} onMouseDown={(e) => !locked && e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={title} className={cx('card animate-rise max-h-[92vh] w-full overflow-y-auto rounded-b-none p-5 sm:rounded-b-2xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}>
+    <div className={cx('modal-backdrop fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4', themeClass())} onMouseDown={(e) => !locked && e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-label={title} className={cx('card m-modal max-h-[92vh] w-full overflow-y-auto rounded-b-none p-5 sm:rounded-b-2xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}>
         <div className="mb-4 flex items-center justify-between"><h2 className="text-2xl font-bold">{title}</h2>
           {!locked && <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted hover:bg-surface2">✕</button>}</div>
         {children}
@@ -175,8 +177,8 @@ export function ErrorBox({ error, retry }: { error: unknown; retry?: () => void 
 }
 export function Empty({ title, hint, action, icon = '🏟️' }: { title: string; hint?: string; action?: ReactNode; icon?: string }) {
   return (
-    <div className="card flex flex-col items-center gap-2 p-10 text-center"><div className="text-4xl">{icon}</div>
-      <h3 className="text-xl font-bold">{title}</h3>{hint && <p className="max-w-sm text-sm text-muted">{hint}</p>}{action}</div>
+    <div className="card empty-state flex flex-col items-center gap-2 p-10 text-center"><div className="empty-ico text-4xl" aria-hidden="true">{icon}</div>
+      <h3 className="text-xl font-bold">{title}</h3>{hint && <p className="max-w-sm text-sm text-muted">{hint}</p>}{action && <div className="empty-action">{action}</div>}</div>
   );
 }
 export const SkeletonCards = ({ n = 6 }: { n?: number }) => (
@@ -204,13 +206,26 @@ export function Tabs({ tabs, value, onChange }: { tabs: { id: string; label: str
   );
 }
 
-export function Stat({ label, value, hint, accent }: { label: string; value: ReactNode; hint?: string; accent?: boolean }) {
-  return (
-    <div className={cx('card min-w-0 p-4 sm:p-5', accent && 'border-brand/50')}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted sm:text-xs">{label}</p>
-      <p className={cx('mt-1 break-words font-display text-2xl font-bold leading-tight sm:text-4xl', accent && 'text-[rgb(var(--brand-text))]')}>{value}</p>
+export function Stat({ label, value, hint, accent, to, count, format, suffix, valueLabel, index, live }: {
+  label: string; value?: ReactNode; hint?: string; accent?: boolean;
+  /** makes the card a link to the page behind the number */ to?: string;
+  /** a number from the server: counts up on load and glides to a new value on refresh (instead of `value`) */ count?: number; format?(n: number): string;
+  /** shown after the counted number, e.g. " / 30" */ suffix?: ReactNode; /** spoken text for the number */ valueLabel?: string;
+  /** position in its grid: the cards fade in one after another */ index?: number;
+  /** a small availability dot by the label: green with a gentle pulse when true, grey when false */ live?: boolean;
+}) {
+  const body = (<>
+      <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted sm:text-xs">{label}
+        {live !== undefined && <span aria-hidden="true" className="relative inline-flex h-2 w-2">{live && <span className="stat-ping absolute inline-flex h-full w-full rounded-full bg-ok" />}<span className={cx('relative inline-flex h-2 w-2 rounded-full', live ? 'bg-ok' : 'bg-muted/50')} /></span>}</p>
+      <p aria-label={valueLabel} className={cx('mt-1 break-words font-display text-2xl font-bold leading-tight sm:text-4xl', accent && 'text-[rgb(var(--brand-text))]')}>
+        {count !== undefined ? <><AnimatedNumber value={count} format={format} />{suffix}</> : value}</p>
       {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
-    </div>
+      {to && <span aria-hidden="true" className="stat-arrow absolute right-4 top-4 text-muted">→</span>}
+  </>);
+  const enter = index !== undefined ? { className: 'stat-enter', style: { animationDelay: `${index * 65}ms` } } : { className: '', style: undefined };
+  if (to) return <Link to={to} style={enter.style} className={cx('card stat-card group relative block min-w-0 p-4 sm:p-5', accent && 'border-brand/50 stat-accent', enter.className)}>{body}</Link>;
+  return (
+    <div style={enter.style} className={cx('card min-w-0 p-4 sm:p-5', accent && 'border-brand/50', enter.className)}>{body}</div>
   );
 }
 
@@ -221,7 +236,7 @@ export function Table<T extends { id?: string }>({ columns, rows, onRow, animate
   return (
     <div className="card overflow-x-auto">
       <table className="w-full min-w-[640px] text-left text-sm">
-        <thead><tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+        <thead className="table-head"><tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
           {columns.map((c) => <th key={c.key} className={cx('border-r border-line/60 px-4 py-3 font-semibold last:border-r-0', c.className)}>{c.header}</th>)}</tr></thead>
         <tbody>
           {rows.map((r, i) => (
@@ -266,7 +281,7 @@ function AnimatedTable<T extends { id?: string }>({ columns, rows, onRow, pageKe
           <p role="status" className="mb-2 flex items-center gap-3 text-xs text-muted"><b className="text-ink">{picked.size} selected</b><button type="button" onClick={() => setPicked(new Set())} className="font-semibold text-[rgb(var(--brand-text))] hover:underline">Clear selection</button></p></motion.div>)}</AnimatePresence>
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead><tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+          <thead className="table-head"><tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
             {columns.map((c) => <th key={c.key} className={cx('border-r border-line/60 px-4 py-3 font-semibold last:border-r-0', c.className)}>{c.header}</th>)}</tr></thead>
           <AnimatePresence mode="wait" initial={false}>
             <motion.tbody key={String(pageKey ?? 'all')} exit={reduce ? undefined : { opacity: 0 }} transition={{ duration: 0.15 }}>
@@ -276,7 +291,7 @@ function AnimatedTable<T extends { id?: string }>({ columns, rows, onRow, pageKe
                     aria-selected={on || undefined} onClick={onRow ? () => onRow(r) : undefined} className={cx('bk-row border-b border-line/60 last:border-0', onRow && 'cursor-pointer', on && 'is-picked')}>
                     {columns.map((c, ci) => (
                       <td key={c.key} className={cx('border-r border-line/60 px-4 py-3 align-middle last:border-r-0', c.className, flash.has(`${id}::${c.key}`) && 'cell-flash')}>
-                        {ci === 0 && <label className="fx-check bk-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="sr-only" aria-label="Select this row" checked={on} onChange={() => toggle(id)} /><span className="fx-box grid h-[15px] w-[15px] place-items-center rounded-[4px] border-2 border-line transition-colors" aria-hidden="true"><svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#101010" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg></span></label>}
+                        {ci === 0 && <label className="fx-check bk-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="sr-only" aria-label="Select this row" checked={on} onChange={() => toggle(id)} /><span className="fx-box grid h-[15px] w-[15px] place-items-center rounded-[4px] border-2 border-line transition-colors" aria-hidden="true"><svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#0B1340" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg></span></label>}
                         {c.render ? c.render(r) : String((r as any)[c.key] ?? '—')}</td>))}
                   </motion.tr>); })}
             </motion.tbody>
@@ -289,7 +304,7 @@ function AnimatedTable<T extends { id?: string }>({ columns, rows, onRow, pageKe
 
 /** A page shown inside a tab of another page leaves its own title out and keeps only its buttons. */
 export const EmbeddedCtx = createContext(false);
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: string; actions?: ReactNode }) {
   const embedded = useContext(EmbeddedCtx);
   if (embedded) return actions ? <div className="mb-3 flex flex-wrap justify-end gap-2">{actions}</div> : null;
   return (

@@ -19,7 +19,7 @@ const ADMIN = { id: 'a1', email: 'admin@x.co', phone: null, fullName: 'Platform 
 const ALERT = { id: 'n1', title: 'Venue submitted for approval', body: 'Arjun Mehta submitted "Green Arena" (Bengaluru) for review.', type: 'admin_venue_submitted', data: { link: '/admin/venues?status=pending' }, read_at: null, created_at: '2030-01-01T10:00:00Z' };
 
 beforeEach(() => {
-  vi.clearAllMocks(); sessionStorage.setItem('kickoff_token', 't');
+  vi.clearAllMocks(); sessionStorage.setItem('playnx_token', 't');
   vi.mocked(api.post).mockResolvedValue({});
   vi.mocked(api.get).mockImplementation(async (url: string) => ({
     '/auth/me': { user: ADMIN }, '/me/notifications': { notifications: [ALERT], unread: 1 }, '/admin/venues': { venues: [] },

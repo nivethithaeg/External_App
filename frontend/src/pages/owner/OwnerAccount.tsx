@@ -8,12 +8,14 @@ import { Badge, Button, Card, Input, PageHeader, PasswordInput, QueryBoundary } 
 import { NotificationPreferences } from '../../components/NotificationPreferences';
 import { fmtDateTime, titleCase } from '../../lib/utils';
 import { DocumentsSection } from './OwnerOps';
+import { BusinessStep, businessTypeLabel } from './OwnerOnboarding';
+import { Modal, Textarea } from '../../components/ui';
 import { isIndianMobile, MOBILE_MESSAGE } from '../../lib/phone';
 
 interface Change { field: string; label: string; current: string | null; proposed: string | null }
 interface ProfileData { profile: any; user: any; pendingChange: { id: string; requestedAt: string; changes: Change[] } | null; lastDecision: { status: 'approved' | 'rejected'; note: string | null; at: string; changes: Change[] } | null }
 const useProfile = () => useQuery({ queryKey: ['profile'], queryFn: () => get<ProfileData>('/me/profile') });
-const SENT = 'Sent to KickOff for approval. Your current details stay live until an admin approves the change.';
+const SENT = 'Sent to PlaynX for approval. Your current details stay live until an admin approves the change.';
 
 /** Edits to these details wait for an admin. This shows what is waiting, lets the owner withdraw it, and explains a rejection. */
 function ChangeNotice({ pending, last, fields }: { pending: ProfileData['pendingChange']; last: ProfileData['lastDecision']; fields: string[] }) {
@@ -24,7 +26,7 @@ function ChangeNotice({ pending, last, fields }: { pending: ProfileData['pending
   const l = !p && last?.status === 'rejected' && mine(last.changes).length ? last : null;
   if (!p && !l) return null;
   return p ? (
-    <Card className="space-y-2 border-warn/40 bg-warn/10 p-4 text-sm"><p className="font-semibold">Waiting for KickOff approval since {fmtDateTime(p.requestedAt)}</p>
+    <Card className="space-y-2 border-warn/40 bg-warn/10 p-4 text-sm"><p className="font-semibold">Waiting for PlaynX approval since {fmtDateTime(p.requestedAt)}</p>
       <p className="text-muted">Your current details below stay live. These changes show up only after an admin approves them.</p>
       <ul className="space-y-1">{mine(p.changes).map((c) => <li key={c.field}><b>{c.label}:</b> <span className="text-muted line-through">{c.current ?? 'not set'}</span> → <b>{c.proposed}</b></li>)}</ul>
       <Button variant="ghost" className="!py-1" loading={withdraw.isPending} onClick={() => withdraw.mutate()}>Withdraw request</Button></Card>
@@ -38,6 +40,40 @@ export function BusinessPage() {
   const q = useProfile();
   return <QueryBoundary q={q}>{(d) => <BusinessForm profile={d.profile} user={d.user} pending={d.pendingChange} last={d.lastDecision} />}</QueryBoundary>;
 }
+/**
+ * Business type after approval: the owner asks for a change with the details the new type needs. The approved details stay
+ * live (venues, bookings, payouts) until a PlaynX admin approves it.
+ */
+function BusinessTypeCard({ current }: { current: string | null }) {
+  const { toast } = useToast(); const qc = useQueryClient();
+  const req = useQuery({ queryKey: ['business-change'], queryFn: () => get<{ request: any | null }>('/owner/application/business-change') });
+  const [open, setOpen] = useState(false); const [reason, setReason] = useState('');
+  const app = useQuery({ queryKey: ['owner-application'], queryFn: () => get<any>('/owner/application'), enabled: open });
+  const cancel = useMutation({ mutationFn: () => del('/owner/application/business-change'), onSuccess: () => { qc.invalidateQueries({ queryKey: ['business-change'] }); toast('Request cancelled. Your business type stays as it is.'); }, onError: (e) => toast(apiError(e), 'error') });
+  const r = req.data?.request; const pending = r?.status === 'pending';
+  return (
+    <Card className="space-y-3 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><div className="text-xs uppercase text-muted">Business type</div><b className="text-lg">{businessTypeLabel(current)}</b></div>
+        {pending ? <Button variant="ghost" loading={cancel.isPending} onClick={() => cancel.mutate()}>Cancel request</Button>
+          : <Button variant="ghost" onClick={() => { setReason(''); setOpen(true); }}>Change business type</Button>}
+      </div>
+      {pending && <p role="status" className="rounded-xl bg-warn/10 px-3 py-2 text-sm">Change to <b>{businessTypeLabel(r.toType)}</b> is waiting for PlaynX approval. Until then your current business details stay in use.</p>}
+      {r?.status === 'rejected' && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">Your request to change to {businessTypeLabel(r.toType)} was rejected: {r.reviewNote}</p>}
+      {r?.status === 'approved' && <p className="text-sm text-ok">Changed from {businessTypeLabel(r.fromType)} on {fmtDateTime(r.reviewedAt)}.</p>}
+      <Modal open={open} onClose={() => setOpen(false)} title="Change business type" wide>
+        <div className="space-y-4">
+          <p className="rounded-xl bg-brand/10 px-3 py-2 text-sm">Choose the new type and fill in its details. PlaynX checks them before the change goes live; until then nothing changes for your venues, bookings or payouts.</p>
+          <Textarea label="Why are you changing it? (optional)" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. We registered a partnership firm" />
+          {app.isLoading || !app.data ? <p className="text-sm text-muted">Loading your details…</p> : (
+            <BusinessStep d={app.data} title="" nextLabel="Send for approval" refresh={() => {}} toPersonal={() => {}}
+              submit={(body) => post('/owner/application/business-change', { ...body, ...(reason.trim() ? { reason: reason.trim() } : {}) })}
+              next={() => { setOpen(false); qc.invalidateQueries({ queryKey: ['business-change'] }); toast('Sent to PlaynX for approval. Your current details stay in use until then.'); }} />)}
+        </div>
+      </Modal>
+    </Card>);
+}
+
 function BusinessForm({ profile, user, pending, last }: { profile: any; user: any; pending: ProfileData['pendingChange']; last: ProfileData['lastDecision'] }) {
   const { toast } = useToast(); const qc = useQueryClient();
   const [f, setF] = useState({ businessName: profile.business_name ?? '', gstin: profile.gstin ?? '', pan: profile.pan ?? '', address: profile.address ?? '' });
@@ -45,16 +81,17 @@ function BusinessForm({ profile, user, pending, last }: { profile: any; user: an
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   return (
     <div className="max-w-2xl space-y-5"><PageHeader title="Business information" actions={<Badge status={profile.verification_status}>Account {profile.verification_status}</Badge>} />
-      {profile.verification_note && <p className="rounded-xl border border-line p-3 text-sm"><b>Note from KickOff:</b> {profile.verification_note}</p>}
+      {profile.verification_note && <p className="rounded-xl border border-line p-3 text-sm"><b>Note from PlaynX:</b> {profile.verification_note}</p>}
       <Card className="grid gap-3 p-5 text-sm sm:grid-cols-2"><div><div className="text-xs uppercase text-muted">Authorized representative</div><b>{user.fullName}</b></div><div><div className="text-xs uppercase text-muted">Business email</div><b>{user.email}</b><div className="text-xs text-muted">Change it in My profile</div></div></Card>
+      <BusinessTypeCard current={profile.business_type} />
       <ContactNumbers profile={profile} user={user} />
       <ChangeNotice pending={pending} last={last} fields={['business_name', 'gstin', 'pan', 'address']} />
       <Card className="p-5"><form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
         <Input label="Business legal name" value={f.businessName} onChange={set('businessName')} required minLength={2} />
         <div className="grid gap-3 sm:grid-cols-2"><Input label="GSTIN" value={f.gstin} onChange={set('gstin')} /><Input label="PAN" value={f.pan} onChange={set('pan')} /></div>
         <Input label="Registered address" value={f.address} onChange={set('address')} />
-        <p className="text-xs text-muted">Changes to these details are reviewed by KickOff. They take effect only after an admin approves them.</p><Button type="submit" loading={save.isPending}>Send for approval</Button></form></Card>
-      <section aria-label="Venue documents" className="space-y-3 pt-2"><h2 className="text-3xl font-bold">Venue documents</h2><p className="text-sm text-muted">Ownership and licence documents reviewed by KickOff.</p><DocumentsSection /></section></div>
+        <p className="text-xs text-muted">Changes to these details are reviewed by PlaynX. They take effect only after an admin approves them.</p><Button type="submit" loading={save.isPending}>Send for approval</Button></form></Card>
+      <section aria-label="Venue documents" className="space-y-3 pt-2"><h2 className="text-3xl font-bold">Venue documents</h2><p className="text-sm text-muted">Ownership and licence documents reviewed by PlaynX.</p><DocumentsSection /></section></div>
   );
 }
 
@@ -95,7 +132,25 @@ function ContactNumbers({ profile, user }: { profile: any; user: any }) {
 
 export function BankPage() {
   const q = useProfile();
-  return <QueryBoundary q={q}>{(d) => <div className="max-w-2xl space-y-5"><BankForm profile={d.profile} pending={d.pendingChange} last={d.lastDecision} /><PaymentCollection /></div>}</QueryBoundary>;
+  return <QueryBoundary q={q}>{(d) => <div className="max-w-2xl space-y-5"><BankForm profile={d.profile} pending={d.pendingChange} last={d.lastDecision} /></div>}</QueryBoundary>;
+}
+
+/** Account → Payment settings: full amount or advance when customers book, and the advance percentage. */
+export function PaymentSettingsPage() {
+  const q = useQuery({ queryKey: ['payment-collection'], queryFn: () => get<{ mode: 'full' | 'advance'; advancePercent: number | null }>('/owner/payment-collection') });
+  const adv = q.data?.mode === 'advance' && q.data.advancePercent != null;
+  return (
+    <div className="max-w-2xl space-y-5">
+      <PageHeader title="Payment settings" subtitle="Choose how much customers pay online when they book your playing areas." />
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-5" aria-label="Current setting">
+        <div><p className="text-xs font-semibold uppercase tracking-wide text-muted">Right now</p>
+          <p className="mt-1 font-display text-2xl font-bold">{q.isLoading ? '…' : adv ? `Advance ${q.data!.advancePercent}%` : 'Full amount'}</p>
+          <p className="text-sm text-muted">{q.isLoading ? '' : adv ? `Customers pay ${q.data!.advancePercent}% online when they book (₹${Math.round(10 * q.data!.advancePercent!)} for a ₹1,000 slot) and the rest at the venue. You record the balance in Bookings.` : 'Customers pay the whole amount online when they book.'}</p></div>
+        <Badge status={adv ? 'pending' : 'approved'}>{adv ? 'Advance' : 'Full payment'}</Badge>
+      </Card>
+      <PaymentCollection />
+      <p className="text-sm text-muted">A change applies to <b className="text-ink">new bookings only</b>. Bookings already made keep the amount the customer paid when they booked.</p>
+    </div>);
 }
 
 /** When a customer books: the full amount, or only an advance (a percentage) with the rest paid at the venue after the game. */
@@ -110,7 +165,7 @@ export function PaymentCollection() {
   const pct = Number(v.pct); const pctOk = /^\d{1,2}$/.test(v.pct) && pct >= 1 && pct <= 99;
   return (
     <Card className="p-5"><form className="space-y-4" noValidate onSubmit={(e) => { e.preventDefault(); setErr(''); if (v.mode === 'advance' && !pctOk) return setErr('Enter the advance percentage, from 1 to 99.'); save.mutate(); }}>
-      <div><h2 className="text-2xl font-bold">How customers pay when they book</h2><p className="text-sm text-muted">Do you take the full amount when a customer books, or only an advance?</p></div>
+      <div><h2 className="text-2xl font-bold">Change it</h2><p className="text-sm text-muted">Do you take the full amount when a customer books, or only an advance?</p></div>
       <fieldset className="grid gap-2 sm:grid-cols-2"><legend className="sr-only">Amount taken when booking</legend>
         {([['full', 'Full amount', 'Customers pay the whole amount when they book.'], ['advance', 'Advance amount only', 'Customers pay a part when they book and the rest after playing.']] as const).map(([k, l, h]) => (
           <label key={k} className={`flex cursor-pointer gap-3 rounded-xl border p-3 text-sm ${v.mode === k ? 'border-brand bg-brand/10' : 'border-line'}`}>
@@ -128,11 +183,11 @@ function BankForm({ profile, pending, last }: { profile: any; pending: ProfileDa
   const { toast } = useToast(); const qc = useQueryClient();
   const [f, setF] = useState({ bankAccountName: profile.bank_account_name ?? '', bankAccountNumber: '', bankIfsc: profile.bank_ifsc ?? '', upiId: profile.upi_id ?? '' });
   const has = !!(profile.bank_account_number || profile.upi_id);
-  const save = useMutation({ mutationFn: () => put('/owner/profile', Object.fromEntries(Object.entries(f).filter(([, v]) => v !== ''))), onSuccess: (r: any) => { setF({ ...f, bankAccountNumber: '' }); qc.invalidateQueries({ queryKey: ['profile'] }); if (!has) { qc.invalidateQueries({ queryKey: ['owner-bank'] }); qc.invalidateQueries({ queryKey: ['owner-checklist'] }); return toast('Bank details saved. The rest of the portal is open now. KickOff verifies them before your first payout.', 'success'); } toast(r?.pending ? SENT : 'No changes to save', r?.pending ? 'info' : undefined); }, onError: (e) => toast(apiError(e), 'error') });
+  const save = useMutation({ mutationFn: () => put('/owner/profile', Object.fromEntries(Object.entries(f).filter(([, v]) => v !== ''))), onSuccess: (r: any) => { setF({ ...f, bankAccountNumber: '' }); qc.invalidateQueries({ queryKey: ['profile'] }); if (!has) { qc.invalidateQueries({ queryKey: ['owner-bank'] }); qc.invalidateQueries({ queryKey: ['owner-checklist'] }); return toast('Bank details saved. The rest of the portal is open now. PlaynX verifies them before your first payout.', 'success'); } toast(r?.pending ? SENT : 'No changes to save', r?.pending ? 'info' : undefined); }, onError: (e) => toast(apiError(e), 'error') });
   return (
     <div className="space-y-5"><PageHeader title="Bank account details" subtitle="Where your settlements are paid" actions={has ? <Badge status={profile.bank_verified ? 'verified' : 'pending'}>{profile.bank_verified ? 'Verified' : 'Verification pending'}</Badge> : undefined} />
       {has && <Card className="p-5 text-sm"><div className="grid gap-3 sm:grid-cols-2"><div><div className="text-xs uppercase text-muted">Account holder</div><b>{profile.bank_account_name ?? '—'}</b></div><div><div className="text-xs uppercase text-muted">Account number</div><b>{profile.bank_account_number ?? '—'}</b></div><div><div className="text-xs uppercase text-muted">IFSC</div><b>{profile.bank_ifsc ?? '—'}</b></div><div><div className="text-xs uppercase text-muted">UPI</div><b>{profile.upi_id ?? '—'}</b></div></div>
-        {!profile.bank_verified && <p className="mt-3 rounded-lg bg-warn/10 p-2 text-warn">Settlements are paid only to a verified account. KickOff finance verifies new or changed details.</p>}</Card>}
+        {!profile.bank_verified && <p className="mt-3 rounded-lg bg-warn/10 p-2 text-warn">Settlements are paid only to a verified account. PlaynX finance verifies new or changed details.</p>}</Card>}
       <ChangeNotice pending={pending} last={last} fields={['bank_account_name', 'bank_account_number', 'bank_ifsc', 'upi_id']} />
       <Card className="p-5"><form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (!Object.values(f).some(Boolean)) return toast('Enter the details to save', 'error');
           if (!has) { // the first account needs all three before anything else in the portal opens
@@ -144,7 +199,7 @@ function BankForm({ profile, pending, last }: { profile: any; pending: ProfileDa
         <div className="grid gap-3 sm:grid-cols-2"><Input mandatory={!has} label="Account number" inputMode="numeric" value={f.bankAccountNumber} onChange={(e) => setF({ ...f, bankAccountNumber: e.target.value.replace(/\D/g, '') })} placeholder={profile.bank_account_number ?? ''} hint={has ? 'Leave blank to keep the current number' : undefined} />
           <Input mandatory={!has} label="IFSC" value={f.bankIfsc} onChange={(e) => setF({ ...f, bankIfsc: e.target.value.toUpperCase() })} pattern="[A-Z]{4}0[A-Z0-9]{6}" placeholder="HDFC0001234" /></div>
         <Input label="UPI ID (optional)" value={f.upiId} onChange={(e) => setF({ ...f, upiId: e.target.value })} />
-        {!has ? <p className="text-xs text-muted">Add your bank account to open the rest of the portal. It is saved straight away and KickOff verifies it before your first payout.</p> : <p className="text-xs text-muted">Changed bank details are reviewed by KickOff. Your current account is used for payouts until an admin approves the change, and the new one is then verified before it is paid.</p>}
+        {!has ? <p className="text-xs text-muted">Add your bank account to open the rest of the portal. It is saved straight away and PlaynX verifies it before your first payout.</p> : <p className="text-xs text-muted">Changed bank details are reviewed by PlaynX. Your current account is used for payouts until an admin approves the change, and the new one is then verified before it is paid.</p>}
         <Button type="submit" loading={save.isPending}>{has ? 'Send for approval' : 'Save bank details'}</Button></form></Card></div>
   );
 }

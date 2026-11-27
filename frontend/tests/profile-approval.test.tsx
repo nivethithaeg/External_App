@@ -25,7 +25,7 @@ const CHANGE = { id: 'c1', status: 'pending', requested_at: '2030-01-01T05:00:00
 let me: any = OWNER; let profileData: any; let adminChanges: any[];
 const calls: [string, string, any?][] = [];
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('kickoff_token', 't'); calls.length = 0; me = OWNER; adminChanges = [CHANGE];
+  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('playnx_token', 't'); calls.length = 0; me = OWNER; adminChanges = [CHANGE];
   profileData = { user: OWNER, profile: PROFILE, pendingChange: null, lastDecision: null };
   vi.mocked(api.get).mockImplementation(async (url: string) => ({
     '/auth/me': { user: me }, '/owner/application': ACTIVE, '/me/notifications': { notifications: [], unread: 0 }, '/me/profile': profileData, '/owner/venues': { venues: [] },
@@ -38,20 +38,20 @@ beforeEach(() => {
 const open = (path: string) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ToastProvider><MemoryRouter initialEntries={[path]}><AuthProvider><App /></AuthProvider></MemoryRouter></ToastProvider></QueryClientProvider>);
 
 describe('owner: editing business and bank details', () => {
-  it('says the change goes to KickOff for approval and that the current details stay live', async () => {
+  it('says the change goes to PlaynX for approval and that the current details stay live', async () => {
     open('/owner/account/business');
     expect(await screen.findByText(/take effect only after an admin approves them/)).toBeInTheDocument();
     await userEvent.clear(await screen.findByLabelText(/Business legal name/)); await userEvent.type(screen.getByLabelText(/Business legal name/), 'Mehta Sports Pvt Ltd');
     await userEvent.click(screen.getByRole('button', { name: 'Send for approval' }));
     await waitFor(() => expect(calls[0]).toEqual(['PUT', '/owner/profile', expect.objectContaining({ businessName: 'Mehta Sports Pvt Ltd' })]));
-    expect(await screen.findByText(/Sent to KickOff for approval/)).toBeInTheDocument();
+    expect(await screen.findByText(/Sent to PlaynX for approval/)).toBeInTheDocument();
   });
 
   it('shows what is waiting (old value struck out, new value beside it) and lets the owner withdraw it', async () => {
     profileData = { ...profileData, pendingChange: { id: 'c1', requestedAt: '2030-01-01T05:00:00Z', changes: CHANGE.changes } };
     open('/owner/account/business');
-    expect(await screen.findByText(/Waiting for KickOff approval/)).toBeInTheDocument();
-    const note = screen.getByText(/Waiting for KickOff approval/).closest('div')!;
+    expect(await screen.findByText(/Waiting for PlaynX approval/)).toBeInTheDocument();
+    const note = screen.getByText(/Waiting for PlaynX approval/).closest('div')!;
     expect(note).toHaveTextContent('Business name'); expect(note).toHaveTextContent('Mehta Sports Pvt Ltd');
     expect(note).not.toHaveTextContent('Account number'); // bank changes are listed on the bank page, not here
     expect(screen.getByLabelText(/Business legal name/)).toHaveValue('Mehta Sports'); // the form still shows the live value
@@ -62,8 +62,8 @@ describe('owner: editing business and bank details', () => {
   it('shows the pending bank change on the bank page only, with the number masked', async () => {
     profileData = { ...profileData, pendingChange: { id: 'c1', requestedAt: '2030-01-01T05:00:00Z', changes: CHANGE.changes } };
     open('/owner/account/bank');
-    expect(await screen.findByText(/Waiting for KickOff approval/)).toBeInTheDocument();
-    const note = screen.getByText(/Waiting for KickOff approval/).closest('div')!;
+    expect(await screen.findByText(/Waiting for PlaynX approval/)).toBeInTheDocument();
+    const note = screen.getByText(/Waiting for PlaynX approval/).closest('div')!;
     expect(note).toHaveTextContent('••••••••3456'); expect(note).not.toHaveTextContent('Business name');
   });
 
@@ -123,7 +123,7 @@ describe('owner: business contact numbers are editable, without approval', () =>
     await userEvent.click(within(f).getByRole('button', { name: 'Save contact numbers' }));
     await waitFor(() => expect(calls).toContainEqual(['PUT', '/me/profile', { alternatePhone: '+919899999999' }])); // only what changed; the main number was not touched
     expect(await screen.findByText(/Contact numbers saved. They are live now/)).toBeInTheDocument();
-    expect(screen.queryByText(/sent to KickOff for approval/i)).toBeNull();
+    expect(screen.queryByText(/sent to PlaynX for approval/i)).toBeNull();
   });
 
   it('changes the main number and says it needs verifying again', async () => {

@@ -18,5 +18,5 @@ export function PaymentCelebrationHost() {
   const visible = useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => open);
   const nav = useNavigate();
   if (!visible) return null;
-  return <PaymentSuccess onClose={dismissPaymentCelebration} onDashboard={() => { dismissPaymentCelebration(); nav('/'); }} />;
+  return <PaymentSuccess onClose={dismissPaymentCelebration} onDashboard={() => { dismissPaymentCelebration(); nav('/home'); }} />;
 }

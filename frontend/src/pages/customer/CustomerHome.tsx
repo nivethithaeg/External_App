@@ -1,3 +1,4 @@
+import { BrandHero } from '../../components/BrandHero';
 import { HomeBooking } from './Discover';
 import { useState, type FormEvent } from 'react';
 import { CopyCode, Countdown, Reveal, RotatingWord, TitleUnderline } from '../../components/Motion';
@@ -32,7 +33,7 @@ export function CustomerHome() {
   const [f, setF] = useState({ location: '', sport: '', date: '' });
   const recent = recentVenues();
   const profile = useQuery({ queryKey: ['profile'], queryFn: () => get<{ profile: { preferred_sports?: string[] } | null }>('/me/profile') });
-  const local: string[] = (() => { try { return JSON.parse(localStorage.getItem('kickoff_pref_sports') ?? '[]'); } catch { return []; } })();
+  const local: string[] = (() => { try { return JSON.parse(localStorage.getItem('playnx_pref_sports') ?? '[]'); } catch { return []; } })();
   const prefs: string[] = profile.data?.profile?.preferred_sports?.length ? profile.data.profile.preferred_sports : local; // the saved profile wins over this browser's copy
   const [locating, setLocating] = useState(false); const [geoErr, setGeoErr] = useState('');
   // search with the phone's / browser's live position: nearest turfs first, within 25 km, keeping the sport and date chosen above
@@ -51,16 +52,7 @@ export function CustomerHome() {
 
   return (
     <div className="space-y-12">
-      <section className="pitch-stripes relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#151515] via-[#292929] to-[#151515] p-6 text-white sm:p-10">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 animate-drift rounded-full bg-[#FF6B22]/25 blur-3xl" />
-        <div className="relative space-y-5">
-          <p className="animate-rise text-sm font-semibold text-[#FFC857]">Welcome back, {user?.fullName.split(' ')[0]}</p>
-          <h1 style={{ animationDelay: '120ms' }} className="animate-rise font-display text-5xl font-extrabold uppercase leading-[.95] sm:text-7xl">Your game. Your turf.<br /><span className="text-[#FF6B22]">Your time.</span></h1>
-          <p className="animate-rise text-lg font-semibold text-white/90" style={{ animationDelay: '220ms' }} aria-hidden="true">Find your next <RotatingWord words={(sports.data?.sports ?? []).map((x) => x.name)} /> turf</p>
-          <p className="max-w-xl text-white/75">Discover the best sports turfs around you, check live availability and book your perfect playing slot with KickOff.</p>
-          <div className="flex flex-wrap gap-2"><a href="#book" className="btn-primary">Book a turf</a><Link to="/bookings" className="btn border border-white/30 text-white hover:bg-white/10">View my bookings</Link>{(offers.data?.offers?.length ?? 0) > 0 && <Link to="/offers" className="btn border border-white/30 text-white hover:bg-white/10">Explore offers</Link>}</div>
-        </div>
-      </section>
+      <BrandHero greeting={`Welcome back, ${user?.fullName.split(' ')[0] ?? ''}`} secondary={<><Link to="/bookings" className="btn rounded-full border-2 border-[#101B5C]/15 bg-white !px-7 !py-3 text-base text-[#101B5C] hover:-translate-y-0.5 hover:border-[#7200FF]/50 hover:text-[#7200FF] dark:border-white/25 dark:bg-transparent dark:text-white">My Bookings</Link>{(offers.data?.offers?.length ?? 0) > 0 && <Link to="/offers" className="btn rounded-full border-2 border-[#FF8C00]/40 bg-white !px-7 !py-3 text-base text-[#B35F00] hover:-translate-y-0.5 hover:border-[#FF8C00] dark:bg-transparent dark:text-[#FFB020]">Explore offers</Link>}</>} />
 
       <HomeBooking />
 

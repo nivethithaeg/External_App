@@ -1,5 +1,5 @@
 {
-  "name": "kickoff-backend",
+  "name": "playnx-backend",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -48,5 +48,6 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^3.2.4"
-  }
+  },
+  "main": "server.js"
 }

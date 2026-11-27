@@ -70,7 +70,7 @@ export const requirePermission = (perm: string) => (req: Request, _res: Response
 };
 
 /**
- * Venue owners can only add and manage venues once KickOff has approved their application. Enforced here on the server for every owner
+ * Venue owners can only add and manage venues once PlaynX has approved their application. Enforced here on the server for every owner
  * endpoint (paths in `except`, such as the application itself, stay open), so it holds even if someone calls the API directly.
  */
 export function requireActiveOwner(ctx: Ctx, except: string[] = []) {
@@ -80,7 +80,7 @@ export function requireActiveOwner(ctx: Ctx, except: string[] = []) {
     const { rows } = await ctx.db.query('SELECT application_status, verification_status, bank_account_number FROM owner_profiles WHERE user_id=$1', [req.user!.id]);
     const p = rows[0];
     if (!p || p.application_status !== 'approved' || p.verification_status !== 'verified')
-      throw new HttpError(403, 'Your owner account must be approved by KickOff before you can add or manage venues. Check your application status.', 'owner_not_approved');
+      throw new HttpError(403, 'Your owner account must be approved by PlaynX before you can add or manage venues. Check your application status.', 'owner_not_approved');
     // approved, but the payout bank account comes first: until it is added only the places that save it work
     if (!p.bank_account_number && !BANK_FIRST_OK.some((x) => req.path === x || req.path.startsWith(x + '/')))
       throw new HttpError(403, 'Add your bank account details first (Account > Bank account). You can use the rest of the portal once they are saved.', 'bank_required');
@@ -107,4 +107,4 @@ async function unpricedToday(ctx: Ctx, ownerId: string): Promise<boolean> {
   return blocked;
 }
 /** The paths that still work before the bank account is added: the one that saves it. */
-const BANK_FIRST_OK = ['/profile', '/bank'];
+const BANK_FIRST_OK = ['/profile', '/bank', '/payment-collection']; // asked in the same bank pop-up

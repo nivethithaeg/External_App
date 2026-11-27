@@ -5,7 +5,7 @@ import { apiError, get, post } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Logo } from '../../components/Logo';
-import { ThemeToggle } from '../../components/Layouts';
+import { BackButton, ThemeToggle } from '../../components/Layouts';
 import { useLogoutConfirm } from '../../components/LogoutConfirm';
 import { Badge, Button, Card, ErrorBox, Input, Loading, PageHeader, PasswordInput, QueryBoundary, Select, Stat, Table } from '../../components/ui';
 import { DAYS, DURATIONS, durationLabel, fmtDateTime, fmtRange, fmtTime, money, titleCase } from '../../lib/utils';
@@ -43,7 +43,7 @@ export function StaffLayout() {
       <header className="border-b border-line bg-surface"><div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4"><Logo subtitle="Venue staff" />
         <div className="flex items-center gap-2"><ThemeToggle /><span className="hidden text-sm text-muted sm:block">{user?.fullName}</span><Button variant="ghost" className="!py-2" onClick={ask.ask}>Log out</Button></div></div></header>
       <StaffTabs />
-      <main className="mx-auto max-w-3xl px-4 py-6"><Outlet /></main>
+      <main className="mx-auto max-w-3xl px-4 py-6"><BackButton home="/staff" /><Outlet /></main>
       {ask.dialog}
     </div>
   );
@@ -70,7 +70,7 @@ export function StaffCheckIn() {
       <PageHeader title="Check-in" subtitle={today.data ? `${today.data.business}. Type the booking reference the player shows you.` : "Type the booking reference the player shows you"} />
       <Card className="space-y-4 p-5">
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (code.trim().length >= 6) verify.mutate(code); }}>
-          <input className="field uppercase" aria-label="Booking reference" placeholder="KO-XXXXXXX" autoCapitalize="characters" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} />
+          <input className="field uppercase" aria-label="Booking reference" placeholder="PX-XXXXXXX" autoCapitalize="characters" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} />
           <Button type="submit" loading={verify.isPending} disabled={code.trim().length < 6}>Check</Button></form>
         {err && <p role="alert" className="rounded-xl bg-danger/10 p-3 text-sm text-danger">{err}</p>}
         {res && (

@@ -16,7 +16,7 @@ const PHONE = PHONE_CHECK;
 
 /**
  * The owner books a slot for someone who is not using the app (a walk-in or a phone call). The slot is checked exactly as for an online
- * booking, it is confirmed at once, and nothing is paid through KickOff: the owner records what they collected at the venue.
+ * booking, it is confirmed at once, and nothing is paid through PlaynX: the owner records what they collected at the venue.
  */
 export function OfflineBookingPage() {
   const qc = useQueryClient(); const [sp] = useSearchParams();
@@ -90,12 +90,12 @@ export function OfflineBookingPage() {
           {[['Customer', `${done.customer} · ${done.phone}`], ['Venue', done.venueName], ['Playing area', `${done.area}${done.sport ? ` · ${done.sport}` : ''}`], ['Date and time', fmtRange(done.startsAt, done.endsAt, done.timezone)],
             ['Amount', `${money(done.total)}${done.discount > 0 ? ` (${money(done.discount)} off)` : ''}`], ['Payment', `${STATUS_LABEL[done.status] ?? ''}${done.method && done.method !== 'unpaid' ? ` · ${done.method === 'online' ? 'Online' : 'Offline'}` : ''}`]].map(([k, v]) => <div key={k}><dt className="text-xs uppercase tracking-wide text-muted">{k}</dt><dd className="font-semibold">{v}</dd></div>)}
         </dl>
-        <p className="text-xs text-muted">The slot is now blocked for online customers. Nothing was charged through KickOff, so there is no commission and no payout for this booking.</p>
+        <p className="text-xs text-muted">The slot is now blocked for online customers. Nothing was charged through PlaynX, so there is no commission and no payout for this booking.</p>
         <div className="flex flex-wrap gap-2"><Button onClick={reset}>Add another offline booking</Button><Link to="/owner/bookings" className="btn-ghost">View all bookings</Link><Link to="/owner" className="btn-ghost">Back to overview</Link></div>
       </Card></section>
     </div>);
 
-  if (bookable.length === 0) return <div className="space-y-4">{back}<Empty icon="🏟️" title="No approved venue yet" hint="You can add offline bookings once KickOff has approved one of your venues." action={<Link to="/owner/venues" className="btn-primary">Go to venues</Link>} /></div>;
+  if (bookable.length === 0) return <div className="space-y-4">{back}<Empty icon="🏟️" title="No approved venue yet" hint="You can add offline bookings once PlaynX has approved one of your venues." action={<Link to="/owner/venues" className="btn-primary">Go to venues</Link>} /></div>;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">{back}

@@ -185,11 +185,15 @@ describe('Google sign-in', () => {
     expect(linked.body.user.id).toBe(existing.id);
     expect(linked.body.user.emailVerified).toBe(false); // signing in with Google never skips the code
   });
-  it('a new owner is not emailed a code at sign-up; they ask for it on the verification step, and a second Google sign-in never verifies them', async () => {
+  it('a new owner who signs up with Google is emailed a code, and is verified only once they enter it', async () => {
     const email = `${uniq('g')}@gmail.test`;
-    await g({ credential: `good:${email}`, create: true, role: 'owner', businessName: 'Gee Sports' }).expect(200);
-    expect((await g({ credential: `good:${email}` }).expect(200)).body.user.emailVerified).toBe(false);
-    expect(env.emails.some((m) => m.to === email)).toBe(false); // nothing was emailed at sign-up
+    const first = await g({ credential: `good:${email}`, create: true, role: 'owner', businessName: 'Gee Sports' }).expect(200);
+    expect((await g({ credential: `good:${email}` }).expect(200)).body.user.emailVerified).toBe(false); // signing in again never verifies
+    const mail = env.emails.filter((m) => m.to === email).at(-1)!;
+    expect(mail.subject).toBe('Your PlaynX verification code');
+    const code = otpFrom(mail.html);
+    const r = await request(env.app).post('/api/auth/otp/verify').set({ Authorization: `Bearer ${first.body.token}` }).send({ channel: 'email', code }).expect(200);
+    expect(r.body.user.emailVerified).toBe(true);
   });
 });
 
@@ -220,5 +224,30 @@ describe('Google accounts choose a password', () => {
     await request(env.app).post('/api/auth/set-password').set(auth).send({ newPassword: 'Passw0rdNew1', confirmPassword: 'Passw0rdNew1' }).expect(200);
     a = (await request(env.app).get('/api/owner/application').set(auth).expect(200)).body;
     expect(a.personal).toMatchObject({ done: true, passwordSet: true });
+  });
+});
+
+describe('venue owner Google sign-up: first name, last name, mobile and password', () => {
+  const g = (body: object) => request(env.app).post('/api/auth/google').send(body);
+  it('the owner fills them in once; the password then works and the details are saved', async () => {
+    const email = `${uniq('gown')}@gmail.test`;
+    const first = (await g({ credential: `good:${email}`, create: true, role: 'owner' }).expect(200)).body;
+    expect(first.user.credentialSet).toBe(false); expect(first.user.phone).toBeNull();
+    const auth = { Authorization: `Bearer ${first.token}` };
+    const body = { firstName: 'Arun', lastName: 'Kumar', phone: '9876501234', newPassword: 'OwnerPass123', confirmPassword: 'OwnerPass123', acceptTerms: true };
+    await request(env.app).post('/api/auth/complete-signup').set(auth).send({ ...body, acceptTerms: false }).expect(400);
+    await request(env.app).post('/api/auth/complete-signup').set(auth).send({ ...body, confirmPassword: 'Different123' }).expect(400);
+    const r = await request(env.app).post('/api/auth/complete-signup').set(auth).send(body).expect(200);
+    expect(r.body.user).toMatchObject({ fullName: 'Arun Kumar', credentialSet: true }); expect(r.body.user.phone).toContain('9876501234');
+    await request(env.app).post('/api/auth/complete-signup').set(auth).send(body).expect(409); // only once
+    expect((await request(env.app).post('/api/auth/login').send({ email, password: 'OwnerPass123' }).expect(200)).body.user.role).toBe('owner');
+  });
+  it('a mobile number used by another account is refused', async () => {
+    const a = `${uniq('gown')}@gmail.test`, b = `${uniq('gown')}@gmail.test`;
+    const ta = (await g({ credential: `good:${a}`, create: true, role: 'owner' }).expect(200)).body.token;
+    const tb = (await g({ credential: `good:${b}`, create: true, role: 'owner' }).expect(200)).body.token;
+    const body = { firstName: 'A', lastName: 'B', phone: '9876509999', newPassword: 'OwnerPass123', confirmPassword: 'OwnerPass123', acceptTerms: true };
+    await request(env.app).post('/api/auth/complete-signup').set({ Authorization: `Bearer ${ta}` }).send(body).expect(200);
+    expect((await request(env.app).post('/api/auth/complete-signup').set({ Authorization: `Bearer ${tb}` }).send(body).expect(409)).body.error.code).toBe('phone_taken');
   });
 });

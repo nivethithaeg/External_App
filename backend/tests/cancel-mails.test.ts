@@ -26,7 +26,7 @@ describe('emails when a booking is cancelled and when money is refunded', () => 
     const before = mails(c.email).length;
     await cancel(c, id, { refundTo: 'wallet' }).expect(200);
     const got = mails(c.email).slice(before);
-    expect(got.find((m) => m.subject === 'Booking cancelled')!.text).toMatch(/added to your KickOff wallet/);
+    expect(got.find((m) => m.subject === 'Booking cancelled')!.text).toMatch(/added to your PlaynX wallet/);
     expect(got.some((m) => m.subject === 'Refund issued')).toBe(false);
   });
 

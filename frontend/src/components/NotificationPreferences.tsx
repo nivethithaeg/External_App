@@ -11,7 +11,7 @@ const OWNER_ROWS: { key: Key; title: string; hint: string }[] = [
 const ROWS: { key: Key; title: string; hint: string }[] = [
   { key: 'bookings', title: 'Booking and account updates', hint: 'Confirmations, cancellations, refunds, payouts and reschedules.' },
   { key: 'reminders', title: 'Game reminders', hint: 'A reminder about a day before, and another a couple of hours before.' },
-  { key: 'announcements', title: 'Offers and news', hint: 'Announcements and promotions from KickOff.' }];
+  { key: 'announcements', title: 'Offers and news', hint: 'Announcements and promotions from PlaynX.' }];
 
 /** Email and push alerts can be switched off per category. Alerts inside the app stay on, and sign-in codes and password resets are always sent. */
 export function NotificationPreferences({ owner = false }: { owner?: boolean }) {
@@ -27,7 +27,7 @@ export function NotificationPreferences({ owner = false }: { owner?: boolean }) 
   return (
     <Card className="p-6"><section aria-label="Notification preferences">
       <h2 className="text-2xl font-bold">{owner ? 'Notifications' : 'Email and push alerts'}</h2>
-      <p className="mb-4 text-sm text-muted">Choose which alerts reach your email and phone. They always appear inside KickOff, and sign-in codes and password resets are always sent.</p>
+      <p className="mb-4 text-sm text-muted">Choose which alerts reach your email and phone. They always appear inside PlaynX, and sign-in codes and password resets are always sent.</p>
       {!prefs ? <p className="text-sm text-muted">Loading…</p> : (
         <ul className="divide-y divide-line">{(owner ? OWNER_ROWS : ROWS.filter((r) => r.key !== 'venue_updates')).map((r) => (
           <li key={r.key} className="flex items-center justify-between gap-4 py-3">

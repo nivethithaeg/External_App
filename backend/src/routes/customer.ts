@@ -10,6 +10,7 @@ import { checkedFile, upload } from '../lib/upload.js';
 import { reviewBody } from './customerPortal.js';
 import { normalizePhone, phoneCandidates, INDIAN_MOBILE, INDIAN_MOBILE_MESSAGE } from '../lib/phone.js';
 import { describeChange } from '../lib/ownerProfile.js';
+import { sendStoredFile } from '../lib/private-file.js';
 
 export function accountRoutes(ctx: Ctx) {
   const r = Router();
@@ -21,7 +22,7 @@ export function accountRoutes(ctx: Ctx) {
     const profile = req.user!.role === 'customer'
       ? (await ctx.db.query('SELECT avatar_url, city, birth_date, gender, preferred_sports, lat, lng FROM customer_profiles WHERE user_id=$1', [u.id])).rows[0]
       : req.user!.role === 'owner' ? (await ctx.db.query(
-          `SELECT business_name, gstin, pan, address, verification_status, verification_note, bank_account_name, CASE WHEN bank_account_number IS NULL THEN NULL ELSE repeat('•', greatest(length(bank_account_number) - 4, 0)) || right(bank_account_number, 4) END AS bank_account_number, bank_ifsc, upi_id, bank_verified, alternate_phone FROM owner_profiles WHERE user_id=$1`, [u.id])).rows[0] : null;
+          `SELECT business_name, business_type, gstin, pan, address, verification_status, verification_note, bank_account_name, CASE WHEN bank_account_number IS NULL THEN NULL ELSE repeat('•', greatest(length(bank_account_number) - 4, 0)) || right(bank_account_number, 4) END AS bank_account_number, bank_ifsc, upi_id, bank_verified, alternate_phone FROM owner_profiles WHERE user_id=$1`, [u.id])).rows[0] : null;
     let pendingChange = null, lastDecision = null;
     if (req.user!.role === 'owner') {
       const ch = (await ctx.db.query(`SELECT id, changes AS fields, status, review_note AS note, created_at AS requested_at, reviewed_at FROM owner_profile_change_requests WHERE owner_id=$1 AND status IN ('pending','approved','rejected') ORDER BY (status='pending') DESC, COALESCE(reviewed_at, created_at) DESC LIMIT 2`, [u.id])).rows;
@@ -171,7 +172,26 @@ export function accountRoutes(ctx: Ctx) {
     const t = (await ctx.db.query('SELECT * FROM support_tickets WHERE id=$1 AND user_id=$2', [id, req.user!.id])).rows[0];
     if (!t) throw notFound('Ticket not found');
     const msgs = (await ctx.db.query(`SELECT m.id, m.body, m.created_at, u.full_name AS author, u.role AS author_role FROM ticket_messages m JOIN users u ON u.id=m.author_id WHERE m.ticket_id=$1 ORDER BY m.created_at`, [id])).rows;
-    res.json({ ticket: t, messages: msgs });
+    const attachments = (await ctx.db.query('SELECT id, kind, content_type, size_bytes, created_at FROM ticket_attachments WHERE ticket_id=$1 ORDER BY created_at', [id])).rows;
+    res.json({ ticket: t, messages: msgs, attachments });
+  });
+  /** Photos and videos for a ticket the person raised: up to 10, images up to 8 MB and videos up to 50 MB. */
+  r.post('/tickets/:id/attachments', upload.single('file'), async (req, res) => {
+    const id = parse(z.uuid(), req.params.id);
+    const t = (await ctx.db.query('SELECT id FROM support_tickets WHERE id=$1 AND user_id=$2', [id, req.user!.id])).rows[0];
+    if (!t) throw notFound('Ticket not found');
+    if (+(await ctx.db.query('SELECT count(*)::int AS n FROM ticket_attachments WHERE ticket_id=$1', [id])).rows[0].n >= 10) throw badRequest('A ticket can have at most 10 photos and videos', 'too_many_files');
+    const f = checkedFile(req.file, ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm']);
+    const key = await ctx.storage.putPrivate(`ticket-attachments/${id}`, f.buffer, f.type);
+    const a = (await ctx.db.query(`INSERT INTO ticket_attachments (ticket_id, uploaded_by, kind, content_type, size_bytes, file_ref) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, kind, content_type, size_bytes, created_at`,
+      [id, req.user!.id, f.type.startsWith('video/') ? 'video' : 'image', f.type, f.buffer.length, `private:${key}`])).rows[0];
+    res.status(201).json({ attachment: a });
+  });
+  r.get('/tickets/:id/attachments/:attId/file', async (req, res) => {
+    const a = (await ctx.db.query(`SELECT a.file_ref FROM ticket_attachments a JOIN support_tickets t ON t.id=a.ticket_id WHERE a.id=$1 AND a.ticket_id=$2 AND t.user_id=$3`,
+      [parse(z.uuid(), req.params.attId), parse(z.uuid(), req.params.id), req.user!.id])).rows[0];
+    if (!a) throw notFound('File not found');
+    await sendStoredFile(ctx, res, a.file_ref);
   });
   r.post('/tickets/:id/messages', async (req, res) => {
     const id = parse(z.uuid(), req.params.id);

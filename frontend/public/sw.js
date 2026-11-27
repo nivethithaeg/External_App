@@ -1,7 +1,7 @@
-/* KickOff service worker: makes the site installable and lets it open offline.
+/* PlaynX service worker: makes the site installable and lets it open offline.
  * It never stores API responses, payments or anything personal: only the app's own files. */
-const VERSION = 'kickoff-v1';
-const SHELL = ['/', '/favicon.svg', '/manifest.webmanifest', '/icons/icon-192.png'];
+const VERSION = 'playnx-v2';
+const SHELL = ['/', '/favicon.png', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {

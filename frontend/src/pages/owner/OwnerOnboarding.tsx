@@ -9,6 +9,7 @@ import { Badge, Button, Card, ErrorBox, Input, Loading, Modal, PasswordInput, Se
 import { Logo } from '../../components/Logo';
 import { ThemeToggle } from '../../components/Layouts';
 import { FileLink } from '../../components/FileLink';
+import { JusgoSignup } from '../../components/JusgoSignup';
 import { GoogleSignIn } from '../../components/GoogleSignIn';
 import { FaceCamera } from '../../components/FaceCamera';
 import { TermsCheckbox } from '../../components/TermsCheckbox';
@@ -35,7 +36,8 @@ const LEGACY_TYPES = [
   { id: 'llp', label: 'Limited Liability Partnership (LLP)', desc: 'Registered LLP with an LLPIN' },
   { id: 'trust_society', label: 'Trust / Society / Club', desc: 'Sports club, academy, school or trust with a registration number' },
 ] as const;
-const ALL_TYPES: readonly { id: string; label: string; desc: string }[] = [...BUSINESS_TYPES, ...LEGACY_TYPES];
+export const ALL_TYPES: readonly { id: string; label: string; desc: string }[] = [...BUSINESS_TYPES, ...LEGACY_TYPES];
+export const businessTypeLabel = (id?: string | null) => ALL_TYPES.find((t) => t.id === id)?.label ?? (id ? id.replace(/_/g, ' ') : 'Not set');
 const JUSGO_TYPES = ['individual', 'sole_proprietorship', 'partnership_pvt_ltd'];
 const UDYAM_RE = /^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$/;
 const GST_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -59,7 +61,7 @@ const SectionBadge = ({ s }: { s: string }) => <Badge status={SECTION[s]?.[1] ??
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/, CIN_RE = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/, LLPIN_RE = /^[A-Z]{3}-[0-9]{4}$/, TRUST_RE = /^[A-Z0-9][A-Z0-9/.\- ]{3,39}$/;
 const NAME_RE = /^[\p{L}][\p{L} .'-]*$/u;
 
-type AppData = any;
+export type AppData = any;
 
 /** The wizard step where a missing item has to be fixed. */
 const stepOf = (m: { type: string; key: string }) => (m.type === 'contact' ? 0 : m.key === 'personal' ? 1 : m.key === 'self_verification' ? 4 : m.type === 'document' || m.key === 'identity' ? 3 : 2);
@@ -115,8 +117,8 @@ export function OwnerGate({ children }: { children: ReactNode }) {
  * Only sign-out, the theme switch and the application status page stay usable.
  */
 const POPUP: Record<Exclude<Pending, null>, { title: string; icon: string; text: string }> = {
-  waiting: { title: 'Waiting for admin approval', icon: '⏳', text: 'Your documents are with the KickOff team. You can look at every page, but adding or changing anything opens once your application is approved. We will email you as soon as there is a decision.' },
-  changes: { title: 'Update your application first', icon: '✏️', text: 'The KickOff team asked for changes to your application. Update it from the application status page; adding or changing anything in the portal opens once it is approved.' },
+  waiting: { title: 'Waiting for admin approval', icon: '⏳', text: 'Your documents are with the PlaynX team. You can look at every page, but adding or changing anything opens once your application is approved. We will email you as soon as there is a decision.' },
+  changes: { title: 'Update your application first', icon: '✏️', text: 'The PlaynX team asked for changes to your application. Update it from the application status page; adding or changing anything in the portal opens once it is approved.' },
   rejected: { title: 'Application not approved', icon: '⛔', text: 'Your application was not approved, so adding or changing anything in the portal is closed. Open the application status page to see why and what you can do.' },
 };
 const CREATE_PAGES = ['/owner/venues/new', '/owner/bookings/new'];
@@ -158,11 +160,17 @@ function BankFrame({ children }: { children: ReactNode }) {
   const bankQ = useQuery({ queryKey: ['owner-bank'], queryFn: () => get<{ accountNumber: string | null }>('/owner/bank') });
   const needs = bankQ.isSuccess && !bankQ.data.accountNumber;
   const [f, setF] = useState({ bankAccountName: '', bankAccountNumber: '', bankIfsc: '', upiId: '' });
+  const [pc, setPc] = useState<{ mode: '' | 'full' | 'advance'; pct: string }>({ mode: '', pct: '' }); // how customers pay when they book
   const [errs, setErrs] = useState<Record<string, string>>({}); const [error, setError] = useState('');
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   const save = useMutation({
-    mutationFn: () => put('/owner/profile', { bankAccountName: f.bankAccountName.trim(), bankAccountNumber: f.bankAccountNumber, bankIfsc: f.bankIfsc, ...(f.upiId.trim() ? { upiId: f.upiId.trim() } : {}) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['owner-bank'] }); qc.invalidateQueries({ queryKey: ['owner-checklist'] }); qc.invalidateQueries({ queryKey: ['profile'] }); toast('Bank details saved. The portal is open now. KickOff verifies them before your first payout.', 'success'); },
+    mutationFn: async () => {
+      // the bank account first: it is what opens the portal; then how customers pay
+      const r = await put('/owner/profile', { bankAccountName: f.bankAccountName.trim(), bankAccountNumber: f.bankAccountNumber, bankIfsc: f.bankIfsc, ...(f.upiId.trim() ? { upiId: f.upiId.trim() } : {}) });
+      await put('/owner/payment-collection', pc.mode === 'advance' ? { mode: 'advance', advancePercent: Number(pc.pct) } : { mode: 'full' });
+      return r;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['owner-bank'] }); qc.invalidateQueries({ queryKey: ['owner-checklist'] }); qc.invalidateQueries({ queryKey: ['profile'] }); toast('Bank details saved. The portal is open now. PlaynX verifies them before your first payout.', 'success'); },
     onError: (e) => { const fe = fieldErrors(e); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(e)); },
   });
   const go = () => {
@@ -170,6 +178,8 @@ function BankFrame({ children }: { children: ReactNode }) {
     if (f.bankAccountName.trim().length < 2) v.bankAccountName = "Enter the account holder's name";
     if (!/^\d{6,20}$/.test(f.bankAccountNumber)) v.bankAccountNumber = 'Enter the account number (6 to 20 digits)';
     if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(f.bankIfsc)) v.bankIfsc = 'Enter a valid IFSC code, e.g. HDFC0001234';
+    if (!pc.mode) v.pc = 'Choose how customers pay when they book.';
+    else if (pc.mode === 'advance' && !(/^\d{1,2}$/.test(pc.pct) && +pc.pct >= 1 && +pc.pct <= 99)) v.pct = 'Enter the advance percentage, from 1 to 99.';
     setErrs(v); if (Object.keys(v).length === 0) save.mutate();
   };
   return (
@@ -177,12 +187,23 @@ function BankFrame({ children }: { children: ReactNode }) {
       <PriceGate off={needs || !bankQ.isSuccess}>{children}</PriceGate>
       <Modal open={needs} locked onClose={() => undefined} title="Add your bank account details">
         <div className="space-y-4">
-          <p className="text-sm text-muted">Your application is approved. Add the bank account where KickOff will pay you. <b>You need to do this to use the portal.</b> KickOff verifies it before your first payout.</p>
+          <div role="alert" className="rounded-xl border border-warn/50 bg-warn/10 p-3 text-sm text-warn">
+            <b className="block">You cannot skip this step.</b>
+            Fill in your bank details to open the portal. PlaynX pays your bookings into this account only after the admin has checked and approved these details.</div>
           <Input mandatory label="Account holder name" value={f.bankAccountName} onChange={set('bankAccountName')} error={errs.bankAccountName} autoComplete="off" />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input mandatory label="Account number" inputMode="numeric" value={f.bankAccountNumber} onChange={set('bankAccountNumber')} error={errs.bankAccountNumber} autoComplete="off" />
             <Input mandatory label="IFSC code" value={f.bankIfsc} onChange={set('bankIfsc')} error={errs.bankIfsc} maxLength={11} autoComplete="off" /></div>
           <Input label="UPI ID (optional)" value={f.upiId} onChange={set('upiId')} autoComplete="off" />
+          <fieldset className="space-y-2"><legend className="mb-1 text-sm font-bold">How customers pay when they book <span className="text-danger">*</span></legend>
+            <div className="grid gap-2 sm:grid-cols-2">{([['full', 'Full amount', 'Customers pay the whole amount when they book.'], ['advance', 'Advance amount only', 'Customers pay a part when they book and the rest after playing.']] as const).map(([k, l, h]) => (
+              <label key={k} className={`flex cursor-pointer gap-3 rounded-xl border p-3 text-sm ${pc.mode === k ? 'border-brand bg-brand/10' : 'border-line'}`}>
+                <input type="radio" name="bank-payment-collection" checked={pc.mode === k} onChange={() => setPc({ ...pc, mode: k })} className="mt-1" /><span><b className="block">{l}</b><span className="text-muted">{h}</span></span></label>))}</div>
+            {errs.pc && <p role="alert" className="text-xs text-danger">{errs.pc}</p>}
+            {pc.mode === 'advance' && (<>
+              <Input mandatory label="Advance percentage (%)" type="number" inputMode="numeric" min={1} max={99} value={pc.pct} onChange={(e) => setPc({ ...pc, pct: e.target.value.replace(/\D/g, '').slice(0, 2) })} placeholder="For example 30" error={errs.pct} />
+              <p role="status" className="rounded-xl border border-warn/50 bg-warn/10 p-3 text-sm text-warn"><b>You have chosen advance payment.</b> When customers book, they pay only {+pc.pct >= 1 && +pc.pct <= 99 ? `${+pc.pct}%` : 'the percentage you enter'} of the amount you set for the slot{+pc.pct >= 1 && +pc.pct <= 99 ? ` (for a ₹1,000 slot, ₹${10 * +pc.pct} when booking)` : ''}. They pay the rest after they finish playing.</p></>)}
+          </fieldset>
           {error && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           <Button className="w-full" loading={save.isPending} onClick={go}>Save bank details and continue</Button>
         </div>
@@ -198,7 +219,7 @@ export function PendingOverview() {
   if (q.isError || !q.data) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   const d = q.data as AppData;
   return (
-    <div className="mx-auto max-w-2xl space-y-5"><div><h1 className="text-4xl font-extrabold">Welcome, {d.owner?.fullName?.split(' ')[0] ?? 'there'}</h1><p className="mt-1 text-sm text-muted">{{waiting: 'Your venue owner application is waiting for admin approval.', changes: 'The KickOff team asked for changes to your application.', rejected: 'Your venue owner application was not approved.'}[state]} The menu shows everything you will be able to use once you are approved.</p></div>
+    <div className="mx-auto max-w-2xl space-y-5"><div><h1 className="text-4xl font-extrabold">Welcome, {d.owner?.fullName?.split(' ')[0] ?? 'there'}</h1><p className="mt-1 text-sm text-muted">{{waiting: 'Your venue owner application is waiting for admin approval.', changes: 'The PlaynX team asked for changes to your application.', rejected: 'Your venue owner application was not approved.'}[state]} The menu shows everything you will be able to use once you are approved.</p></div>
       <Tracking d={d} onEdit={() => nav('/owner/application?edit=1')} />
       <p className="text-sm text-muted">Open any page in the menu to look around. Adding or changing anything needs admin approval first.</p></div>
   );
@@ -209,12 +230,12 @@ export function OwnerWelcomePage() {
   return (
     <Shell portal="owner">
       <h1 className="text-5xl font-extrabold">Venue owners</h1>
-      <p className="mb-6 mt-1 text-sm text-muted">Put your turf or court on KickOff. Manage slots, pricing and bookings from one dashboard.</p>
+      <p className="mb-6 mt-1 text-sm text-muted">Put your turf or court on PlaynX. Manage slots, pricing and bookings from one dashboard.</p>
       <div className="space-y-3">
         <Link to="/owner/register" className="card block p-5 transition hover:border-brand"><div className="text-xs font-bold uppercase tracking-widest text-[rgb(var(--brand-text))]">New here</div><div className="text-2xl font-bold">Register as Venue Owner</div><p className="text-sm text-muted">Create your account, verify your business and add your first venue.</p></Link>
         <Link to="/owner/login" className="card block p-5 transition hover:border-brand"><div className="text-xs font-bold uppercase tracking-widest text-muted">Already registered</div><div className="text-2xl font-bold">Venue Owner Login</div><p className="text-sm text-muted">Go to your dashboard or track your application.</p></Link>
       </div>
-      <p className="mt-6 text-center text-sm text-muted">Looking to book a turf? <Link className="underline" to="/">Go to KickOff</Link></p>
+      <p className="mt-6 text-center text-sm text-muted">Looking to book a turf? <Link className="underline" to="/">Go to PlaynX</Link></p>
     </Shell>
   );
 }
@@ -236,25 +257,78 @@ function Progress({ step, furthest, issues, onGo }: { step: number; furthest: nu
   );
 }
 
-export function OwnerRegisterPage() {
-  const { register, user } = useAuth();
-  const nav = useNavigate();
-  const [f, setF] = useState({ fullName: '', phone: '', email: '', password: '', confirm: '' });
-  const [errs, setErrs] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [show, setShow] = useState(false);
-  if (user) return <Navigate to={user.role === 'owner' ? '/owner' : '/'} replace />;
+/** A venue owner who signed up with Google: the email came from Google; first name, last name, mobile and password are filled in here. */
+export function OwnerCompleteSignupPage() {
+  const { user, loading, setUser } = useAuth(); const nav = useNavigate();
+  const parts = (user?.fullName ?? '').trim().split(/\s+/);
+  const [f, setF] = useState({ firstName: parts[0] ?? '', lastName: parts.slice(1).join(' '), phone: '', password: '', confirm: '' });
+  const [terms, setTerms] = useState(false);
+  const [errs, setErrs] = useState<Record<string, string>>({}); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  if (loading) return <Loading />;
+  if (!user) return <Navigate to="/owner/login" replace />;
+  if (user.role !== 'owner') return <Navigate to="/" replace />;
+  if (user.credentialSet !== false) return <Navigate to="/owner" replace />;
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setError('');
     const v: Record<string, string> = {};
-    if (f.fullName.trim().length < 2 || !NAME_RE.test(f.fullName.trim())) v.fullName = 'Enter your full name using letters only';
+    if (!f.firstName.trim() || !NAME_RE.test(f.firstName.trim())) v.firstName = 'Enter your first name using letters only';
+    if (!f.lastName.trim() || !NAME_RE.test(f.lastName.trim())) v.lastName = 'Enter your last name using letters only';
+    if (!isIndianMobile(f.phone.replace(/[\s-]/g, ''))) v.phone = MOBILE_MESSAGE;
+    if (f.password.length < 8 || !/[A-Za-z]/.test(f.password) || !/[0-9]/.test(f.password)) v.password = 'At least 8 characters with a letter and a digit';
+    if (f.confirm !== f.password) v.confirm = 'Passwords do not match';
+    if (!terms) v.terms = 'Please accept the Terms and Conditions';
+    setErrs(v); if (Object.keys(v).length) return;
+    setBusy(true);
+    try {
+      const r = await post<{ user: any }>('/auth/complete-signup', { firstName: f.firstName.trim(), lastName: f.lastName.trim(), phone: f.phone.replace(/[\s-]/g, ''), newPassword: f.password, confirmPassword: f.confirm, acceptTerms: true });
+      setUser(r.user); nav('/owner', { replace: true });
+    } catch (err) { const fe = fieldErrors(err); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(err)); } finally { setBusy(false); }
+  };
+  return (
+    <Shell portal="owner" back={false}>
+      <h1 className="text-4xl font-extrabold">Complete your account</h1>
+      <p className="mb-5 mt-1 text-sm text-muted">You signed up with Google. Add these details to finish creating your venue owner account.</p>
+      <form onSubmit={submit} className="space-y-3.5" noValidate>
+        <div className="grid gap-3 sm:grid-cols-2"><Input mandatory label="First Name" filter={FILTERS.personName} autoComplete="given-name" value={f.firstName} onChange={set('firstName')} error={errs.firstName} />
+          <Input mandatory label="Last Name" filter={FILTERS.personName} autoComplete="family-name" value={f.lastName} onChange={set('lastName')} error={errs.lastName} /></div>
+        <Input label="Email" value={user.email} readOnly hint="From your Google account" />
+        <Input mandatory label="Mobile Number" filter={FILTERS.mobile} type="tel" autoComplete="tel" placeholder="+919876543210" value={f.phone} onChange={set('phone')} error={errs.phone} />
+        <PasswordInput mandatory label="Password" autoComplete="new-password" value={f.password} onChange={set('password')} error={errs.password ?? errs.newPassword} />
+        <PasswordInput mandatory label="Confirm Password" autoComplete="new-password" value={f.confirm} onChange={set('confirm')} error={errs.confirm ?? errs.confirmPassword} />
+        <TermsCheckbox checked={terms} onChange={setTerms} error={errs.terms ?? errs.acceptTerms} />
+        {error && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+        <Button type="submit" className="w-full" loading={busy}>Create account & continue</Button>
+      </form>
+    </Shell>
+  );
+}
+
+export function OwnerRegisterPage() {
+  const { register, user } = useAuth();
+  const nav = useNavigate();
+  const [f, setF] = useState({ firstName: '', lastName: '', phone: '', email: '', password: '', confirm: '' });
+  const [terms, setTerms] = useState(false);
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [show, setShow] = useState(false);
+  // "I'm already registered in JusGo": carries on after a refresh while a JusGo sign-up is open
+  const [jusgo, setJusgo] = useState(() => { try { return !!sessionStorage.getItem('playnx_jusgo_link'); } catch { return false; } });
+  if (user) return <Navigate to={user.role === 'owner' ? '/owner' : '/'} replace />;
+  if (jusgo) return <Shell portal="owner"><JusgoSignup onCancel={() => setJusgo(false)} /></Shell>;
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); setError('');
+    const v: Record<string, string> = {};
+    if (!f.firstName.trim() || !NAME_RE.test(f.firstName.trim())) v.firstName = 'Enter your first name using letters only';
+    if (!f.lastName.trim() || !NAME_RE.test(f.lastName.trim())) v.lastName = 'Enter your last name using letters only';
     if (!isIndianMobile(f.phone.replace(/[\s-]/g, ''))) v.phone = MOBILE_MESSAGE;
     if (!/^\S+@\S+\.\S+$/.test(f.email)) v.email = 'Enter a valid email address';
     if (f.password.length < 8 || !/[A-Za-z]/.test(f.password) || !/[0-9]/.test(f.password)) v.password = 'At least 8 characters with a letter and a digit';
     if (f.confirm !== f.password) v.confirm = 'Passwords do not match';
+    if (!terms) v.terms = 'Please accept the Terms and Conditions';
     setErrs(v); if (Object.keys(v).length) return;
     setBusy(true);
-    try { await register({ fullName: f.fullName.trim(), email: f.email.trim(), phone: f.phone.replace(/[\s-]/g, ''), password: f.password, role: 'owner' }); nav('/owner/application', { replace: true }); }
+    try { await register({ fullName: `${f.firstName.trim()} ${f.lastName.trim()}`, email: f.email.trim(), phone: f.phone.replace(/[\s-]/g, ''), password: f.password, role: 'owner' }); nav('/owner/application', { replace: true }); }
     catch (err) { const fe = fieldErrors(err); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(err)); } finally { setBusy(false); }
   };
   return (
@@ -263,13 +337,19 @@ export function OwnerRegisterPage() {
       <ChangeType />
       <h1 className="text-5xl font-extrabold">Register as Venue Owner</h1>
       <p className="mb-5 mt-1 text-sm text-muted">Next you'll verify your contact details and add your business and identity information. You can add your venues once your account is approved.</p>
+      <label className="mb-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-brand/30 bg-brand/5 p-4 transition hover:border-brand/60">
+        <input type="checkbox" className="mt-1 h-4 w-4 accent-[rgb(var(--brand))]" checked={false} onChange={() => setJusgo(true)} />
+        <span><b className="block">I'm already registered in JusGo</b><span className="text-sm text-muted">Bring your JusGo profile and onboarding details across. You'll need your email and JusGo Owner ID.</span></span>
+      </label>
       <form onSubmit={submit} className="space-y-3.5" noValidate>
-        <Input mandatory label="Full name" filter={FILTERS.personName} autoComplete="name" value={f.fullName} onChange={set('fullName')} error={errs.fullName} />
-        <Input mandatory label="Mobile number" filter={FILTERS.mobile} type="tel" autoComplete="tel" placeholder="+919876543210" value={f.phone} onChange={set('phone')} error={errs.phone} />
-        <Input mandatory label="Email address" filter={FILTERS.email} type="email" autoComplete="email" value={f.email} onChange={set('email')} error={errs.email} />
+        <div className="grid gap-3 sm:grid-cols-2"><Input mandatory label="First Name" filter={FILTERS.personName} autoComplete="given-name" value={f.firstName} onChange={set('firstName')} error={errs.firstName} />
+          <Input mandatory label="Last Name" filter={FILTERS.personName} autoComplete="family-name" value={f.lastName} onChange={set('lastName')} error={errs.lastName} /></div>
+        <Input mandatory label="Mobile Number" filter={FILTERS.mobile} type="tel" autoComplete="tel" placeholder="+919876543210" value={f.phone} onChange={set('phone')} error={errs.phone} />
+        <Input mandatory label="Email" filter={FILTERS.email} type="email" autoComplete="email" value={f.email} onChange={set('email')} error={errs.email} />
         <div className="relative"><Input mandatory label="Password" filter={FILTERS.password} type={show ? 'text' : 'password'} autoComplete="new-password" value={f.password} onChange={set('password')} error={errs.password} className="!pr-16" />
           <button type="button" aria-pressed={show} onClick={() => setShow((s) => !s)} className="absolute right-3 top-8 text-xs font-semibold text-muted hover:text-ink">{show ? 'Hide' : 'Show'}<span className="sr-only"> password</span></button></div>
-        <Input mandatory label="Confirm password" filter={FILTERS.password} type={show ? 'text' : 'password'} autoComplete="new-password" value={f.confirm} onChange={set('confirm')} error={errs.confirm} />
+        <Input mandatory label="Confirm Password" filter={FILTERS.password} type={show ? 'text' : 'password'} autoComplete="new-password" value={f.confirm} onChange={set('confirm')} error={errs.confirm} />
+        <TermsCheckbox checked={terms} onChange={setTerms} error={errs.terms} />
         {error && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
         <Button type="submit" className="w-full" loading={busy}>Create account & continue</Button>
       </form>
@@ -282,8 +362,8 @@ export function OwnerRegisterPage() {
 /* ------------------------------------------------------------------ small building blocks */
 type Existing = { id: string; status: string; note?: string | null } | undefined;
 /** Upload slot with image preview, progress bar, type/size validation, and "view" for what is already stored. */
-function DocSlot({ label, hint, existing, uploadUrl, fields, viewPath, accept = 'image/jpeg,image/png,application/pdf', disabled, onDone, optional, fieldKey, capture, camera }: {
-  fieldKey?: string; capture?: 'user' | 'environment'; camera?: boolean;
+function DocSlot({ label, hint, existing, uploadUrl, fields, viewPath, accept = 'image/jpeg,image/png,application/pdf', disabled, onDone, optional, fieldKey, capture, camera, maxMB = 10 }: {
+  fieldKey?: string; capture?: 'user' | 'environment'; camera?: boolean; maxMB?: number;
   label: string; hint?: string; existing?: Existing; uploadUrl: string; fields: Record<string, string>; viewPath?(id: string): string; accept?: string; disabled?: boolean; onDone(): void; optional?: boolean;
 }) {
   const { toast } = useToast();
@@ -295,8 +375,9 @@ function DocSlot({ label, hint, existing, uploadUrl, fields, viewPath, accept = 
   const choose = async (file?: File) => {
     if (!file) return; setErr('');
     const image = file.type.startsWith('image/');
-    if (!accept.split(',').includes(file.type)) return setErr('Unsupported file type. Use JPG, PNG or PDF.');
-    if (file.size > (image ? 8 : 10) * 1024 * 1024) return setErr(`File too large (max ${image ? 8 : 10} MB)`);
+    const kinds = accept.split(',').map((t) => (t === 'application/pdf' ? 'PDF' : t.replace('image/', '').toUpperCase())).filter((k, i, a) => a.indexOf(k) === i).join(', ').replace('JPEG', 'JPG');
+    if (!accept.split(',').includes(file.type)) return setErr(`Unsupported file type. Use ${kinds}.`);
+    if (file.size > maxMB * 1024 * 1024) return setErr(`File too large (max ${maxMB} MB)`);
     setPreview({ url: URL.createObjectURL(file), name: file.name, image }); setProgress(0);
     try {
       const fd = new FormData(); Object.entries(fields).forEach(([k, v]) => fd.append(k, v)); fd.append('file', file);
@@ -398,15 +479,15 @@ function PersonalStep({ d, refresh, back, next, focus }: { d: AppData; refresh()
   return (
     <div><h2 className="text-3xl font-bold">Personal details</h2><p className="mb-4 text-sm text-muted">Tell us about yourself and where your turf is located. The next steps start from these answers, so you will not type them again.</p>
       <div className="space-y-3.5">
-        <DocSlot label="Profile photograph" hint="Optional. JPG, PNG or WebP." optional accept="image/jpeg,image/png,image/webp" existing={photo} uploadUrl="/owner/application/documents" fields={{ docType: 'profile_photo' }} viewPath={(id) => `/owner/application/documents/${id}/file`} onDone={refresh} />
-        <Input mandatory data-field="legalName" filter={FILTERS.personName} label="Legal full name" autoComplete="name" value={f.legalName} onChange={set('legalName')} error={errs.legalName} hint="Exactly as it appears on your government ID" />
-        <div className="grid gap-3 sm:grid-cols-2"><Input mandatory data-field="dob" label="Date of birth" type="date" value={f.dob} onChange={set('dob')} error={errs.dob} />
-          <Input mandatory data-field="phone" filter={FILTERS.mobile} label="Phone number" type="tel" inputMode="tel" autoComplete="tel" value={f.phone} onChange={set('phone')} error={errs.phone} placeholder="9876543210" /></div>
+        <DocSlot label="Profile Photo" hint="Optional. JPG or PNG, up to 5 MB." optional maxMB={5} accept="image/jpeg,image/png" existing={photo} uploadUrl="/owner/application/documents" fields={{ docType: 'profile_photo' }} viewPath={(id) => `/owner/application/documents/${id}/file`} onDone={refresh} />
+        <Input mandatory data-field="legalName" filter={FILTERS.personName} label="Legal Full Name" autoComplete="name" value={f.legalName} onChange={set('legalName')} error={errs.legalName} hint="Exactly as it appears on your government ID" />
+        <div className="grid gap-3 sm:grid-cols-2"><Input mandatory data-field="dob" label="Date of Birth" type="date" value={f.dob} onChange={set('dob')} error={errs.dob} />
+          <Input mandatory data-field="phone" filter={FILTERS.mobile} label="Phone Number" type="tel" inputMode="tel" autoComplete="tel" value={f.phone} onChange={set('phone')} error={errs.phone} placeholder="9876543210" /></div>
         <h3 className="pt-1 text-lg font-bold">Turf / venue address</h3>
-        <Textarea mandatory data-field="addressLine1" label="Address line 1" value={f.addressLine1} onChange={set('addressLine1')} error={errs.addressLine1} rows={2} placeholder="Building, street and area" />
-        <Input label="Address line 2 (optional)" value={f.addressLine2} onChange={set('addressLine2')} placeholder="Apartment, landmark, area (optional)" />
+        <Textarea mandatory data-field="addressLine1" label="Address Line 1" value={f.addressLine1} onChange={set('addressLine1')} error={errs.addressLine1} rows={2} placeholder="Building, street and area" />
+        <Input label="Address Line 2" value={f.addressLine2} onChange={set('addressLine2')} placeholder="Apartment, landmark, area (optional)" />
         <StateCityFields state={f.state} city={f.city} errors={{ state: errs.state, city: errs.city }} onChange={(v) => setF({ ...f, ...v })} />
-        <div className="grid gap-3 sm:grid-cols-2"><Input mandatory data-field="pincode" filter={FILTERS.pincode} label="PIN code" inputMode="numeric" maxLength={6} value={f.pincode} onChange={set('pincode')} error={errs.pincode} placeholder="560038" />
+        <div className="grid gap-3 sm:grid-cols-2"><Input mandatory data-field="pincode" filter={FILTERS.pincode} label="PIN / Postal Code" inputMode="numeric" maxLength={6} value={f.pincode} onChange={set('pincode')} error={errs.pincode} placeholder="560038" />
           <Select mandatory label="Country" value={f.country} onChange={set('country')}>{COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}</Select></div>
         {needPassword && <fieldset className="space-y-3 rounded-xl border border-line p-3"><legend className="px-1 text-sm font-bold">Create your password</legend>
           <p className="text-xs text-muted">You signed up with Google. Choose a password too, so you can also sign in with your email and password.</p>
@@ -436,7 +517,11 @@ function LockedNotice({ show, onEdit }: { show: boolean; onEdit(): void }) {
 
 /* ------------------------------------------------------------------ step 2: business */
 type Partner = { name: string; pan: string; aadhaar: string; phone: string };
-function BusinessStep({ d, refresh, back, next, focus, toPersonal }: { d: AppData; refresh(): void; back(): void; next(): void; focus?: string | null; toPersonal(): void }) {
+/**
+ * The business section of the application. Also used after approval to ask for a business type change:
+ * then `submit` sends the details for review instead of saving them, and `title` / `nextLabel` change the wording.
+ */
+export function BusinessStep({ d, refresh, back, next, focus, toPersonal, submit, title, nextLabel }: { d: AppData; refresh(): void; back?(): void; next(): void; focus?: string | null; toPersonal(): void; submit?(body: Record<string, unknown>): Promise<unknown>; title?: string; nextLabel?: string }) {
   useFocusField(focus);
   const b = d.business; const lk = usePersonalLocks(d);
   const [type, setType] = useState<string>(b.type ?? '');
@@ -450,14 +535,15 @@ function BusinessStep({ d, refresh, back, next, focus, toPersonal }: { d: AppDat
   // Reasons our reviewers gave for specific fields, shown right at the field until it is fixed and resubmitted.
   const flags: Record<string, string> = Object.fromEntries((d.correction?.items ?? []).filter((i: any) => i.type === 'field').map((i: any) => [i.key, i.reason || 'Our reviewer flagged this field']));
   const why = (k: string) => errs[k] ?? (flags[k] ? `Reviewer: ${flags[k]}` : undefined);
+  const send = (body: Record<string, unknown>) => (submit ? submit(body) : put('/owner/application/business', body));
   const save = useMutation({
     mutationFn: () => {
       const common = { businessType: type, ...(f.pan ? { pan: f.pan.trim().toUpperCase() } : {}), address: f.address.trim(), state: f.state, city: f.city.trim(), pincode: f.pincode.trim(), representativeName: f.representativeName.trim(), ...(f.gstin ? { gstin: f.gstin.trim().toUpperCase() } : {}) };
-      if (type === 'individual') return put('/owner/application/business', { ...common, dob: f.dob, phone: f.phone.replace(/[\s-]/g, '') });
-      if (type === 'sole_proprietorship') return put('/owner/application/business', { ...common, businessName: f.businessName.trim(), phone: f.phone.replace(/[\s-]/g, ''), ...(f.udyamNumber ? { udyamNumber: f.udyamNumber.trim().toUpperCase() } : {}), ...(f.otherInfo.trim() ? { otherInfo: f.otherInfo.trim() } : {}) });
-      if (type === 'partnership_pvt_ltd') return put('/owner/application/business', { ...common, businessName: f.businessName.trim(), phone: f.phone.replace(/[\s-]/g, ''), ...(f.registrationNumber ? { registrationNumber: f.registrationNumber.trim().toUpperCase() } : {}),
+      if (type === 'individual') return send({ ...common, dob: f.dob, phone: f.phone.replace(/[\s-]/g, '') });
+      if (type === 'sole_proprietorship') return send({ ...common, businessName: f.businessName.trim(), phone: f.phone.replace(/[\s-]/g, ''), ...(f.udyamNumber ? { udyamNumber: f.udyamNumber.trim().toUpperCase() } : {}), ...(f.otherInfo.trim() ? { otherInfo: f.otherInfo.trim() } : {}) });
+      if (type === 'partnership_pvt_ltd') return send({ ...common, businessName: f.businessName.trim(), phone: f.phone.replace(/[\s-]/g, ''), ...(f.registrationNumber ? { registrationNumber: f.registrationNumber.trim().toUpperCase() } : {}),
         partners: partners.map((p) => ({ name: p.name.trim(), pan: p.pan.trim().toUpperCase(), aadhaar: p.aadhaar.replace(/\s/g, ''), phone: p.phone.replace(/[\s-]/g, '') })) });
-      return put('/owner/application/business', { ...common, businessName: f.businessName.trim(),
+      return send({ ...common, businessName: f.businessName.trim(),
         ...(['partnership', 'opc', 'llp', 'trust_society', 'private_limited'].includes(type) && f.designation ? { designation: f.designation.trim() } : {}), ...(['private_limited', 'opc', 'llp', 'trust_society'].includes(type) ? { registrationNumber: f.registrationNumber.trim().toUpperCase() } : {}) });
     },
     onSuccess: () => { refresh(); next(); }, onError: (e) => { const fe = fieldErrors(e); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(e)); }, // the server's reason goes next to the field it is about
@@ -504,7 +590,7 @@ function BusinessStep({ d, refresh, back, next, focus, toPersonal }: { d: AppDat
   const gst = <Input data-field="gstin" filter={FILTERS.gst} label="GST Number (optional)" value={f.gstin} onChange={(e) => setF({ ...f, gstin: e.target.value.toUpperCase() })} maxLength={15} error={why('gstin')} placeholder="22AAAAA0000A1Z5" />;
   const phoneField = (label: string) => <Input {...ro(lk.phone)} mandatory data-field="phone" filter={FILTERS.mobile} label={label} type="tel" inputMode="tel" value={f.phone} onChange={set('phone')} error={why('phone')} placeholder="9876543210" />;
   return (
-    <div><h2 className="text-3xl font-bold">Business information</h2><p className="mb-4 text-sm text-muted">Choose how your business is registered, then fill in the details for it.</p>
+    <div>{title !== '' && <h2 className="text-3xl font-bold">{title ?? 'Business information'}</h2>}<p className="mb-4 text-sm text-muted">Choose how your business is registered, then fill in the details for it.</p>
       <LockedNotice show={lk.name || lk.dob || lk.phone || lk.place} onEdit={toPersonal} />
       <fieldset><legend className={cx('mb-2 text-xs font-semibold uppercase tracking-wide text-muted', STAR)}>Select your account type</legend>
         <div data-field="businessType" role="radiogroup" aria-label="Business type" className="grid gap-2 md:grid-cols-3">{choices.map((t) => (
@@ -534,7 +620,7 @@ function BusinessStep({ d, refresh, back, next, focus, toPersonal }: { d: AppDat
         <div className="grid gap-3 sm:grid-cols-2">
           <Input {...ro(lk.name)} mandatory data-field="representativeName" label="Authorized Person's Full Name" filter={FILTERS.personName} value={f.representativeName} onChange={set('representativeName')} error={why('representativeName')} />
           {phoneField("Authorized Person's Phone Number")}</div>
-        <Input data-field="registrationNumber" filter={FILTERS.cin} label="CIN (Private Limited Company only)" value={f.registrationNumber} onChange={(e) => setF({ ...f, registrationNumber: e.target.value.toUpperCase() })} error={why('registrationNumber')} placeholder="U74999TN2018PTC123456" />
+        <Input data-field="registrationNumber" filter={FILTERS.cin} label="CIN (optional, Private Limited Company only)" value={f.registrationNumber} onChange={(e) => setF({ ...f, registrationNumber: e.target.value.toUpperCase() })} error={why('registrationNumber')} placeholder="U74999TN2018PTC123456" />
         {gst}
         <fieldset data-field="partners" className="rounded-xl border border-line p-3"><legend className="px-1 text-sm font-bold">Partner / Director Details *</legend>
           {why('partners') && <p role="alert" className="text-xs text-danger">{why('partners')}</p>}
@@ -556,7 +642,7 @@ function BusinessStep({ d, refresh, back, next, focus, toPersonal }: { d: AppDat
           <Input mandatory={type !== 'opc' && type !== 'llp'} data-field="designation" label="Designation" value={f.designation} onChange={set('designation')} error={why('designation')} /></div>
         {place(lab.addr)}{gst}</div>)}
       {error && <p role="alert" className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-      <StepNav onBack={back} onNext={go} busy={save.isPending} />
+      <StepNav onBack={back} onNext={go} busy={save.isPending} nextLabel={nextLabel} />
     </div>
   );
 }
@@ -567,6 +653,7 @@ function IdentityStep({ d, refresh, back, next, focus }: { d: AppData; refresh()
   useFocusField(focus);
   const type: string = d.business.type ?? '';
   const holder = type === 'sole_proprietorship' ? "Proprietor's" : type && type !== 'individual' ? "Authorized person's" : '';
+  const numberLabel = holder ? `${holder} Aadhaar` : 'Aadhaar Card Number'; // "Proprietor's Aadhaar" / "Authorized person's Aadhaar"
   const saved: string | null = d.identity.aadhaarMasked ?? null;
   const [aadhaar, setAadhaar] = useState(''); const [error, setError] = useState(''); const [numErr, setNumErr] = useState('');
   const flagged = (d.correction?.items ?? []).find((i: any) => i.type === 'field' && i.key === 'identity');
@@ -579,15 +666,15 @@ function IdentityStep({ d, refresh, back, next, focus }: { d: AppData; refresh()
     setError(''); setNumErr('');
     if (!aadhaar && !saved) return setNumErr('Enter the 12-digit Aadhaar number');
     if (aadhaar && !/^[0-9]{12}$/.test(aadhaar.replace(/\s/g, ''))) return setNumErr('Enter the 12-digit Aadhaar number');
-    if (!proof || proof.status === 'rejected') return setError(`${holder ? `${holder} ` : ''}Aadhaar Card Copy is required`);
+    if (!proof || proof.status === 'rejected') return setError('Aadhaar / Government ID Copy is required');
     save.mutate();
   };
   return (
     <div><h2 className="text-3xl font-bold">Documents</h2><p className="mb-4 text-sm text-muted">Upload clear copies of your documents. PDF, JPG, JPEG or PNG, up to 10 MB each.</p>
       <div className="space-y-3.5 rounded-2xl border border-line p-4"><h3 className="text-xl font-bold">Identity documents</h3>
-        <Input mandatory data-field="identity" label={`${holder ? `${holder} ` : ''}Aadhaar Card Number`} filter={FILTERS.aadhaar} inputMode="numeric" maxLength={12} value={aadhaar} onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, ''))} error={numErr || (flagged && !aadhaar ? `Reviewer: ${flagged.reason || 'Please check the Aadhaar number'}` : undefined)} placeholder="123456789012"
+        <Input mandatory data-field="identity" label={numberLabel} filter={FILTERS.aadhaar} inputMode="numeric" maxLength={12} value={aadhaar} onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, ''))} error={numErr || (flagged && !aadhaar ? `Reviewer: ${flagged.reason || 'Please check the Aadhaar number'}` : undefined)} placeholder="123456789012"
           hint={saved ? `Saved as ${saved}. Type it again only if you want to change it.` : 'The 12-digit number on the Aadhaar card. Only the last 4 digits are kept.'} />
-        <DocSlot fieldKey="identity_proof" label={`${holder ? `${holder} ` : ''}${holder ? 'Aadhaar Card Copy' : 'Aadhaar / Government ID Copy'}`} hint="PDF, JPG, JPEG or PNG, up to 10 MB" existing={proof} uploadUrl="/owner/application/documents" fields={{ docType: 'identity_proof' }} viewPath={(id) => `/owner/application/documents/${id}/file`} onDone={refresh} /></div>
+        <DocSlot fieldKey="identity_proof" label="Aadhaar / Government ID Copy" hint="PDF, JPG, JPEG or PNG, up to 10 MB" existing={proof} uploadUrl="/owner/application/documents" fields={{ docType: 'identity_proof' }} viewPath={(id) => `/owner/application/documents/${id}/file`} onDone={refresh} /></div>
       {error && <p role="alert" className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
       <StepNav onBack={back} onNext={go} busy={save.isPending} />
     </div>
@@ -619,7 +706,7 @@ function ReviewStep({ d, refresh, back, go, onSubmitted }: { d: AppData; refresh
   return (
     <div><h2 className="text-3xl font-bold">Review & Submit</h2><p className="mb-4 text-sm text-muted">Check everything carefully before submitting for verification.</p>
       <div role="status" className="mb-4 flex items-start gap-3 rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-3 text-sm"><span aria-hidden="true">ℹ️</span>
-        <p>Please review every section below carefully before submitting. KickOff verifies these details as part of your application, and identity information can only be updated afterward through an approval request. Make sure everything is accurate and complete.</p></div>
+        <p>Please review every section below carefully before submitting. PlaynX verifies these details as part of your application, and identity information can only be updated afterward through an approval request. Make sure everything is accurate and complete.</p></div>
       <div className="space-y-3">
         <Block title="Personal Details" step={1}><Row k="Legal full name" v={b.representativeName} /><Row k="Date of birth" v={b.dob} /><Row k="Phone number" v={b.phone} /><Row k="Turf / venue address" v={[b.address, b.addressLine2, b.city, b.state, b.pincode, b.country].filter(Boolean).join(', ')} /></Block>
         <Block title="Account Type" step={2}><Row k="Type" v={ALL_TYPES.find((t) => t.id === b.type)?.label} /><Row k="Name" v={b.name} /><Row k="PAN" v={b.panMasked} />{b.registrationNumber && <Row k={b.type === 'llp' ? 'LLPIN' : 'CIN'} v={b.registrationNumber} />}<Row k="Authorized person" v={`${b.representativeName ?? ''}${b.designation ? `, ${b.designation}` : ''}`} /><Row k="Address" v={b.address} /><Row k="State / City / PIN" v={[b.state, b.city, b.pincode].filter(Boolean).join(', ')} /></Block>
@@ -629,7 +716,7 @@ function ReviewStep({ d, refresh, back, go, onSubmitted }: { d: AppData; refresh
       </div>
       <div className="mt-5 space-y-1 rounded-xl border border-line p-4 text-sm">
         <TermsCheckbox checked={terms} onChange={setTerms} />
-        <label className="flex cursor-pointer items-start gap-3 py-1"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-brand" checked={decl} onChange={(e) => setDecl(e.target.checked)} /><span className={STAR}>I confirm that the information and documents provided by me are accurate and complete to the best of my knowledge. I understand they will be reviewed as part of the KickOff verification process, and that if any document I upload is found to be false, forged or illegal, KickOff may block my account.</span></label></div>
+        <label className="flex cursor-pointer items-start gap-3 py-1"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-brand" checked={decl} onChange={(e) => setDecl(e.target.checked)} /><span className={STAR}>I confirm that the information and documents provided by me are accurate and complete to the best of my knowledge. I understand they will be reviewed as part of the PlaynX verification process, and that if any document I upload is found to be false, forged or illegal, PlaynX may block my account.</span></label></div>
       {d.missing.length > 0 && (
         <div role="alert" className="mt-4 rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm">
           <p className="font-bold">{d.missing.length} thing{d.missing.length === 1 ? ' is' : 's are'} missing. Select an item to go and fix it:</p>

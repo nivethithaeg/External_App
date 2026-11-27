@@ -1,4 +1,4 @@
-# KickOff database: tables and fields
+# PlaynX database: tables and fields
 
 Generated from the migrations (48 tables, 414 columns). **PK** = primary key, **FK → t** = points to table t, `?` = may be empty.
 

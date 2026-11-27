@@ -62,7 +62,7 @@ function Shell() {
       {tag && <Text style={styles.tag}>shell v3 · top {Math.round(top)}</Text>}
       {failed ? (
         <View style={styles.center}>
-          <Text style={styles.title}>Can’t reach KICKOFF</Text>
+          <Text style={styles.title}>Can’t reach PlaynX</Text>
           <Text style={styles.msg}>Check that your phone and laptop are on the same WiFi, and the frontend is running (npm run dev).{'\n'}{SITE_URL}</Text>
           <Pressable style={styles.btn} onPress={retry}><Text style={styles.btnText}>Try again</Text></Pressable>
         </View>

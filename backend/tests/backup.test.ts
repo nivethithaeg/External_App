@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdmin, createApprovedVenue, setup, type TestEnv } from './helpers.js';
 import { backupDatabase } from '../src/lib/backup.js';
 
-let env: TestEnv; const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kickoff-backup-'));
+let env: TestEnv; const root = fs.mkdtempSync(path.join(os.tmpdir(), 'playnx-backup-'));
 beforeAll(async () => { env = await setup(); const a = await createAdmin(env); await createApprovedVenue(env, a); });
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 

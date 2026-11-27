@@ -1,3 +1,4 @@
+import { areaFromPrices } from '../lib/fromPrice.js';
 import { venueAreaDays } from '../lib/ownerDay.js';
 import { Router } from 'express';
 import { adjustmentOn } from '../lib/slots.js';
@@ -26,7 +27,7 @@ export function publicRoutes(ctx: Ctx) {
   const r = Router();
   const opt = optionalAuth(ctx);
 
-  r.get('/sports', async (_req, res) => res.json({ sports: (await ctx.db.query('SELECT id, name, slug FROM sports WHERE is_active ORDER BY name')).rows }));
+  r.get('/sports', async (_req, res) => res.json({ sports: (await ctx.db.query('SELECT id, name, slug FROM sports WHERE is_active ORDER BY sort_order, name')).rows }));
   r.get('/facilities', async (_req, res) => res.json({ facilities: (await ctx.db.query('SELECT id, name FROM facilities ORDER BY name')).rows }));
   /** Banners for everyone, plus those aimed at the visitor's city: the one in the request, or the signed-in customer's own city. */
   r.get('/banners', opt, async (req, res) => {
@@ -79,7 +80,7 @@ export function publicRoutes(ctx: Ctx) {
         ${dist ? `round((${dist})::numeric, 1)::float8` : 'NULL::float8'} AS distance_km,
         (SELECT url FROM venue_images i WHERE i.venue_id=v.id AND i.area_id IS NULL AND i.kind='image' AND NOT i.is_pending ORDER BY i.is_cover DESC, i.sort_order LIMIT 1) AS cover_image,
         (SELECT COALESCE(json_agg(x.url), '[]') FROM (SELECT url FROM venue_images i WHERE i.venue_id=v.id AND i.area_id IS NULL AND i.kind='image' AND NOT i.is_pending ORDER BY i.is_cover DESC, i.sort_order LIMIT 4) x) AS photos,
-        (SELECT COALESCE(json_agg(DISTINCT sp.name), '[]') FROM playing_areas a JOIN playing_area_sports s ON s.playing_area_id=a.id JOIN sports sp ON sp.id=s.sport_id WHERE a.venue_id=v.id AND a.is_active) AS sports,
+        (SELECT COALESCE(json_agg(x.name ORDER BY x.so, x.name), '[]') FROM (SELECT DISTINCT sp.name, sp.sort_order AS so FROM playing_areas a JOIN playing_area_sports s ON s.playing_area_id=a.id JOIN sports sp ON sp.id=s.sport_id WHERE a.venue_id=v.id AND a.is_active) x) AS sports,
         ${uid ? `EXISTS (SELECT 1 FROM favourites f WHERE f.user_id=${uid} AND f.venue_id=v.id)` : 'false'} AS is_favourite,
         count(*) OVER()::int AS total
       FROM venues v
@@ -87,13 +88,18 @@ export function publicRoutes(ctx: Ctx) {
       WHERE ${where.join(' AND ')}
       ORDER BY ${order}, v.id LIMIT ${add(limit)} OFFSET ${add(offset)}`;
     const { rows } = await ctx.db.query(sql, p);
-    res.json({ venues: rows.map(({ total, ...v }) => v), total: rows[0]?.total ?? 0, page: pageNo, limit });
+    // "from ₹…": the lowest price a customer can really book, not a price that no open slot uses
+    const ids = rows.map((v: any) => v.id);
+    const vAreas = ids.length ? (await ctx.db.query(`SELECT id, venue_id FROM playing_areas WHERE venue_id = ANY($1::uuid[]) AND is_active`, [ids])).rows : [];
+    const fp = await areaFromPrices(ctx.db, vAreas.map((a: any) => a.id));
+    const fromOf = (vid: string) => { const xs = vAreas.filter((a: any) => a.venue_id === vid).map((a: any) => fp.get(a.id)).filter((x: any) => x != null) as number[]; return xs.length ? Math.min(...xs) : null; };
+    res.json({ venues: rows.map(({ total, ...v }) => ({ ...v, min_price: fromOf(v.id) ?? v.min_price })), total: rows[0]?.total ?? 0, page: pageNo, limit });
   });
 
   r.get('/venues/:id', opt, async (req, res) => {
     const id = parse(z.uuid(), req.params.id);
     const v = (await ctx.db.query(
-      `SELECT v.*, op.business_name FROM venues v JOIN owner_profiles op ON op.user_id=v.owner_id WHERE v.id=$1`, [id])).rows[0];
+      `SELECT v.*, op.business_name, (SELECT CASE WHEN oo.payment_collection='advance' THEN oo.advance_percent END FROM owner_onboarding oo WHERE oo.owner_id=v.owner_id) AS advance_percent FROM venues v JOIN owner_profiles op ON op.user_id=v.owner_id WHERE v.id=$1`, [id])).rows[0];
     const viewer = req.user;
     if (!v || (v.status !== 'approved' && viewer?.id !== v.owner_id && viewer?.role !== 'admin')) throw notFound('Venue not found');
     const [images, facilities, areas, pricing, avail, fav, areaImages] = await Promise.all([
@@ -101,17 +107,19 @@ export function publicRoutes(ctx: Ctx) {
       ctx.db.query('SELECT f.id, f.name FROM venue_facilities vf JOIN facilities f ON f.id=vf.facility_id WHERE vf.venue_id=$1 ORDER BY f.name', [id]),
       ctx.db.query(
         `SELECT a.id, a.name, a.surface, a.capacity, a.slot_minutes, a.min_duration_minutes, a.max_duration_minutes, a.environment, a.roof_type, a.advance_booking_days, a.instant_booking,
-           (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name, 'slug', sp.slug)), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id) AS sports
+           (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name, 'slug', sp.slug) ORDER BY sp.sort_order, sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id) AS sports
          FROM playing_areas a WHERE a.venue_id=$1 AND a.is_active AND a.approval_status='approved' ORDER BY a.name`, [id]),
       ctx.db.query(`SELECT pr.area_id, pr.sport_id, pr.day_type, pr.day_of_week, pr.start_time::text, pr.end_time::text, pr.price_per_hour FROM pricing_rules pr JOIN playing_areas a ON a.id=pr.area_id WHERE a.venue_id=$1 AND a.is_active`, [id]),
       ctx.db.query(`SELECT ar.playing_area_id AS area_id, ar.day_of_week, ar.open_time::text, ar.close_time::text, ar.is_closed FROM playing_area_hours ar JOIN playing_areas a ON a.id=ar.playing_area_id WHERE a.venue_id=$1`, [id]),
       viewer ? ctx.db.query('SELECT 1 FROM favourites WHERE user_id=$1 AND venue_id=$2', [viewer.id, id]) : Promise.resolve({ rows: [] as any[] }),
       ctx.db.query("SELECT id, url, area_id FROM venue_images WHERE venue_id=$1 AND area_id IS NOT NULL AND kind='image' AND NOT is_pending ORDER BY sort_order", [id]),
     ]);
-    const { owner_id, contact_phone2: _alt, ...pub } = v; // the second contact number is for the owner and KickOff, not shown to customers
+    const areaFrom = await areaFromPrices(ctx.db, areas.rows.map((a: any) => a.id));
+    const { owner_id, contact_phone2: _alt, ...pub } = v; // the second contact number is for the owner and PlaynX, not shown to customers
     const panorama = (await ctx.db.query("SELECT url FROM venue_images WHERE venue_id=$1 AND kind='panorama' AND NOT is_pending LIMIT 1", [id])).rows[0]?.url ?? null;
     res.json({ venue: { ...pub, panorama, images: images.rows, facilities: facilities.rows, is_favourite: !!fav.rows[0],
-      areas: areas.rows.map((a: any) => ({ ...a, images: areaImages.rows.filter((i: any) => i.area_id === a.id).map(({ area_id, ...i }: any) => i), pricing: pricing.rows.filter((p: any) => p.area_id === a.id), availability: avail.rows.filter((x: any) => x.area_id === a.id) })) } });
+      // each area's "from" price: what a customer can really book
+      areas: areas.rows.map((a: any) => ({ ...a, from_price: areaFrom.get(a.id) ?? null, images: areaImages.rows.filter((i: any) => i.area_id === a.id).map(({ area_id, ...i }: any) => i), pricing: pricing.rows.filter((p: any) => p.area_id === a.id), availability: avail.rows.filter((x: any) => x.area_id === a.id) })) } });
   });
 
 

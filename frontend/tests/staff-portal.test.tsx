@@ -17,7 +17,7 @@ const CODE = 'KO-ABC123';
 const BOOKING = { reference: 'KO-ABC123', status: 'confirmed', starts_at: '2030-01-05T10:00:00Z', ends_at: '2030-01-05T11:00:00Z', area_name: 'Turf A', venue_name: 'Green Arena', customer_name: 'Priya Nair', checked_in_at: null };
 let calls: { method: string; url: string; body?: any }[] = []; let verifyResult: any;
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('kickoff_token', 't'); calls = []; verifyResult = { valid: true, booking: BOOKING };
+  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('playnx_token', 't'); calls = []; verifyResult = { valid: true, booking: BOOKING };
   vi.mocked(api.get).mockImplementation((async (url: string) => ({ '/auth/me': { user: STAFF }, '/me/notifications': { notifications: [], unread: 0 }, '/staff/me': { business: 'Green Arena Pvt', permissions: ['CHECK_IN', 'BOOKING_VIEW'] }, '/staff/overview': { business: 'Mehta Sports', bookings: [{ id: 'b1', ...BOOKING, timezone: 'Asia/Kolkata' }, { id: 'b2', ...BOOKING, reference: 'KO-2', customer_name: 'Ravi', checked_in_at: '2030-01-05T10:05:00Z', timezone: 'Asia/Kolkata' }] } } as Record<string, any>)[url] ?? {}) as any);
   vi.mocked(api.post).mockImplementation((async (url: string, body?: any) => { calls.push({ method: 'POST', url, body }); if (url === '/staff/verify') return verifyResult; if (url === '/staff/check-in') return { checkedIn: true, alreadyCheckedIn: false, at: '2030-01-05T10:10:00Z', booking: BOOKING }; return {}; }) as any);
 });

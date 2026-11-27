@@ -72,7 +72,7 @@ describe('booking flow & payment verification', () => {
     expect(ok.body.status).toBe('confirmed');
     const done = await request(env.app).get(`/api/bookings/${booking.body.bookingId}`).set(c.auth).expect(200);
     expect(done.body.booking.status).toBe('confirmed');
-    expect(done.body.booking.reference).toMatch(/^KO-[A-Z0-9]{7}$/);
+    expect(done.body.booking.reference).toMatch(/^PX-[A-Z0-9]{7}$/);
     expect(done.body.qr).toBeUndefined(); // there is no QR code: people show the booking reference at the gate
     expect(env.emails.some((e) => e.to === c.email && e.subject === 'Booking confirmed')).toBe(true);
     const ownerNotes = await request(env.app).get('/api/me/notifications').set(fx.owner.auth).expect(200);

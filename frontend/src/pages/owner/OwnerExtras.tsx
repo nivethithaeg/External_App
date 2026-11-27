@@ -52,7 +52,7 @@ export function OwnerCloseAccountPage() {
   const go = () => { setError(''); if (confirmWord.trim().toUpperCase() !== 'DELETE') return setError('Type DELETE to confirm'); close.mutate(); };
   return (
     <div>
-      <PageHeader title="Delete account" subtitle="Permanently close your KickOff account and delete your personal information." />
+      <PageHeader title="Delete account" subtitle="Permanently close your PlaynX account and delete your personal information." />
       <Card className="max-w-2xl space-y-4 p-5">
         <div className="text-sm"><b>What happens</b>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">

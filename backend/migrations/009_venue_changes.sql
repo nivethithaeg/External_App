@@ -1,4 +1,4 @@
--- Edits to a venue that KickOff has already approved wait here until an admin approves them.
+-- Edits to a venue that PlaynX has already approved wait here until an admin approves them.
 -- Customers keep seeing the venues row (the approved version); approval copies these values onto it.
 CREATE TABLE IF NOT EXISTS venue_changes (
   venue_id     uuid PRIMARY KEY REFERENCES venues(id) ON DELETE CASCADE,

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { forgetPricedCache } from '../src/middleware/auth.js';
-import { createAdmin, createApprovedVenue, ist, pay, registerUser, setup, startBooking, type TestEnv } from './helpers.js';
+import { approveOwner, createAdmin, createApprovedVenue, ist, pay, registerUser, setup, startBooking, type TestEnv } from './helpers.js';
 const dayAhead = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 
 let env: TestEnv;
@@ -368,5 +368,71 @@ describe('venue-owner tables carry JusGo names and fields', () => {
     expect(await ids()).toContain(f.venue.id);
     await env.db.query('DELETE FROM pricing_rules WHERE area_id=$1', [f.area.id]); // open, but no price
     expect(await ids()).not.toContain(f.venue.id);
+  });
+
+  it('advance bookings: the customer pays the advance online, the owner records the balance at the venue', async () => {
+    const admin = await createAdmin(env);
+    const f: any = await createApprovedVenue(env, admin); const own = f.owner.auth;
+    await request(env.app).put('/api/owner/payment-collection').set(own).send({ mode: 'advance', advancePercent: 30 }).expect(200);
+    expect((await request(env.app).get(`/api/venues/${f.venue.id}`).expect(200)).body.venue.advance_percent).toBe(30);
+    const c = await registerUser(env, 'customer');
+    const sb = await startBooking(env, c, f, ist(dayAhead(3), '10:00'));
+    const bid = sb.booking.body.bookingId; const total = sb.booking.body.total;
+    expect(sb.booking.body.advance).toBeCloseTo(total * 0.3, 2); expect(sb.booking.body.order.amount).toBeCloseTo(total * 0.3, 2);
+    expect(sb.booking.body.payAtVenue).toBeCloseTo(total * 0.7, 2);
+    await pay(env, c, bid, sb.booking.body.order.id).then((r) => expect(r.status).toBe(200));
+    const pend = (await request(env.app).post(`/api/owner/bookings/${bid}/payments`).set(own).send({ amount: total, mode: 'cash' }).expect(400)).body; // more than the balance
+    expect(pend.error.code).toBe('overpayment');
+    const r = (await request(env.app).post(`/api/owner/bookings/${bid}/payments`).set(own).send({ amount: Math.round(total * 70) / 100, mode: 'cash' }).expect(201)).body;
+    expect(r.pending).toBe(0); expect(r.paid).toBeCloseTo(total, 2);
+    const b = (await env.db.query('SELECT advance_amount::float8 AS a, commission_amount::float8 AS fee FROM bookings WHERE id=$1', [bid])).rows[0];
+    const ps = (await request(env.app).get('/api/owner/payout-status').set(own).expect(200)).body.bookings.find((x: any) => x.id === bid);
+    expect(ps.gross).toBeCloseTo(b.a, 2); expect(ps.on_hold + ps.ready_to_pay).toBeCloseTo(Math.max(0, b.a - b.fee), 2); // PlaynX holds only the advance
+  });
+
+  it('a ticket takes photos and videos: only the person who raised it and admins can open them', async () => {
+    const admin = await createAdmin(env);
+    const c = await registerUser(env, 'customer'); const other = await registerUser(env, 'customer');
+    const t = (await request(env.app).post('/api/me/tickets').set(c.auth).send({ subject: 'Turf not clean', message: 'Rubbish on the pitch' }).expect(201)).body.ticket;
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]);
+    const a = (await request(env.app).post(`/api/me/tickets/${t.id}/attachments`).set(c.auth).attach('file', png, { filename: 'p.png', contentType: 'image/png' }).expect(201)).body.attachment;
+    expect(a.kind).toBe('image');
+    await request(env.app).post(`/api/me/tickets/${t.id}/attachments`).set(c.auth).attach('file', Buffer.from('%PDF-1.4 x'), { filename: 'x.pdf', contentType: 'application/pdf' }).expect(400); // photos and videos only
+    await request(env.app).post(`/api/me/tickets/${t.id}/attachments`).set(other.auth).attach('file', png, { filename: 'p.png', contentType: 'image/png' }).expect(404); // not their ticket
+    expect((await request(env.app).get(`/api/me/tickets/${t.id}`).set(c.auth).expect(200)).body.attachments).toHaveLength(1);
+    await request(env.app).get(`/api/me/tickets/${t.id}/attachments/${a.id}/file`).set(c.auth).expect(200).expect('Content-Type', /image\/png/);
+    await request(env.app).get(`/api/me/tickets/${t.id}/attachments/${a.id}/file`).set(other.auth).expect(404);
+    const d = (await request(env.app).get(`/api/admin/tickets/${t.id}`).set(admin.auth).expect(200)).body;
+    expect(d.attachments.map((x: any) => x.id)).toEqual([a.id]);
+    await request(env.app).get(`/api/admin/tickets/${t.id}/attachments/${a.id}/file`).set(admin.auth).expect(200);
+  });
+
+  it('sports are listed Cricket, Football, Badminton first, then the rest by name', async () => {
+    const names = (await request(env.app).get('/api/sports').expect(200)).body.sports.map((x: any) => x.name);
+    const first = names.filter((n: string) => ['Cricket', 'Football', 'Badminton'].includes(n));
+    expect(names.slice(0, first.length)).toEqual(['Cricket', 'Football', 'Badminton'].filter((n) => first.includes(n)));
+    const rest = names.slice(first.length); expect(rest).toEqual([...rest].sort((a: string, b: string) => a.localeCompare(b)));
+  });
+
+  it('a just-approved owner with no bank account can save the bank details and how customers pay, in either order', async () => {
+    const admin = await createAdmin(env);
+    const o = await registerUser(env, 'owner'); await approveOwner(env, admin, o);
+    await env.db.query('UPDATE owner_onboarding SET bank_account_number=NULL WHERE owner_id=$1', [o.id]);
+    await request(env.app).put('/api/owner/payment-collection').set(o.auth).send({ mode: 'advance', advancePercent: 30 }).expect(200); // no "add your bank first"
+    await request(env.app).put('/api/owner/profile').set(o.auth).send({ bankAccountName: 'Ravi Kumar', bankAccountNumber: '123456789012', bankIfsc: 'HDFC0001234' }).expect(200);
+    expect((await request(env.app).get('/api/owner/payment-collection').set(o.auth).expect(200)).body).toEqual({ mode: 'advance', advancePercent: 30 });
+  });
+
+  it('the "from" price is the lowest a customer can really book: a default price no open slot uses is not shown', async () => {
+    const admin = await createAdmin(env);
+    const f: any = await createApprovedVenue(env, admin);
+    await env.db.query('DELETE FROM pricing_rules WHERE area_id=$1', [f.area.id]);
+    await env.db.query(`INSERT INTO pricing_rules (area_id, sport_id, day_type, day_of_week, start_time, end_time, price_per_hour) VALUES ($1,NULL,'all',NULL,'00:00','24:00',500)`, [f.area.id]); // default
+    await env.db.query(`DELETE FROM playing_area_sports WHERE playing_area_id=$1 AND sport_id<>$2`, [f.area.id, f.football.id]); // football only
+    await env.db.query(`INSERT INTO pricing_rules (area_id, sport_id, day_type, day_of_week, start_time, end_time, price_per_hour) VALUES ($1,$2,'all',NULL,'00:00','24:00',900)`, [f.area.id, f.football.id]); // football always costs 900
+    const v = (await request(env.app).get('/api/venues?limit=50').expect(200)).body.venues.find((x: any) => x.id === f.venue.id);
+    expect(v.min_price).toBe(900);
+    const d = (await request(env.app).get(`/api/venues/${f.venue.id}`).expect(200)).body.venue;
+    expect(d.areas.find((a: any) => a.id === f.area.id).from_price).toBe(900);
   });
 });

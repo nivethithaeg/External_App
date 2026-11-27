@@ -24,7 +24,7 @@ export function OverviewPage() {
   const checklist = useQuery({ queryKey: ['owner-checklist'], queryFn: () => get<{ venue: { name: string } | null; items: { id: string; label: string; done: boolean; link: string }[]; done: number; total: number; complete: boolean }>('/owner/checklist') });
   const [range, setRange] = useState<'day' | 'week' | 'month' | 'year'>('day');
   return (
-    <div><PageHeader title={`${greeting()}, ${user?.fullName ?? ''} 👋`} subtitle={`What is happening with your venues right now.${dash.data?.ownerCode ? ` Owner ID ${dash.data.ownerCode}` : ''}`} />
+    <div><PageHeader title={<>{greeting()}, {user?.fullName ?? ''} <span className="wave-hand" role="img" aria-label="waving hand">👋</span></>} subtitle={`What is happening with your venues right now.${dash.data?.ownerCode ? ` Owner ID ${dash.data.ownerCode}` : ''}`} />
       <QueryBoundary q={q}>{(d) => {
         const series = d.revenue[range] as { period: string; revenue: number; bookings: number }[];
         const total = d.statusBreakdown.reduce((s: number, x: any) => s + x.n, 0);
@@ -51,10 +51,13 @@ export function OverviewPage() {
             <div className="flex flex-wrap justify-end gap-2" aria-label="Quick actions">
               <Link to="/owner/bookings/new" className="btn-primary">Add Booking</Link><Link to="/owner/reports?tab=payments&status=pending" className="btn-ghost">Record Payment</Link></div>
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-              <Stat label="Total Venues" value={d.counts.venues} /><Stat label="Total Playing Areas" value={d.counts.areas} />
-              <Stat label="Today's Bookings" value={d.today.bookings} /><Stat label="Upcoming Bookings" value={d.upcoming} />
-              <Stat label="Completed Bookings" value={d.statusBreakdown.find((x: any) => x.status === 'completed')?.n ?? 0} /><Stat label="Cancelled Bookings" value={d.statusBreakdown.find((x: any) => x.status === 'cancelled')?.n ?? 0} />
-              <Stat label="Total Revenue (GTV)" value={money(d.counts.gtv ?? 0)} accent /><Stat label="Open Slots Today" value={d.slotsToday ? <span aria-label={`${d.slotsToday.open} open of ${d.slotsToday.total} slots today`}>{d.slotsToday.open}<span className="text-2xl text-muted"> / {d.slotsToday.total}</span></span> : d.slots.available} hint="Free to book now or later / all of today's slots, every playing area" />
+              <Stat index={0} to="/owner/venues" label="Total Venues" count={d.counts.venues} /><Stat index={1} to="/owner/areas" label="Total Playing Areas" count={d.counts.areas} />
+              <Stat index={2} to="/owner/bookings?preset=today" label="Today's Bookings" count={d.today.bookings} /><Stat index={3} to="/owner/bookings/upcoming" label="Upcoming Bookings" count={d.upcoming} />
+              <Stat index={4} to="/owner/bookings?status=completed" label="Completed Bookings" count={d.statusBreakdown.find((x: any) => x.status === 'completed')?.n ?? 0} /><Stat index={5} to="/owner/bookings/cancelled" label="Cancelled Bookings" count={d.statusBreakdown.find((x: any) => x.status === 'cancelled')?.n ?? 0} />
+              <Stat index={6} to="/owner/reports" label="Total Revenue (GTV)" count={Number(d.counts.gtv ?? 0)} format={(n) => money(Math.round(n))} valueLabel={money(d.counts.gtv ?? 0)} accent />
+              {d.slotsToday
+                ? <Stat index={7} to="/owner/slots" label="Open Slots Today" live={d.slotsToday.open > 0} count={d.slotsToday.open} suffix={<span className="text-2xl text-muted"> / {d.slotsToday.total}</span>} valueLabel={`${d.slotsToday.open} open of ${d.slotsToday.total} slots today`} hint="Free to book now or later / all of today's slots, every playing area" />
+                : <Stat index={7} to="/owner/slots" label="Open Slots Today" live={d.slots.available > 0} count={d.slots.available} hint="Free to book now or later / all of today's slots, every playing area" />}
             </div>
 
             <Card className="p-5"><h2 className="mb-3 text-2xl font-bold">Booking trend, last 30 days</h2>
@@ -105,7 +108,7 @@ function WithVenue({ children, label = 'Venue', editableWhenPending = false, alw
     <div className="space-y-5">
       {(alwaysPick || list.data!.venues.length > 1) && <div className="max-w-sm"><Select label={label} value={id} onChange={(e) => setSel(e.target.value)}>{list.data!.venues.map((v) => <option key={v.id} value={v.id}>{v.name}{v.city ? ` · ${v.city}` : ''}{['ready', 'approved'].includes(v.status) ? '' : ` · ${({ pending: 'Waiting for approval', draft: 'Not sent for approval yet', rejected: 'Needs changes', suspended: 'Suspended' } as Record<string, string>)[v.status] ?? 'Waiting for approval'}`}</option>)}</Select></div>}
       {det.isLoading ? <Loading /> : det.isError ? <ErrorBox error={det.error} retry={() => det.refetch()} /> : det.data && (det.data.venue.status === 'pending' && !editableWhenPending
-        ? <><p role="status" className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>Under approval.</b> This venue was sent to KickOff, so its details can't be changed until it is reviewed.</p>
+        ? <><p role="status" className="rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>Under approval.</b> This venue was sent to PlaynX, so its details can't be changed until it is reviewed.</p>
           <fieldset disabled aria-label="Locked while under approval" className="m-0 min-w-0 border-0 p-0 opacity-70">{children(det.data.venue)}</fieldset></>
         : children(det.data.venue))}
     </div>
@@ -145,7 +148,7 @@ export function DocumentsSection() {
 
 /** Old stand-alone page, kept only for links that still point at it. */
 export function DocumentsPage() {
-  return <div><PageHeader title="Venue documents" subtitle="Ownership and licence documents reviewed by KickOff" /><DocumentsSection /></div>;
+  return <div><PageHeader title="Venue documents" subtitle="Ownership and licence documents reviewed by PlaynX" /><DocumentsSection /></div>;
 }
 
 /* ---------------------------------------------------------------- Hours */

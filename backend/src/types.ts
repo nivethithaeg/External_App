@@ -8,6 +8,7 @@ import type { Notifier } from './lib/notify.js';
 import type { Sms } from './lib/sms.js';
 import type { GoogleVerifier } from './lib/google.js';
 import type { PayoutProvider } from './lib/payouts.js';
+import type { JusgoClient } from './lib/jusgo.js';
 
 export type Role = 'customer' | 'owner' | 'admin' | 'staff';
 export interface AuthUser {
@@ -18,6 +19,8 @@ export interface Ctx {
   storage: Storage; realtime: Realtime; notifier: Notifier; now: () => Date;
   /** Bank payouts to owners; absent or disabled means an admin pays by hand. */
   payouts?: PayoutProvider;
+  /** JusGo partner API (customer-link); absent when not configured */
+  jusgo?: JusgoClient;
 }
 declare global {
   namespace Express {

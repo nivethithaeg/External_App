@@ -11,7 +11,7 @@ describe('terms and conditions shown in a pop-up', () => {
     expect(screen.queryByRole('link', { name: 'Terms and Conditions' })).not.toBeInTheDocument(); // not a link that leaves the page
     await userEvent.click(trigger);
     const dlg = await screen.findByRole('dialog', { name: 'Terms and conditions' });
-    expect(await within(dlg).findByText('Using KickOff')).toBeInTheDocument();
+    expect(await within(dlg).findByText('Using PlaynX')).toBeInTheDocument();
     await userEvent.click(within(dlg).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Terms and conditions' })).not.toBeInTheDocument());
   });

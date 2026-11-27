@@ -1,26 +1,31 @@
 import { cx } from '../lib/utils';
 
-/** KickOff mark: an orange ball in motion (speed lines) inside a charcoal rounded square. */
-export function LogoMark({ size = 36 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <rect width="64" height="64" rx="16" fill="#151515" />
-      <circle cx="34" cy="32" r="16" fill="#FF6B22" />
-      <path d="M34 22l7 5-2.7 8h-8.6L27 27z" fill="#151515" />
-      <path d="M34 22v-6M41 27l5-3M38.3 35l4 5M29.7 35l-4 5M27 27l-5-3" stroke="#151515" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M8 24h10M5 32h12M8 40h10" stroke="#FF6B22" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  );
+/*
+ * The PlaynX logo as supplied (public/brand/playnx-logo.png), with its white background made transparent so it sits on
+ * any background. On dark backgrounds (navy footer, dark mode) the navy letters show in white.
+ */
+const SRC = { light: '/brand/playnx-logo-transparent.png', dark: '/brand/playnx-logo-light.png' };
+const MARK = { light: '/brand/playnx-mark.png', dark: '/brand/playnx-mark-light.png' };
+
+/** Pick the right image for the background: `onDark` forces the white-letter version (for a navy footer). */
+function Themed({ src, onDark, alt, className, style }: { src: { light: string; dark: string }; onDark?: boolean; alt: string; className?: string; style?: React.CSSProperties }) {
+  if (onDark) return <img src={src.dark} alt={alt} className={className} style={style} />;
+  return <>
+    <img src={src.light} alt={alt} className={cx(className, 'dark:hidden')} style={style} />
+    <img src={src.dark} alt={alt} aria-hidden={alt ? undefined : true} className={cx(className, 'hidden dark:block')} style={style} />
+  </>;
 }
 
-export function Logo({ className, subtitle }: { className?: string; subtitle?: string }) {
+/** Small square spot (collapsed sidebar): the logo's "P" with the play button. */
+export function LogoMark({ size = 36, onDark }: { size?: number; onDark?: boolean }) {
+  return <Themed src={MARK} onDark={onDark} alt="" className="object-contain" style={{ width: size, height: size }} />;
+}
+
+export function Logo({ className, subtitle, onDark }: { className?: string; subtitle?: string; onDark?: boolean }) {
   return (
-    <span className={cx('inline-flex items-center gap-2.5', className)}>
-      <LogoMark />
-      <span className="leading-none">
-        <span className="block font-display text-2xl font-extrabold uppercase tracking-wide">Kick<span className="text-[rgb(var(--brand-text))]">Off</span></span>
-        {subtitle && <span className="block text-[10px] font-semibold uppercase tracking-[.2em] text-muted">{subtitle}</span>}
-      </span>
+    <span className={cx('inline-flex flex-col items-start gap-1', className)}>
+      <Themed src={SRC} onDark={onDark} alt="PlaynX" className="h-11 w-auto" />
+      {subtitle && <span className="block text-[10px] font-semibold uppercase tracking-[.2em] text-muted">{subtitle}</span>}
     </span>
   );
 }

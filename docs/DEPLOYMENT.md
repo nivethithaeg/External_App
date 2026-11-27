@@ -11,7 +11,7 @@ sudo apt install -y nginx certbot python3-certbot-nginx && curl -fsSL https://de
 git clone <repo> && cd backend && npm ci && cp .env.example .env   # fill in; NODE_ENV=production; CORS_ORIGINS=https://your-frontend
 npm run build && npm run migrate   # migrate runs via tsx; or `node dist/src/migrate.js`
 pm2 start ecosystem.config.cjs && pm2 save && pm2 startup
-sudo cp ../docs/nginx.conf /etc/nginx/sites-available/kickoff-api && sudo ln -s /etc/nginx/sites-available/kickoff-api /etc/nginx/sites-enabled/ && sudo certbot --nginx -d api.YOUR-DOMAIN.com
+sudo cp ../docs/nginx.conf /etc/nginx/sites-available/playnx-api && sudo ln -s /etc/nginx/sites-available/playnx-api /etc/nginx/sites-enabled/ && sudo certbot --nginx -d api.YOUR-DOMAIN.com
 ```
 Run a **single** API instance (Socket.IO rooms and the maintenance timer are in-process); scale later with a Socket.IO Redis adapter.
 Optional push: `npm i firebase-admin` and set `FIREBASE_SERVICE_ACCOUNT_JSON`.

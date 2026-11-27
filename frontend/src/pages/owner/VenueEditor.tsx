@@ -30,7 +30,7 @@ export function OwnerVenuesPage() {
     mutationFn: ({ id, what }: { id: string; what: 'publish' | 'unpublish' | 'send-for-approval' }) => post(`/owner/venues/${id}/${what}`),
     onSuccess: (_r, { id, what }) => {
       qc.invalidateQueries({ queryKey: ['owner-venues'] }); qc.invalidateQueries({ queryKey: ['owner-venue', id] }); qc.invalidateQueries({ queryKey: ['venues'] });
-      toast(what === 'publish' ? 'Published. Customers can find and book this venue now.' : what === 'unpublish' ? 'Deactivated. Customers can no longer see or book this venue. Existing bookings are not affected.' : 'Sent for approval. KickOff will review it.', 'success');
+      toast(what === 'publish' ? 'Published. Customers can find and book this venue now.' : what === 'unpublish' ? 'Deactivated. Customers can no longer see or book this venue. Existing bookings are not affected.' : 'Sent for approval. PlaynX will review it.', 'success');
     },
     onError: (e) => toast(apiError(e), 'error'),
   });
@@ -50,7 +50,7 @@ export function OwnerVenuesPage() {
                 <div className="space-y-1 p-4"><div className="flex items-center justify-between gap-2"><h3 className="text-2xl font-bold">{v.name}</h3><Badge status={v.status}>{STATUS_HELP[v.status]?.label ?? v.status}</Badge></div>
                   <p className="text-sm text-muted">{v.city} · {v.area_count} area{v.area_count === 1 ? '' : 's'}</p>
                   {v.status === 'rejected' && v.rejection_reason && <p className="text-xs text-danger">Rejected: {v.rejection_reason}</p>}
-                  {v.status === 'pending' && <p className="text-xs text-muted">Waiting for approval. It cannot be edited until KickOff reviews it. Customers can book it once it is approved.</p>}
+                  {v.status === 'pending' && <p className="text-xs text-muted">Waiting for approval. It cannot be edited until PlaynX reviews it. Customers can book it once it is approved.</p>}
                   {v.status === 'draft' && <p className="text-xs text-muted">Your owner account is approved, but each venue is approved separately. Press <b>Send for approval</b> when it is ready.</p>}</div></Link>
               <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line p-3">
                 {v.status === 'pending' && <><button type="button" disabled title="Locked while the venue is under approval" className="btn-ghost !py-1.5 cursor-not-allowed opacity-50">Edit</button><Link to={`/owner/venues/${v.id}`} className="btn-ghost !py-1.5">View</Link></>}
@@ -58,7 +58,7 @@ export function OwnerVenuesPage() {
                 {['draft', 'rejected'].includes(v.status) && <Button className="!py-1.5" loading={busyOn(v.id, 'send-for-approval')} onClick={() => act.mutate({ id: v.id, what: 'send-for-approval' })}>Send for approval</Button>}
                 {v.status === 'ready' && <Button className="!py-1.5" loading={busyOn(v.id, 'publish')} onClick={() => act.mutate({ id: v.id, what: 'publish' })}>Publish</Button>}
                 {v.status === 'approved' && <ConfirmButton variant="ghost" className="!py-1.5" message={`Deactivate ${v.name}? Customers will no longer see or book it. Existing bookings are not affected. You can publish it again any time.`} onConfirm={() => act.mutate({ id: v.id, what: 'unpublish' })}>{busyOn(v.id, 'unpublish') ? 'Deactivating…' : 'Deactivate'}</ConfirmButton>}
-                {v.status === 'suspended' && <span className="text-xs text-muted">Suspended by KickOff. Contact support.</span>}
+                {v.status === 'suspended' && <span className="text-xs text-muted">Suspended by PlaynX. Contact support.</span>}
               </div>
             </article>);
         })}</div>}
@@ -69,11 +69,11 @@ export function OwnerVenuesPage() {
 /** What each venue status means, in plain words. */
 export const STATUS_HELP: Record<string, { label: string; text: string }> = {
   draft: { label: 'Not published', text: 'Saved, but not live. Only you can see it; customers cannot find or book it. Fill in the details below and press Send for approval.' },
-  pending: { label: 'Under approval', text: 'Sent to KickOff and waiting for approval. Its details cannot be changed. It is hidden from customers and greyed out until approved. Set its prices and opening hours meanwhile. You will be notified of the decision.' },
-  ready: { label: 'Approved · not published', text: 'KickOff approved this venue. It is not shown to customers until you press Publish venue.' },
-  approved: { label: 'Published', text: 'Live on KickOff. Customers can find it and book it. Press Unpublish to hide it again.' },
-  rejected: { label: 'Needs changes', text: 'KickOff asked for changes. Fix the issues listed below and publish again.' },
-  suspended: { label: 'Suspended', text: 'Temporarily hidden by KickOff. Contact support to find out why.' },
+  pending: { label: 'Under approval', text: 'Sent to PlaynX and waiting for approval. Its details cannot be changed. It is hidden from customers and greyed out until approved. Set its prices and opening hours meanwhile. You will be notified of the decision.' },
+  ready: { label: 'Approved · not published', text: 'PlaynX approved this venue. It is not shown to customers until you press Publish venue.' },
+  approved: { label: 'Published', text: 'Live on PlaynX. Customers can find it and book it. Press Unpublish to hide it again.' },
+  rejected: { label: 'Needs changes', text: 'PlaynX asked for changes. Fix the issues listed below and publish again.' },
+  suspended: { label: 'Suspended', text: 'Temporarily hidden by PlaynX. Contact support to find out why.' },
 };
 
 /** The venue's quality score out of 100, how each part is worked out, and what would raise it. */
@@ -108,7 +108,7 @@ export function VenueEditorPage() {
         <div className="space-y-6">
           <PageHeader title={venue.name} subtitle={[venue.city, venue.state].filter(Boolean).join(', ')} actions={<Badge status={venue.status}>{st.label}</Badge>} />
           <div role="status" className="rounded-xl border border-line bg-surface p-3 text-sm"><b>{st.label}:</b> {st.text}</div>
-          {venue.status === 'rejected' && venue.rejection_reason && <p role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger"><b>Reason from KickOff:</b> {venue.rejection_reason}</p>}
+          {venue.status === 'rejected' && venue.rejection_reason && <p role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger"><b>Reason from PlaynX:</b> {venue.rejection_reason}</p>}
           <Tabs tabs={[{ id: 'overview', label: '360° View' }, { id: 'areas', label: 'Playing areas' }, { id: 'edit', label: 'Edit venue' }]} value={tab} onChange={(t) => setSp(t === 'overview' ? {} : { tab: t }, { replace: true })} />
           {tab === 'overview' && (<div className="space-y-4"><VenueSummary venue={venue} />
             <Card className="space-y-3 p-5"><h2 className="text-xl font-bold">360° Venue View</h2>
@@ -139,11 +139,11 @@ export function DocumentsTab({ venue }: { venue: any }) {
   );
 }
 
-/** What the owner sees next to a venue until KickOff approves it. */
+/** What the owner sees next to a venue until PlaynX approves it. */
 const WAITING: Record<string, string> = { draft: 'Not sent for approval yet', pending: 'Waiting for approval', rejected: 'Needs changes', suspended: 'Suspended' };
 
 /**
- * The venue an area belongs to, drawn as a card like the ones on the venues page. Until KickOff approves the venue the card is greyed out
+ * The venue an area belongs to, drawn as a card like the ones on the venues page. Until PlaynX approves the venue the card is greyed out
  * and says it is waiting for approval.
  */
 export function VenueSummary({ venue, compact = false }: { venue: any; compact?: boolean }) {
@@ -159,7 +159,7 @@ export function VenueSummary({ venue, compact = false }: { venue: any; compact?:
         <div className="flex flex-wrap items-center gap-2"><p className={`truncate font-bold ${compact ? 'text-lg' : 'text-2xl'}`}>{venue.name}</p>
           {!live && <Badge status={venue.status === 'pending' ? 'pending' : venue.status === 'draft' ? 'pending' : 'rejected'}>{WAITING[venue.status] ?? 'Waiting for approval'}</Badge>}</div>
         <p className="truncate text-sm text-muted">{[venue.locality, venue.city, venue.state].filter(Boolean).join(', ')}</p>
-        {!live && !compact && <p className="text-xs text-muted">{venue.status === 'pending' ? 'KickOff is reviewing this venue. Customers can book it once it is approved.' : venue.status === 'draft' ? 'Finish the details and send it for approval. Customers can book it once it is approved.' : 'Customers cannot book this venue right now.'}</p>}
+        {!live && !compact && <p className="text-xs text-muted">{venue.status === 'pending' ? 'PlaynX is reviewing this venue. Customers can book it once it is approved.' : venue.status === 'draft' ? 'Finish the details and send it for approval. Customers can book it once it is approved.' : 'Customers cannot book this venue right now.'}</p>}
       </div>
     </div>
   );
@@ -171,7 +171,8 @@ export function AreasTab({ venue }: { venue: any }) {
   const qc = useQueryClient(); const { toast } = useToast();
   const sports = useQuery({ queryKey: ['sports'], queryFn: () => get<{ sports: { id: number; name: string }[] }>('/sports'), staleTime: Infinity });
   const refresh = () => qc.invalidateQueries({ queryKey: ['owner-venue', venue.id] });
-  const remove = useMutation({ mutationFn: (aid: string) => del(`/owner/areas/${aid}`), onSuccess: () => { refresh(); toast('Area deleted'); }, onError: (e) => toast(apiError(e), 'error') });
+  const remove = useMutation({ mutationFn: (v: { id: string; reason?: string }) => del(`/owner/areas/${v.id}`, v.reason ? { reason: v.reason } : undefined), onSuccess: () => { setConfirmDel(null); setDelReason(''); refresh(); qc.invalidateQueries({ queryKey: ['owner-areas'] }); toast('Sent to PlaynX for approval. The area is closed for booking straight away; its bookings are kept.', 'info'); }, onError: (e) => toast(apiError(e), 'error') });
+  const undoDelete = useMutation({ mutationFn: (aid: string) => post(`/owner/areas/${aid}/cancel-deletion`, {}), onSuccess: () => { refresh(); qc.invalidateQueries({ queryKey: ['owner-areas'] }); toast('Delete request cancelled. The area is back as it was.'); }, onError: (e) => toast(apiError(e), 'error') });
   const toggle = useMutation({
     mutationFn: (a: any) => put(`/owner/areas/${a.id}`, { isActive: !a.is_active, ...(a.is_active && a.__how ? { bookings: a.__how } : {}) }),
     onSuccess: (_r, a) => { refresh(); qc.invalidateQueries({ queryKey: ['owner-areas'] }); toast(a.is_active ? `${a.name} is deactivated. Customers can no longer see or book it. Existing bookings are not affected.` : `${a.name} is active again. Customers can book it.`, a.is_active ? 'info' : undefined); },
@@ -179,6 +180,10 @@ export function AreasTab({ venue }: { venue: any }) {
   });
   /** Deactivating hides the area from customers, so it asks first in a pop-up. Activating is harmless and happens straight away. */
   const [confirmOff, setConfirmOff] = useState<any | null>(null);
+  // deleting asks in a pop-up: what happens, the upcoming bookings, and an optional reason for PlaynX
+  const [confirmDel, setConfirmDel] = useState<any | null>(null); const [delReason, setDelReason] = useState('');
+  const delUpcomingQ = useQuery({ queryKey: ['area-upcoming', confirmDel?.id], enabled: !!confirmDel, queryFn: () => get<{ bookings: any[] }>(`/owner/areas/${confirmDel.id}/upcoming-bookings`) });
+  const delUpcoming = delUpcomingQ.data?.bookings ?? [];
   const upcomingQ = useQuery({ queryKey: ['area-upcoming', confirmOff?.id], enabled: !!confirmOff, queryFn: () => get<{ bookings: any[] }>(`/owner/areas/${confirmOff.id}/upcoming-bookings`) });
   const upcoming = upcomingQ.data?.bookings ?? [];
   const flip = (a: any) => { if (a.is_active) setConfirmOff(a); else toggle.mutate(a); };
@@ -188,25 +193,48 @@ export function AreasTab({ venue }: { venue: any }) {
       <div className="flex justify-between"><p className="text-sm text-muted">Each playing area (e.g. "Turf A", "Court 1") is booked independently.</p><Button onClick={() => setEdit('new')}>+ Add area</Button></div>
       {venue.areas.length === 0 ? <Empty title="No playing areas" hint="Add an area, choose its sports, then set pricing and hours." /> : <div className="grid gap-4 xl:grid-cols-2">{venue.areas.map((a: any) => {
         const photos = ((venue.images ?? []) as any[]).filter((i) => i.area_id === a.id && i.kind === 'image' && !i.delete_requested);
+        const gone: 'pending' | 'deleted' | null = a.deletion_status ?? null; // a delete request (or an approved deletion): greyed out, closed for booking
         return (
-        <Card key={a.id} className={`overflow-hidden !p-0 ${a.is_active ? '' : 'border-dashed'}`}>
+        <Card key={a.id} aria-disabled={gone ? true : undefined} className={`overflow-hidden !p-0 ${a.is_active ? '' : 'border-dashed'} ${gone ? 'opacity-60 grayscale' : ''}`}>
           <div className={`relative h-36 bg-surface2 ${a.is_active ? '' : 'opacity-50 grayscale'}`} aria-label={`${a.name} photo`}>
-            {photos.length ? <PhotoSlider photos={photos} alt={a.name} /> : <div className="pitch-stripes grid h-full place-items-center bg-gradient-to-br from-[#151515] via-[#292929] to-[#151515] text-4xl" aria-hidden="true">⚽</div>}
+            {photos.length ? <PhotoSlider photos={photos} alt={a.name} /> : <div className="pitch-stripes grid h-full place-items-center bg-gradient-to-br from-[#101B5C] via-[#1B2A80] to-[#101B5C] text-4xl" aria-hidden="true">⚽</div>}
             {photos.length > 1 && <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white">{photos.length} photos</span>}
-            {!a.is_active && <span className="absolute inset-0 grid place-items-center"><span className="rounded-full bg-black/75 px-3 py-1.5 text-xs font-bold text-white">Inactive · hidden from customers</span></span>}
-            {photos.length === 0 && <button type="button" onClick={() => setEdit(a)} className="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white hover:bg-black/80">+ Add photos</button>}
+            {!a.is_active && <span className="absolute inset-0 grid place-items-center"><span className="rounded-full bg-black/75 px-3 py-1.5 text-xs font-bold text-white">{gone === 'deleted' ? 'Deleted · closed for booking' : gone === 'pending' ? 'Delete requested · closed for booking' : 'Inactive · hidden from customers'}</span></span>}
+            {photos.length === 0 && !gone && <button type="button" onClick={() => setEdit(a)} className="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white hover:bg-black/80">+ Add photos</button>}
           </div>
           <div className="space-y-3 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><h3 className="text-2xl font-bold">{a.name}</h3>{!a.is_active && <Badge status="suspended">Inactive</Badge>}{a.approval_status === 'pending' && <Badge status="pending">Waiting for approval</Badge>}{a.approval_status === 'rejected' && <Badge status="rejected">Rejected</Badge>}</div>
-            <div className="flex flex-wrap gap-2"><Link to={`/owner/areas/${a.id}`} className="btn-ghost !py-1.5">Details</Link><Button variant="ghost" className="!py-1.5" onClick={() => setEdit(a)}>Edit</Button><Button variant="ghost" className="!py-1.5" loading={toggle.isPending && toggle.variables?.id === a.id} onClick={() => flip(a)}>{a.is_active ? 'Deactivate' : 'Activate'}</Button><ConfirmButton variant="danger" className="!py-1.5" message={`Delete ${a.name}? This cannot be undone.`} onConfirm={() => remove.mutate(a.id)}>Delete</ConfirmButton></div></div>
-          {a.approval_status === 'pending' && <p className="text-sm text-muted">KickOff is reviewing this area. Customers can book it once it is approved.</p>}
+          <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><h3 className="text-2xl font-bold">{a.name}</h3>{gone === 'pending' && <Badge status="pending">Delete waiting for approval</Badge>}{gone === 'deleted' && <Badge status="rejected">Deleted</Badge>}{!a.is_active && !gone && <Badge status="suspended">Inactive</Badge>}{a.approval_status === 'pending' && <Badge status="pending">Waiting for approval</Badge>}{a.approval_status === 'rejected' && <Badge status="rejected">Rejected</Badge>}</div>
+            <div className="flex flex-wrap gap-2"><Link to={`/owner/areas/${a.id}`} className="btn-ghost !py-1.5">Details</Link>{gone === 'pending' ? <Button variant="ghost" className="!py-1.5" loading={undoDelete.isPending && undoDelete.variables === a.id} onClick={() => undoDelete.mutate(a.id)}>Cancel delete request</Button> : gone ? null : <><Button variant="ghost" className="!py-1.5" onClick={() => setEdit(a)}>Edit</Button><Button variant="ghost" className="!py-1.5" loading={toggle.isPending && toggle.variables?.id === a.id} onClick={() => flip(a)}>{a.is_active ? 'Deactivate' : 'Activate'}</Button><Button variant="danger" className="!py-1.5" onClick={() => { setDelReason(''); remove.reset(); setConfirmDel(a); }}>Delete</Button></>}</div></div>
+          {gone === 'pending' && <p className="text-sm text-muted">You asked to delete this area. It is closed for booking while PlaynX reviews the request. Existing bookings are kept.</p>}
+          {gone === 'deleted' && <p className="text-sm text-muted">Deleted{a.deleted_at ? ` on ${new Date(a.deleted_at).toLocaleDateString('en-IN')}` : ''}. It can't be booked; its booking history is kept.</p>}
+          {!gone && a.deletion_note && <p role="alert" className="text-sm text-warn">PlaynX rejected your delete request: {a.deletion_note}</p>}
+          {a.approval_status === 'pending' && !gone && <p className="text-sm text-muted">PlaynX is reviewing this area. Customers can book it once it is approved.</p>}
           {a.approval_status === 'rejected' && <p role="alert" className="text-sm text-danger">Rejected: {a.approval_note ?? 'no reason given'}. Edit the area and save it to send it for review again.</p>}
           <div className="flex flex-wrap gap-1.5">{a.sport_ids.map((sid: number) => <span key={sid} className="chip">{sports.data?.sports.find((s) => s.id === sid)?.name ?? sid}</span>)}<span className="chip">{a.slot_minutes}-min slots</span><span className="chip">{a.min_duration_minutes}–{a.max_duration_minutes} min bookings</span></div>
-          <div className="grid gap-2 sm:grid-cols-2">
+          {!gone && <div className="grid gap-2 sm:grid-cols-2">
             {(() => { const st = scheduleStatus(a); return ([['schedule', st.label, st.warn], ['blocks', 'Block slots', false]] as const).map(([what, label, warn]) => (
-              <button key={what} onClick={() => setManage({ area: a, what })} className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition hover:border-brand ${warn ? 'border-warn/60 text-warn' : 'border-line'}`}>{label}{warn && ' · setup needed'}</button>)); })()}</div>
+              <button key={what} onClick={() => setManage({ area: a, what })} className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition hover:border-brand ${warn ? 'border-warn/60 text-warn' : 'border-line'}`}>{label}{warn && ' · setup needed'}</button>)); })()}</div>}
           </div>
         </Card>); })}</div>}
+      <Modal open={!!confirmDel} onClose={() => setConfirmDel(null)} title={confirmDel ? `Delete ${confirmDel.name}?` : ''}>
+        {confirmDel && (<div className="space-y-4 text-sm">
+          <div className="flex items-start gap-3 rounded-2xl bg-danger/10 p-4">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-danger/15 text-lg text-danger" aria-hidden="true">🗑</span>
+            <ul className="space-y-1.5">
+              <li><b>Closed for booking straight away.</b> Customers can't see or book it, and no walk-in bookings can be added.</li>
+              <li><b>PlaynX approves the deletion.</b> Until then you can cancel the request and it comes back as it was.</li>
+              <li><b>Its bookings are kept.</b> The booking history stays in your records.</li>
+            </ul>
+          </div>
+          {delUpcomingQ.isLoading ? <p className="text-muted">Checking upcoming bookings…</p> : delUpcoming.length === 0 ? <p className="text-muted">There are no upcoming bookings in this playing area.</p> : (
+            <div className="space-y-2"><p className="font-semibold text-warn">{delUpcoming.length === 1 ? 'There is 1 upcoming booking. It is not cancelled: please honour it or cancel it yourself.' : `There are ${delUpcoming.length} upcoming bookings. They are not cancelled: please honour them or cancel them yourself.`}</p>
+              <ul className="max-h-40 divide-y divide-line overflow-auto rounded-xl border border-line">{delUpcoming.map((x) => <li key={x.id} className="flex justify-between gap-2 px-3 py-2"><span><b>{x.customer_name ?? 'Customer'}</b> · {x.reference}</span><span className="text-muted">{fmtRange(x.starts_at, x.ends_at)}</span></li>)}</ul></div>)}
+          <Textarea label="Reason (optional, PlaynX sees this)" rows={2} maxLength={300} value={delReason} onChange={(e) => setDelReason(e.target.value)} placeholder="e.g. Turning this court into parking" />
+          {remove.isError && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-danger">{apiError(remove.error)}</p>}
+          <div className="flex flex-wrap justify-end gap-2"><Button variant="ghost" onClick={() => setConfirmDel(null)}>Cancel</Button>
+            <Button variant="danger" loading={remove.isPending} onClick={() => remove.mutate({ id: confirmDel.id, reason: delReason.trim() || undefined })}>Send delete request</Button></div>
+        </div>)}
+      </Modal>
       <Modal open={!!confirmOff} onClose={() => setConfirmOff(null)} title={confirmOff ? `Deactivate ${confirmOff.name}?` : ''}>
         {confirmOff && (<div className="space-y-4 text-sm">
           <p>Customers will <b>no longer see or book</b> {confirmOff.name}. It stays in your list and you can activate it again at any time.</p>
@@ -335,7 +363,7 @@ export function AreaModal({ venue, area, sports: allSports, onClose, onSaved }: 
                   <p className="min-w-0 flex-1 truncate pr-5 text-xs">{x.file.name}<span className="block text-muted">Uploaded from your device</span></p>
                   <button type="button" aria-label={`Remove photo ${n + 1}`} onClick={() => setFiles(files.filter((_, j) => j !== n))} className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-danger text-xs font-bold text-white">×</button></li>))}
             </ul>)}
-          {(hasLocated || shots.length > 0) && <p className="text-xs text-ok">✓ {shots.length + savedPhotos.length} live photo{shots.length + savedPhotos.length === 1 ? '' : 's'} with a verified location. {venue.status === 'approved' || venue.status === 'ready' ? 'New photos on a live venue are shown to customers after KickOff approves them.' : ''}</p>}
+          {(hasLocated || shots.length > 0) && <p className="text-xs text-ok">✓ {shots.length + savedPhotos.length} live photo{shots.length + savedPhotos.length === 1 ? '' : 's'} with a verified location. {venue.status === 'approved' || venue.status === 'ready' ? 'New photos on a live venue are shown to customers after PlaynX approves them.' : ''}</p>}
           <Button type="button" variant="ghost" className="!py-1.5 text-sm" disabled={savedPhotos.length + shots.length + files.length >= 10} onClick={() => { setPhotoErr(''); setCamOpen(true); }}>📷 Take live photo</Button>
           <label className={`btn-ghost cursor-pointer !py-1.5 text-sm ${savedPhotos.length + shots.length + files.length >= 10 ? 'pointer-events-none opacity-50' : ''}`}>⬆ Upload photos<input type="file" hidden multiple accept="image/jpeg,image/png,image/webp" aria-label="Upload area photos" onChange={(e) => { const picked = Array.from(e.target.files ?? []); e.target.value = ''; setPhotoErr(''); const bad = picked.find((x) => !['image/jpeg', 'image/png', 'image/webp'].includes(x.type) || x.size > 8 * 1024 * 1024); if (bad) return setPhotoErr(`${bad.name}: use a JPG, PNG or WebP up to 8 MB.`); setFiles((all) => [...all, ...picked].slice(0, Math.max(0, 10 - savedPhotos.length - shots.length))); }} /></label>
           {photoErr && <p role="alert" className="text-xs text-danger">{photoErr}</p>}

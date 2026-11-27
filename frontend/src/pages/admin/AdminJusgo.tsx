@@ -55,22 +55,86 @@ export function AdminListingChanges() {
 /* ------------------------------------------------------------- Playing area approvals */
 export function AdminAreaApprovals() {
   const qc = useQueryClient();
-  const [status, setStatus] = useState('pending');
-  const q = useQuery({ queryKey: ['admin-areas', status], queryFn: () => get<{ areas: any[] }>('/admin/areas', status ? { status } : undefined), placeholderData: (p) => p });
+  // the admin email for a delete request links here with ?view=deletions
+  const [status, setStatus] = useState(() => (new URLSearchParams(window.location.search).get('view') === 'deletions' ? 'del:pending' : 'pending'));
+  const delView = status.startsWith('del:');
+  const q = useQuery({ queryKey: ['admin-areas', status], queryFn: () => get<{ areas: any[] }>('/admin/areas', delView ? { deletion: status.slice(4) } : status ? { status } : undefined), placeholderData: (p) => p });
+  const [delRej, setDelRej] = useState<any | null>(null); const [delOk, setDelOk] = useState<any | null>(null);
+  const decideDel = useMutation({ mutationFn: (v: { id: string; decision: 'approve' | 'reject'; note?: string }) => post(`/admin/areas/${v.id}/deletion`, { decision: v.decision, ...(v.note ? { note: v.note } : {}) }),
+    onSuccess: () => { setDelRej(null); setDelOk(null); setReason(''); setErr(''); qc.invalidateQueries({ queryKey: ['admin-areas'] }); }, onError: (e) => setErr(apiError(e)) });
   const [rej, setRej] = useState<any | null>(null); const [reason, setReason] = useState(''); const [err, setErr] = useState('');
   const decide = useMutation({ mutationFn: (v: { id: string; decision: 'approve' | 'reject'; note?: string }) => post(`/admin/areas/${v.id}/decision`, { decision: v.decision, ...(v.note ? { note: v.note } : {}) }),
     onSuccess: () => { setRej(null); setReason(''); setErr(''); qc.invalidateQueries({ queryKey: ['admin-areas'] }); }, onError: (e) => setErr(apiError(e)) });
   return (
     <div><PageHeader title="Playing area approvals" subtitle="A new playing area stays hidden from customers until you approve it." />
-      <div className="mb-4 max-w-xs"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="pending">Waiting for approval</option><option value="rejected">Rejected</option><option value="approved">Approved</option><option value="">All</option></Select></div>
-      <QueryBoundary q={q} empty={(d) => d.areas.length === 0 && <Empty icon="✅" title="Nothing to review" hint="New playing areas added by owners appear here." />}>{(d) => <div className="space-y-3">{d.areas.map((a) => (
+      <div className="mb-4 max-w-xs"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="pending">Waiting for approval</option><option value="rejected">Rejected</option><option value="approved">Approved</option><option value="">All</option><option value="del:pending">Delete requests</option><option value="del:deleted">Deleted areas</option></Select></div>
+      <QueryBoundary q={q} empty={(d) => d.areas.length === 0 && <Empty icon="✅" title="Nothing to review" hint={delView ? 'Delete requests from owners appear here.' : 'New playing areas added by owners appear here.'} />}>{(d) => <div className="space-y-3">{d.areas.map((a) => delView ? (
+        <Card key={a.id} className={`space-y-2 p-4 ${a.deletionStatus === 'deleted' ? 'opacity-70 grayscale' : ''}`}><div className="flex flex-wrap items-center justify-between gap-2"><div><b className="text-lg">{a.name}</b> <Badge status={a.deletionStatus === 'deleted' ? 'rejected' : 'pending'}>{a.deletionStatus === 'deleted' ? 'Deleted' : 'Delete requested'}</Badge>
+          <div className="text-xs text-muted">{a.venueName}, {a.city} · {a.ownerName}</div></div>
+          {a.deletionStatus === 'pending' && <div className="flex gap-2"><Button variant="ghost" onClick={() => { setDelRej(a); setReason(''); setErr(''); }}>Reject request</Button><Button variant="danger" onClick={() => { setErr(''); setDelOk(a); }}>Approve delete</Button></div>}</div>
+          {a.deletionReason && <p className="text-sm">Owner's reason: {a.deletionReason}</p>}
+          <p className="text-sm text-muted">{a.totalBookings} booking{a.totalBookings === 1 ? '' : 's'} in its history{a.deletionRequestedAt ? ` · requested ${new Date(a.deletionRequestedAt).toLocaleString('en-IN')}` : ''}</p>
+          {a.upcomingBookings > 0 && <p role="alert" className="rounded-xl bg-warn/10 px-3 py-2 text-sm text-warn">{a.upcomingBookings} upcoming booking{a.upcomingBookings === 1 ? ' is' : 's are'} still booked here. Deleting does not cancel {a.upcomingBookings === 1 ? 'it' : 'them'}: make sure the owner honours or cancels {a.upcomingBookings === 1 ? 'it' : 'them'}.</p>}
+        </Card>) : (
         <Card key={a.id} className="space-y-2 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><b className="text-lg">{a.name}</b> <Badge status={a.approvalStatus === 'approved' ? 'approved' : a.approvalStatus === 'rejected' ? 'rejected' : 'pending'}>{titleCase(a.approvalStatus)}</Badge>
           <div className="text-xs text-muted">{a.venueName}, {a.city} · {a.ownerName}</div></div>
           {a.approvalStatus !== 'approved' && <div className="flex gap-2">{a.approvalStatus === 'pending' && <Button variant="ghost" onClick={() => { setRej(a); setReason(''); setErr(''); }}>Reject</Button>}<Button loading={decide.isPending && decide.variables?.id === a.id} onClick={() => decide.mutate({ id: a.id, decision: 'approve' })}>Approve</Button></div>}</div>
           <div className="flex flex-wrap gap-1.5 text-sm">{(a.sports as string[]).map((n) => <span key={n} className="chip">{n}</span>)}{a.capacity && <span className="chip">{a.capacity} players</span>}<span className="chip">{a.priceRules} price rule{a.priceRules === 1 ? '' : 's'}</span></div>
           {a.approvalNote && <p className="text-sm text-muted">Reason given: {a.approvalNote}</p>}</Card>))}</div>}</QueryBoundary>
+      <Modal open={!!delOk} onClose={() => setDelOk(null)} title={delOk ? `Delete ${delOk.name}?` : ''}>{delOk && <div className="space-y-4 text-sm">
+        <p className="text-muted">{delOk.venueName}, {delOk.city} · {delOk.ownerName}</p>
+        <div className="flex items-start gap-3 rounded-2xl bg-danger/10 p-4">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-danger/15 text-lg text-danger" aria-hidden="true">🗑</span>
+          <ul className="space-y-1.5">
+            <li>No one can book this area anymore.</li>
+            <li>Its booking history is kept.</li>
+          </ul>
+        </div>
+        {delOk.deletionReason && <p>Owner's reason: {delOk.deletionReason}</p>}
+        {delOk.upcomingBookings > 0 && <p role="alert" className="rounded-xl bg-warn/10 px-3 py-2 text-warn">{delOk.upcomingBookings} upcoming booking{delOk.upcomingBookings === 1 ? ' is' : 's are'} not cancelled by this. Make sure the owner honours or cancels {delOk.upcomingBookings === 1 ? 'it' : 'them'}.</p>}
+        {err && <p role="alert" className="text-danger">{err}</p>}
+        <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setDelOk(null)}>Cancel</Button><Button variant="danger" loading={decideDel.isPending} onClick={() => decideDel.mutate({ id: delOk.id, decision: 'approve' })}>Delete playing area</Button></div>
+      </div>}</Modal>
+      <Modal open={!!delRej} onClose={() => setDelRej(null)} title={`Reject the delete request for ${delRej?.name ?? ''}?`}><div className="space-y-3"><p className="text-sm text-muted">The playing area is <b className="text-ink">not deleted</b>. It opens for booking again, exactly as it was before the request, and the owner sees your reason.</p><Textarea label="Reason (the owner sees this)" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />{err && <p role="alert" className="text-sm text-danger">{err}</p>}
+        <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setDelRej(null)}>Cancel</Button><Button loading={decideDel.isPending} disabled={reason.trim().length < 3} onClick={() => decideDel.mutate({ id: delRej.id, decision: 'reject', note: reason.trim() })}>Reject request</Button></div></div></Modal>
       <Modal open={!!rej} onClose={() => setRej(null)} title={`Reject ${rej?.name ?? ''}`}><div className="space-y-3"><Textarea label="Reason (the owner sees this)" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />{err && <p role="alert" className="text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setRej(null)}>Cancel</Button><Button variant="danger" loading={decide.isPending} disabled={reason.trim().length < 3} onClick={() => decide.mutate({ id: rej.id, decision: 'reject', note: reason.trim() })}>Reject area</Button></div></div></Modal>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- Business type changes */
+const TYPE_LABEL: Record<string, string> = { individual: 'Individual', sole_proprietorship: 'Sole Proprietorship', partnership_pvt_ltd: 'Partnership / Private Limited Company', partnership: 'Partnership Firm', private_limited: 'Private Limited Company', opc: 'One Person Company', llp: 'LLP', trust_society: 'Trust / Society / Club' };
+const typeName = (t?: string | null) => (t ? TYPE_LABEL[t] ?? t.replace(/_/g, ' ') : 'Not set');
+const DETAIL_LABEL: [string, string][] = [['businessName', 'Business name'], ['representativeName', 'Representative'], ['designation', 'Designation'], ['pan', 'PAN'], ['gstin', 'GSTIN'], ['registrationNumber', 'Registration number'], ['udyamNumber', 'Udyam number'], ['dob', 'Date of birth'], ['phone', 'Phone'], ['address', 'Address'], ['city', 'City'], ['state', 'State'], ['pincode', 'PIN code'], ['otherInfo', 'Other information']];
+/** Approved owners asking to change their business type: check the new details and approve or reject. */
+export function AdminBusinessChanges() {
+  const qc = useQueryClient();
+  const [status, setStatus] = useState('pending');
+  const q = useQuery({ queryKey: ['admin-business-changes', status], queryFn: () => get<{ changes: any[] }>('/admin/business-changes', status ? { status } : undefined), placeholderData: (p) => p });
+  const [ok, setOk] = useState<any | null>(null); const [rej, setRej] = useState<any | null>(null); const [note, setNote] = useState(''); const [err, setErr] = useState('');
+  const decide = useMutation({ mutationFn: (v: { id: string; decision: 'approve' | 'reject'; note?: string }) => post(`/admin/business-changes/${v.id}/decision`, { decision: v.decision, ...(v.note ? { note: v.note } : {}) }),
+    onSuccess: () => { setOk(null); setRej(null); setNote(''); setErr(''); qc.invalidateQueries({ queryKey: ['admin-business-changes'] }); }, onError: (e) => setErr(apiError(e)) });
+  return (
+    <div><PageHeader title="Business type changes" subtitle="Approved owners asking to change their business type. Their current details stay live until you approve." />
+      <div className="mb-4 max-w-xs"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="">All</option></Select></div>
+      <QueryBoundary q={q} empty={(d) => d.changes.length === 0 && <Empty icon="🏢" title="Nothing to review" hint="Business type changes asked for by owners appear here." />}>{(d) => <div className="space-y-3">{d.changes.map((c) => (
+        <Card key={c.id} className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><b className="text-lg">{c.ownerName}</b> <Badge status={c.status === 'pending' ? 'pending' : c.status === 'approved' ? 'approved' : 'rejected'}>{titleCase(c.status)}</Badge>
+            <div className="text-xs text-muted">{c.ownerEmail}{c.ownerCode ? ` · ${c.ownerCode}` : ''}{c.currentBusinessName ? ` · ${c.currentBusinessName}` : ''}</div></div>
+            {c.status === 'pending' && <div className="flex gap-2"><Button variant="ghost" onClick={() => { setRej(c); setNote(''); setErr(''); }}>Reject</Button><Button onClick={() => { setErr(''); setOk(c); }}>Approve</Button></div>}</div>
+          <p className="text-sm"><span className="text-muted">{typeName(c.fromType)}</span> → <b>{typeName(c.toType)}</b></p>
+          {c.reason && <p className="text-sm">Owner's reason: {c.reason}</p>}
+          <dl className="grid gap-x-6 gap-y-1 rounded-xl border border-line p-3 text-sm sm:grid-cols-2">{DETAIL_LABEL.filter(([k]) => c.details?.[k]).map(([k, l]) => <div key={k} className="flex gap-2"><dt className="text-muted">{l}:</dt><dd className="font-medium">{String(c.details[k])}</dd></div>)}
+            {(c.details?.partners ?? []).length > 0 && <div className="sm:col-span-2"><dt className="text-muted">Partners / directors:</dt><dd>{c.details.partners.map((p: any) => `${p.name} (PAN ${p.pan}, Aadhaar ••••${p.aadhaarLast4}, ${p.phone})`).join('; ')}</dd></div>}</dl>
+          {c.reviewNote && <p className="text-sm text-muted">Reason given: {c.reviewNote}</p>}
+        </Card>))}</div>}</QueryBoundary>
+      <Modal open={!!ok} onClose={() => setOk(null)} title={ok ? `Change ${ok.ownerName} to ${typeName(ok.toType)}?` : ''}>{ok && <div className="space-y-4 text-sm">
+        <ul className="space-y-1.5 rounded-2xl bg-brand/10 p-4"><li>The new business type and details replace the current ones.</li><li>They are marked as verified by PlaynX.</li></ul>
+        {err && <p role="alert" className="text-danger">{err}</p>}
+        <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setOk(null)}>Cancel</Button><Button loading={decide.isPending} onClick={() => decide.mutate({ id: ok.id, decision: 'approve' })}>Approve change</Button></div></div>}</Modal>
+      <Modal open={!!rej} onClose={() => setRej(null)} title={`Reject the change for ${rej?.ownerName ?? ''}?`}><div className="space-y-3"><p className="text-sm text-muted">Nothing changes: the owner keeps the current business type and sees your reason.</p><Textarea label="Reason (the owner sees this)" value={note} onChange={(e) => setNote(e.target.value)} rows={3} />{err && <p role="alert" className="text-sm text-danger">{err}</p>}
+        <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setRej(null)}>Cancel</Button><Button variant="danger" loading={decide.isPending} disabled={note.trim().length < 3} onClick={() => decide.mutate({ id: rej.id, decision: 'reject', note: note.trim() })}>Reject change</Button></div></div></Modal>
     </div>
   );
 }

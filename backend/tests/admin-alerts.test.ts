@@ -27,6 +27,16 @@ describe('admin alerts for owner activity', () => {
     expect(su).toContain('admin_ticket_created'); expect(su).not.toContain('admin_venue_created');
   });
 
+  it('emails admins when a playing area is created, with a button to the area approvals page', async () => {
+    const a = await createAdmin(env, 'super_admin');
+    const fx = await createApprovedVenue(env, a);
+    const before = env.emails.length;
+    await request(env.app).post(`/api/owner/venues/${fx.venue.id}/areas`).set(fx.owner.auth).send({ name: 'Mail Court', sportIds: [1], slotMinutes: 60, minDurationMinutes: 60, maxDurationMinutes: 120, defaultPrice: 900 }).expect(201);
+    const mail = env.emails.slice(before).find((m) => m.subject === 'Playing area awaiting approval' && m.to === a.email);
+    expect(mail, 'admin email').toBeTruthy();
+    expect(mail!.html).toContain('Mail Court'); expect(mail!.html).toContain('/admin/area-approvals'); expect(mail!.html).toContain('Open in admin portal');
+  });
+
   it('includes a link to the relevant admin page and the owner’s own name', async () => {
     const a = await createAdmin(env, 'super_admin');
     const o = await registerUser(env, 'owner', { name: 'Meera Nair' }); await approveOwner(env, a, o);

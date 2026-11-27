@@ -57,7 +57,7 @@ export function SportsPage() {
       <PageHeader title="Sports" subtitle="Pick a sport to see the turfs and courts that offer it" />
       <QueryBoundary q={sports} empty={(d) => d.sports.length === 0 && <Empty title="No sports yet" />}>
         {(d) => <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{d.sports.map((s) => {
-          const info = SPORTS[s.slug] ?? { desc: `Find turfs and courts for ${s.name.toLowerCase()}.`, icon: '🏟️', from: '#292929', to: '#151515' };
+          const info = SPORTS[s.slug] ?? { desc: `Find turfs and courts for ${s.name.toLowerCase()}.`, icon: '🏟️', from: '#1B2A80', to: '#101B5C' };
           return (
             <Link key={s.id} to={`/venues?sport=${s.slug}`} aria-label={`Explore ${s.name} turfs`} className="card group overflow-hidden transition hover:-translate-y-1 hover:border-brand/50">
               <div className="pitch-stripes grid h-36 place-items-center text-6xl" style={{ background: `linear-gradient(135deg, ${info.from}, ${info.to})` }} aria-hidden="true">{info.icon}</div>
@@ -75,7 +75,7 @@ const CalendarIcon = () => <svg viewBox="0 0 24 24" width="16" height="16" fill=
 /** The big line on a coupon, with the amount picked out in the brand colour. */
 function Headline({ o }: { o: any }) {
   const amount = o.discount_type === 'percent' ? `${o.value}%` : money(o.value);
-  return <h3 className="font-display text-4xl font-extrabold uppercase leading-none text-white sm:text-5xl">{o.discount_type === 'percent' ? '' : 'Flat '}<span className="text-[#FF6B22]">{amount}</span> off</h3>;
+  return <h3 className="font-display text-4xl font-extrabold uppercase leading-none text-white sm:text-5xl">{o.discount_type === 'percent' ? '' : 'Flat '}<span className="text-[#7200FF]">{amount}</span> off</h3>;
 }
 
 /** One ticket-style coupon: the offer on a dark panel, the code on a dashed stub with Copy and Use Now. */
@@ -85,11 +85,11 @@ function CouponTicket({ o, expired, onCopy, onUse }: { o: any; expired: boolean;
   const line = o.min_amount > 0 ? `On bookings above ${money(o.min_amount)}` : 'On any booking';
   return (
     <article aria-label={`Coupon ${o.code}`} className={`relative flex flex-col overflow-hidden rounded-2xl border border-brand/40 shadow-card sm:flex-row ${expired ? 'opacity-60 grayscale' : ''}`}>
-      <div className="pitch-stripes relative flex-1 overflow-hidden bg-gradient-to-br from-[#151515] via-[#292929] to-[#151515] p-5 text-white sm:p-6">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-[#FF6B22]/25 blur-3xl" aria-hidden="true" />
+      <div className="pitch-stripes relative flex-1 overflow-hidden bg-gradient-to-br from-[#101B5C] via-[#1B2A80] to-[#101B5C] p-5 text-white sm:p-6">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-[#7200FF]/25 blur-3xl" aria-hidden="true" />
         <span aria-hidden="true" className="pointer-events-none absolute -bottom-4 right-3 select-none text-7xl opacity-30">⚽</span>
         <div className="relative space-y-3">
-          <span className="inline-flex max-w-full items-center truncate rounded-full bg-[#FF6B22] px-3 py-1 text-xs font-bold text-[#151515]">{tag}</span>
+          <span className="inline-flex max-w-full items-center truncate rounded-full bg-[#7200FF] px-3 py-1 text-xs font-bold text-[#101B5C]">{tag}</span>
           <Headline o={o} />
           <p className="text-sm text-white/80">{line}{o.discount_type === 'percent' && o.max_discount ? `, up to ${money(o.max_discount)} off` : ''}</p>
           {o.description && <p className="text-xs text-white/60">{o.description}</p>}
@@ -117,7 +117,7 @@ export function OffersPage() {
   const [tab, setTab] = useState<'live' | 'expired'>('live');
   const q = useQuery({ queryKey: ['offers', tab], queryFn: () => get<{ offers: any[] }>('/offers', tab === 'expired' ? { expired: 1 } : {}) });
   const copy = async (code: string) => { try { await navigator.clipboard.writeText(code); toast(`${code} copied`); } catch { toast(`Your code is ${code}`, 'info'); } };
-  const apply = (o: any) => { try { sessionStorage.setItem('kickoff_coupon', o.code); } catch { /* ignore */ } toast(`${o.code} will be filled in at checkout`, 'info'); nav(o.venue_id ? `/venues/${o.venue_id}` : '/venues'); };
+  const apply = (o: any) => { try { sessionStorage.setItem('playnx_coupon', o.code); } catch { /* ignore */ } toast(`${o.code} will be filled in at checkout`, 'info'); nav(o.venue_id ? `/venues/${o.venue_id}` : '/venues'); };
   return (
     <div className="space-y-6">
       <PageHeader title="Offers & coupons" subtitle="Available offers for your next booking. Codes are checked again when you pay" />
@@ -208,7 +208,7 @@ export function MyReviewsPage() {
 }
 
 /* ------------------------------------------------------------------ Settings */
-const PREF_KEY = 'kickoff_pref_sports';
+const PREF_KEY = 'playnx_pref_sports';
 export function SettingsPage() {
   const { user, setUser } = useAuth(); const nav = useNavigate();
   const { theme, toggle } = useTheme(); const { toast } = useToast(); const qc = useQueryClient();
@@ -222,7 +222,7 @@ export function SettingsPage() {
   const changePw = useMutation({ mutationFn: () => post('/auth/change-password', pw), onSuccess: (r: any) => { if (r?.token) setToken(r.token); setPw({ currentPassword: '', newPassword: '' }); toast('Password updated. Other devices were signed out'); }, onError: (e) => toast(apiError(e), 'error') });
   const logoutAll = useMutation({ mutationFn: () => post<{ token: string }>('/auth/logout-all'), onSuccess: (r) => { if (r?.token) setToken(r.token); toast('Signed out of all other devices'); }, onError: (e) => toast(apiError(e), 'error') });
   const saveCity = useMutation({ mutationFn: () => put('/me/profile', { city: (city ?? '').trim() }), onSuccess: (r: any) => { setUser(r.user); toast('Preferred location saved'); }, onError: (e) => toast(apiError(e), 'error') });
-  const deletion = useMutation({ mutationFn: () => post('/me/tickets', { subject: 'Account deletion request', message: 'Please deactivate and delete my KickOff account and personal data.', priority: 'normal' }), onSuccess: () => { toast('Request sent. Our team will confirm by email'); nav('/support'); }, onError: (e) => toast(apiError(e), 'error') });
+  const deletion = useMutation({ mutationFn: () => post('/me/tickets', { subject: 'Account deletion request', message: 'Please deactivate and delete my PlaynX account and personal data.', priority: 'normal' }), onSuccess: () => { toast('Request sent. Our team will confirm by email'); nav('/support'); }, onError: (e) => toast(apiError(e), 'error') });
   if (!user) return <Loading />;
   const cityVal = city ?? prof.data?.profile?.city ?? '';
   return (
@@ -268,7 +268,7 @@ export function ReceiptPage() {
       <div className="mx-auto max-w-2xl space-y-4">
         <div className="flex items-center justify-between print:hidden"><Link to={`/bookings/${b.id}`} className="text-sm text-muted hover:text-ink">← Back to booking</Link><span className="flex gap-2"><Button variant="ghost" onClick={() => window.print()}>Print</Button><Button loading={dl} onClick={async () => { setDl(true); try { await downloadReceiptPdf(b, refunds, user?.fullName ?? ''); } catch (e) { toast(apiError(e), 'error'); } finally { setDl(false); } }}>Download PDF</Button></span></div>
         <section aria-label="Receipt"><Card className="space-y-4 p-8 print:border-0 print:shadow-none">
-          <div className="flex items-start justify-between gap-3"><div><h1 className="text-4xl font-extrabold">{taxInvoice ? 'Tax invoice' : 'Payment receipt'}</h1><p className="text-sm text-muted">KickOff · Booking {b.reference}{inv ? ` · ${inv.number}` : ''}</p></div><Badge status={b.payment_status ?? b.status}>{titleCase(b.payment_status ?? b.status)}</Badge></div>
+          <div className="flex items-start justify-between gap-3"><div><h1 className="text-4xl font-extrabold">{taxInvoice ? 'Tax invoice' : 'Payment receipt'}</h1><p className="text-sm text-muted">PlaynX · Booking {b.reference}{inv ? ` · ${inv.number}` : ''}</p></div><Badge status={b.payment_status ?? b.status}>{titleCase(b.payment_status ?? b.status)}</Badge></div>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             {[['Customer', user?.fullName ?? ''], ['Venue', b.venue_name], ['Address', `${b.address}, ${b.city}`], ['Playing area', `${b.area_name}${b.sport ? ` · ${b.sport}` : ''}`], ['Date and time', fmtRange(b.starts_at, b.ends_at, b.timezone)], ['Booking status', titleCase(b.status)], ['Transaction ID', b.razorpay_payment_id ?? '—'], ['Issued', fmtDateTime(new Date().toISOString())]].map(([k, v]) => <div key={k}><dt className="text-xs uppercase tracking-wide text-muted">{k}</dt><dd className="font-semibold">{v}</dd></div>)}
           </dl>
@@ -279,7 +279,11 @@ export function ReceiptPage() {
               <div className="flex justify-between text-muted"><span>Taxable value (SAC {inv.sac})</span><span>{money(inv.taxable)}</span></div>
               <div className="flex justify-between text-muted"><span>CGST @ {inv.rate / 2}%</span><span>{money(inv.cgst)}</span></div>
               <div className="flex justify-between text-muted"><span>SGST @ {inv.rate / 2}%</span><span>{money(inv.sgst)}</span></div></>)}
-            <div className="flex justify-between text-xl font-bold"><span>Amount paid</span><span>{money(b.total)}</span></div>
+            {b.advance_amount != null ? (<>
+              <div className="flex justify-between font-semibold"><span>Booking total</span><span>{money(b.total)}</span></div>
+              <div className="flex justify-between text-xl font-bold"><span>Amount paid (advance {Number(b.total) > 0 ? Math.round((Number(b.advance_amount) / Number(b.total)) * 100) : 0}%)</span><span>{money(b.advance_amount)}</span></div>
+              <div className="flex justify-between text-muted"><span>Balance, paid at the venue</span><span>{money(Math.max(0, Number(b.total) - Number(b.advance_amount)))}</span></div></>)
+              : <div className="flex justify-between text-xl font-bold"><span>Amount paid</span><span>{money(b.total)}</span></div>}
             {refunds.map((r: any) => <div key={r.id} className="flex justify-between text-xs text-muted"><span>Refund ({r.status})</span><span>−{money(r.amount)}</span></div>)}</div>
           {taxInvoice && <p className="text-xs text-muted">Supplier: {inv.supplier.name} · GSTIN {inv.supplier.gstin}. Price includes GST.</p>}
           <p className="text-xs text-muted">This is a computer-generated {taxInvoice ? 'invoice' : 'receipt'} for your records.</p>

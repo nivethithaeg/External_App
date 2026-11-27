@@ -1,13 +1,13 @@
 {
-  "name": "KickOff: Book sports turfs",
-  "short_name": "KickOff",
+  "name": "PlaynX: Book sports turfs",
+  "short_name": "PlaynX",
   "description": "Discover and book football, cricket, badminton and more sports turfs near you.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#151515",
-  "theme_color": "#151515",
+  "background_color": "#FFFFFF",
+  "theme_color": "#101B5C",
   "categories": ["sports", "lifestyle"],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

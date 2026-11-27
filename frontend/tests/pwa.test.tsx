@@ -6,7 +6,7 @@ describe('installable app files', () => {
   const pub = (f: string) => resolve(process.cwd(), 'public', f);
   it('has a manifest with a name, start page, standalone display and real icons', () => {
     const m = JSON.parse(readFileSync(pub('manifest.webmanifest'), 'utf8'));
-    expect(m).toMatchObject({ short_name: 'KickOff', start_url: expect.stringContaining('/'), display: 'standalone', theme_color: '#151515' });
+    expect(m).toMatchObject({ short_name: 'PlaynX', start_url: expect.stringContaining('/'), display: 'standalone', theme_color: '#101B5C' });
     for (const i of m.icons) expect(existsSync(pub(i.src.slice(1)))).toBe(true);
     expect(m.icons.some((i: any) => i.sizes === '512x512' && i.purpose === 'maskable')).toBe(true);
     expect(m.icons.some((i: any) => i.sizes === '192x192')).toBe(true);

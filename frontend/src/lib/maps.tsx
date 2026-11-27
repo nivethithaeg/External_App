@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 
 const KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined;
 export const mapsEnabled = !!KEY;
-declare global { interface Window { google?: any; __kickoffMapsReady?: () => void } }
+declare global { interface Window { google?: any; __playnxMapsReady?: () => void } }
 
 let loader: Promise<any> | null = null;
 export function loadMaps(): Promise<any> {
   if (!KEY) return Promise.reject(new Error('Google Maps key not configured'));
   if (window.google?.maps) return Promise.resolve(window.google);
   loader ??= new Promise((resolve, reject) => {
-    window.__kickoffMapsReady = () => resolve(window.google);
+    window.__playnxMapsReady = () => resolve(window.google);
     const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}&callback=__kickoffMapsReady&loading=async`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}&callback=__playnxMapsReady&loading=async`;
     s.async = true; s.onerror = () => { loader = null; reject(new Error('Google Maps failed to load')); };
     document.head.appendChild(s);
   });
@@ -34,14 +34,11 @@ export function MapView({ lat, lng, name, className = 'h-64' }: { lat: number; l
     }).catch((e) => setErr(e.message));
     return () => { cancelled = true; };
   }, [lat, lng, name]);
+  // no map key (or the map failed): show nothing rather than an empty box
+  if (err) return null;
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-line bg-surface2 ${className}`}>
-      {err ? (
-        <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted">
-          <span>{err}</span>
-          <a className="btn-ghost" href={directionsUrl(lat, lng)} target="_blank" rel="noreferrer">Open in Google Maps</a>
-        </div>
-      ) : <div ref={ref} className="h-full w-full" aria-label={`Map showing ${name ?? 'venue'}`} />}
+      <div ref={ref} className="h-full w-full" aria-label={`Map showing ${name ?? 'venue'}`} />
     </div>
   );
 }

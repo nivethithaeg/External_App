@@ -12,7 +12,7 @@ import { emailLayout } from './mailer.js';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export function reference() {
   const rnd = Array.from(crypto.randomBytes(7), (b) => ALPHABET[b % ALPHABET.length]).join('');
-  return `KO-${rnd}`;
+  return `PX-${rnd}`;
 }
 const fmt = (d: Date, tz: string) => d.toLocaleString('en-IN', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' });
 
@@ -86,8 +86,12 @@ export async function createBooking(ctx: Ctx, user: AuthUser, input: { lockId: s
     const addonsTotal = 0; // extras (add-ons) are not sold any more
     const total = round2(subtotal - discount);
     // pay part (or all) from the wallet if the customer asked; the card is charged only for what is left
-    const walletUse = input.useWallet && total > 0 ? round2(Math.min(await walletBalance(q, user.id, now), total)) : 0;
-    const cardDue = round2(total - walletUse);
+    // the venue owner may take only an advance online (a percentage); the rest is paid at the venue after the game
+    const adv = (await q.query(`SELECT payment_collection, advance_percent FROM owner_onboarding WHERE owner_id=$1`, [ac.venue.owner_id])).rows[0];
+    const advance = adv?.payment_collection === 'advance' && adv.advance_percent && total > 0 ? round2((total * Number(adv.advance_percent)) / 100) : null;
+    const dueNow = advance ?? total;
+    const walletUse = input.useWallet && dueNow > 0 ? round2(Math.min(await walletBalance(q, user.id, now), dueNow)) : 0;
+    const cardDue = round2(dueNow - walletUse);
     const owner = await q.query('SELECT commission_override FROM owner_profiles WHERE user_id=$1', [ac.venue.owner_id]);
     const rate = Number(owner.rows[0]?.commission_override ?? (await getSetting<number>(q, 'commission_percent', 10)));
     const commission = round2((total * rate) / 100);
@@ -96,10 +100,10 @@ export async function createBooking(ctx: Ctx, user: AuthUser, input: { lockId: s
 
     const b = await q.query(
       `INSERT INTO bookings (reference, customer_id, venue_id, area_id, sport_id, during, status, subtotal, discount, venue_discount, total, wallet_amount,
-         commission_rate, commission_amount, owner_amount, coupon_id, qr_token, expires_at, addons_total)
-       VALUES ($1,$2,$3,$4,$5,tstzrange($6::timestamptz,$7::timestamptz,'[)'),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
+         commission_rate, commission_amount, owner_amount, coupon_id, qr_token, expires_at, addons_total, advance_amount, amount_paid)
+       VALUES ($1,$2,$3,$4,$5,tstzrange($6::timestamptz,$7::timestamptz,'[)'),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id`,
       [ref, user.id, ac.venue.id, lock.area_id, lock.sport_id, start.toISOString(), end.toISOString(), free ? 'confirmed' : 'pending',
-       subtotal, discount, venueDiscount, total, walletUse, rate, commission, round2(total - commission), couponId, crypto.randomBytes(24).toString('hex'), lock.expires_at, addonsTotal]);
+       subtotal, discount, venueDiscount, total, walletUse, rate, commission, round2(total - commission), couponId, crypto.randomBytes(24).toString('hex'), lock.expires_at, addonsTotal, advance, advance]);
     if (walletUse > 0 && !(await walletDebit(q, { userId: user.id, amount: walletUse, kind: 'booking_payment', note: `Booking ${ref}`, bookingId: b.rows[0].id, now }))) throw conflict('Your wallet balance changed. Please try again.', 'wallet_changed');
     await q.query('DELETE FROM slot_locks WHERE id=$1', [lock.id]);
 
@@ -109,7 +113,7 @@ export async function createBooking(ctx: Ctx, user: AuthUser, input: { lockId: s
       if (!upd.rowCount) throw badRequest('This coupon has been fully redeemed', 'coupon_exhausted');
       await q.query('INSERT INTO coupon_redemptions (coupon_id,user_id,booking_id) VALUES ($1,$2,$3)', [couponId, user.id, b.rows[0].id]);
     }
-    return { bookingId: b.rows[0].id as string, reference: ref, total, cardDue, walletUse, free, ac, start, end };
+    return { bookingId: b.rows[0].id as string, reference: ref, total, cardDue, walletUse, free, ac, start, end, advance };
   });
 
   if (created.free) {
@@ -122,7 +126,7 @@ export async function createBooking(ctx: Ctx, user: AuthUser, input: { lockId: s
       `INSERT INTO payments (booking_id, razorpay_order_id, amount, currency) VALUES ($1,$2,$3,$4)`,
       [created.bookingId, order.id, created.cardDue, order.currency]);
     return {
-      bookingId: created.bookingId, reference: created.reference, total: created.total, walletUsed: created.walletUse, cardDue: created.cardDue,
+      bookingId: created.bookingId, reference: created.reference, total: created.total, walletUsed: created.walletUse, cardDue: created.cardDue, advance: created.advance, payAtVenue: created.advance != null ? round2(created.total - created.advance) : 0,
       order: { id: order.id, amount: order.amount, currency: order.currency, keyId: ctx.gateway.keyId() },
     };
   } catch (e) {
@@ -336,8 +340,8 @@ export async function cancelBooking(ctx: Ctx, user: AuthUser, bookingId: string,
     const start = new Date(b.s);
     if (!byVenue && start <= now) throw conflict('This booking has already started', 'already_started');
     const hours = (start.getTime() - now.getTime()) / 3600000;
-    const offline = b.source === 'offline'; // paid (or not) at the venue, never through KickOff: there is nothing to refund here
-    const refund = offline ? 0 : refundableAmount(Number(b.total), hours, b.cancellation_hours, byVenue);
+    const offline = b.source === 'offline'; // paid (or not) at the venue, never through PlaynX: there is nothing to refund here
+    const refund = offline ? 0 : refundableAmount(Number(b.advance_amount ?? b.total), hours, b.cancellation_hours, byVenue); // an advance booking: only the advance was paid online
     await q.query(`UPDATE bookings SET status='cancelled', cancelled_at=$2, cancel_reason=$3, cancelled_by=$4 WHERE id=$1`, [b.id, now.toISOString(), reason ?? null, byVenue ? 'venue' : 'customer']);
     await releaseCoupon(q, b.id);
     return { b, refund, byVenue, paid: !offline };
@@ -369,7 +373,7 @@ export async function cancelBooking(ctx: Ctx, user: AuthUser, bookingId: string,
   if (info.b.source === 'online' && info.b.customer_id) { // the customer always gets a confirmation that says exactly what happens to their money
     const lines: string[] = [];
     if (info.paid && info.refund > 0) {
-      if (toWallet > 0) lines.push(`${money(toWallet)} has been added to your KickOff wallet and can be used on your next booking.`);
+      if (toWallet > 0) lines.push(`${money(toWallet)} has been added to your PlaynX wallet and can be used on your next booking.`);
       if (cardRefunded > 0) lines.push(`${money(cardRefunded)} is being refunded to your original payment method. It usually reaches your account in 5 to 7 working days.`);
     } else if (info.paid) lines.push(`No refund applies because it was cancelled less than ${info.b.cancellation_hours} hours before the game.`);
     await ctx.notifier.notify(info.b.customer_id, {
@@ -578,7 +582,7 @@ export interface OfflineBookingInput { customerCity?: string; opponent1Name?: st
 
 /**
  * The owner books a slot for someone who is not using the app. The slot is checked exactly as for an online booking (opening hours, slot grid,
- * price, nobody else on it, nobody holding it), then confirmed at once. No payment is taken through KickOff, so there is no commission and
+ * price, nobody else on it, nobody holding it), then confirmed at once. No payment is taken through PlaynX, so there is no commission and
  * the booking is not part of any payout. The amount is what the owner collects at the venue.
  */
 export async function createOfflineBooking(ctx: Ctx, owner: AuthUser, input: OfflineBookingInput) {

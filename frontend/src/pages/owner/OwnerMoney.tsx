@@ -20,7 +20,7 @@ function printReceipt(r: { title: string; rows: [string, string][] }) {
   const w = window.open('', '_blank', 'width=640,height=800');
   if (!w) return alert('Allow pop-ups to print the receipt.');
   w.document.write(`<!doctype html><title>${esc(r.title)}</title><style>body{font:14px Arial;max-width:520px;margin:30px auto;color:#111}h1{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:16px}td{padding:8px 0;border-bottom:1px solid #ddd}td:last-child{text-align:right;font-weight:600}.m{color:#666;font-size:12px}</style>
-    <h1>KickOff</h1><div class="m">${esc(r.title)}</div><table>${r.rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table><p class="m">Generated ${esc(new Date().toLocaleString('en-IN'))}. This is a computer-generated receipt.</p>`);
+    <h1>PlaynX</h1><div class="m">${esc(r.title)}</div><table>${r.rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table><p class="m">Generated ${esc(new Date().toLocaleString('en-IN'))}. This is a computer-generated receipt.</p>`);
   w.document.close(); w.focus(); w.print();
 }
 
@@ -37,15 +37,24 @@ const SIZE = 20;
 export function BookingsPage({ view }: { view: keyof typeof VIEWS }) {
   const { toast } = useToast(); const qc = useQueryClient();
   const [sp] = useSearchParams();
-  const [f, setF] = useState({ q: sp.get('q') ?? '', venueId: '', areaId: '', sportId: '', status: '', payment: '', from: '', to: '', preset: '' });
+  // the overview cards link here with ?preset=today or ?status=completed
+  const presetRange = (p: string): [string, string] => (({ today: [istDate(), istDate()], tomorrow: [istDate(1), istDate(1)], week: [istDate(), istDate(6)], month: [istDate().slice(0, 8) + '01', istDate()] } as Record<string, [string, string]>)[p] ?? ['', '']);
+  const p0 = sp.get('preset') ?? ''; const [from0, to0] = presetRange(p0);
+  const [f, setF] = useState({ q: sp.get('q') ?? '', venueId: '', areaId: '', sportId: '', status: sp.get('status') ?? '', payment: '', from: from0, to: to0, preset: from0 ? p0 : '' });
   const [page, setPage] = useState(1);
-  // what each booking is worth, what the venue gets after KickOff's fee, and what the customer still has to pay
+  // what each booking is worth, what the venue gets after PlaynX's fee, and what the customer still has to pay
   const n = (v: unknown) => Number(v ?? 0) || 0;
   const live = (b: any) => ['confirmed', 'completed'].includes(b.status);
-  const pendingOf = (b: any) => (!live(b) || b.booking_source !== 'offline' ? 0 : Math.max(0, Math.round((n(b.total) - n(b.amount_paid) - n(b.payment_discount)) * 100) / 100));
-  const receivedOf = (b: any) => (!live(b) ? 0 : b.booking_source === 'offline' ? n(b.amount_paid) : n(b.total));
-  const markPaid = useMutation({ mutationFn: (b: any) => post(`/owner/bookings/${b.id}/payments`, { amount: pendingOf(b), mode: 'offline', note: 'Paid at the venue after playing' }),
-    onSuccess: (_r, b: any) => { qc.invalidateQueries({ queryKey: ['owner-bookings'] }); qc.invalidateQueries({ queryKey: ['owner-pending-payments'] }); toast(`${b.reference} is paid. ${money(pendingOf(b))} is added to the amount received.`); },
+  // an advance booking: the customer paid the advance online and pays the rest at the venue, which the owner records here
+  const isAdvance = (b: any) => b.booking_source !== 'offline' && b.advance_amount != null;
+  const collects = (b: any) => b.booking_source === 'offline' || isAdvance(b); // money the owner collects at the venue
+  const pendingOf = (b: any) => (!live(b) || !collects(b) ? 0 : Math.max(0, Math.round((n(b.total) - n(b.amount_paid) - n(b.payment_discount)) * 100) / 100));
+  const receivedOf = (b: any) => (!live(b) ? 0 : collects(b) ? n(b.amount_paid) : n(b.total));
+  // what the owner has from the booking so far: everything received, less PlaynX's fee (an online booking pays the fee)
+  const youGetOf = (b: any) => (b.booking_source === 'offline' ? n(b.owner_amount) : isAdvance(b) ? Math.max(0, Math.round((receivedOf(b) - n(b.commission_amount)) * 100) / 100) : n(b.owner_amount));
+  const [collect, setCollect] = useState<{ b: any; amount: string; mode: string; err: string } | null>(null);
+  const markPaid = useMutation({ mutationFn: (x: { b: any; amount: number; mode: string }) => post(`/owner/bookings/${x.b.id}/payments`, { amount: x.amount, mode: x.mode, note: 'Paid at the venue after playing' }),
+    onSuccess: (_r, x) => { setCollect(null); qc.invalidateQueries({ queryKey: ['owner-bookings'] }); qc.invalidateQueries({ queryKey: ['owner-pending-payments'] }); const left = Math.round((pendingOf(x.b) - x.amount) * 100) / 100; toast(left > 0 ? `${money(x.amount)} recorded for ${x.b.reference}. ${money(left)} is still pending.` : `${x.b.reference} is fully paid. ${money(x.amount)} is added to the amount received.`); },
     onError: (e) => toast(apiError(e), 'error') });
   const [open, setOpen] = useState<any>(null); const [editB, setEditB] = useState<any>(null); const [delB, setDelB] = useState<any>(null); const [cancelFor, setCancelFor] = useState<any>(null); const [reason, setReason] = useState('');
   const [scan, setScan] = useState(false); const [code, setCode] = useState(''); const [scanRes, setScanRes] = useState<any>(null); const [scanErr, setScanErr] = useState('');
@@ -55,8 +64,8 @@ export function BookingsPage({ view }: { view: keyof typeof VIEWS }) {
   const venues = [...new Map((areasQ.data?.areas ?? []).map((a) => [a.venue_id, a.venue_name]))];
   const set = (k: string, v: string) => { setF({ ...f, [k]: v, ...(k === 'venueId' ? { areaId: '' } : {}), ...(k === 'from' || k === 'to' ? { preset: 'custom' } : {}) }); setPage(1); };
   const preset = (p: string) => {
-    const r: Record<string, [string, string]> = { today: [istDate(), istDate()], tomorrow: [istDate(1), istDate(1)], week: [istDate(), istDate(6)], month: [istDate().slice(0, 8) + '01', istDate()], '': ['', ''] };
-    setF({ ...f, preset: p, from: r[p][0], to: r[p][1] }); setPage(1);
+    const [from, to] = presetRange(p);
+    setF({ ...f, preset: p, from, to }); setPage(1);
   };
   const cancel = useMutation({ mutationFn: () => post(`/owner/bookings/${cancelFor.id}/cancel`, { reason }), onSuccess: (r: any) => { setCancelFor(null); setOpen(null); setReason(''); qc.invalidateQueries({ queryKey: ['owner-bookings'] }); qc.invalidateQueries({ queryKey: ['owner-overview'] }); toast(`Cancelled. Customer refunded ${money(r.refundAmount)}.`); }, onError: (e) => toast(apiError(e), 'error') });
   const check = async (text: string) => { setScanErr(''); setScanRes(null); try { setScanRes(await post('/owner/bookings/verify', { reference: text.trim() })); } catch (e) { setScanErr(apiError(e)); } };
@@ -81,19 +90,27 @@ export function BookingsPage({ view }: { view: keyof typeof VIEWS }) {
       </div>
       <QueryBoundary q={q} empty={(d) => d.bookings.length === 0 && <Empty icon="📅" title="No bookings found" hint="Try changing the filters." />}>{(d) => (<>
         <Table animated pageKey={page} rows={d.bookings} onRow={setOpen} columns={[
-          { key: 'reference', header: 'Booking ID', render: (b) => <div><b>{b.reference}</b>{b.source === 'offline' && <div><span className="chip !px-2 !py-0.5 text-[10px]" title="Booked by you for a walk-in customer. Paid at the venue, not through KickOff.">Offline{b.payment_method ? ` · ${b.payment_method === 'unpaid' ? 'not paid' : b.payment_method}` : ''}</span></div>}</div> },
+          { key: 'reference', header: 'Booking ID', render: (b) => <div><b>{b.reference}</b>{b.source === 'offline' && <div><span className="chip !px-2 !py-0.5 text-[10px]" title="Booked by you for a walk-in customer. Paid at the venue, not through PlaynX.">Offline{b.payment_method ? ` · ${b.payment_method === 'unpaid' ? 'not paid' : b.payment_method}` : ''}</span></div>}</div> },
           { key: 'venue', header: 'Venue', watch: (b) => b.venue_name, render: (b) => b.venue_name },
           { key: 'area', header: 'Playing Area', watch: (b) => [b.area_name, b.sport], render: (b) => <div>{b.area_name}<div className="text-xs text-muted">{b.sport}</div></div> },
           { key: 'date', header: 'Date', watch: (b) => b.starts_at, render: (b) => fmtDate(b.starts_at) },
           { key: 'time', header: 'Time', watch: (b) => [b.starts_at, b.ends_at], render: (b) => <span className="whitespace-nowrap text-xs">{fmtRange(b.starts_at, b.ends_at, b.timezone).split(' · ').slice(-1)[0]}</span> },
-          { key: 'amount', header: 'Total amount', watch: (b) => [b.total, b.discount], render: (b) => <div><b>{money(n(b.total))}</b>{b.discount > 0 && <div className="text-xs text-ok">−{money(b.discount)} off</div>}<div className="text-xs text-muted">{b.booking_source === 'offline' ? 'Offline' : 'KickOff'}</div></div> },
-          { key: 'owner', header: 'You get', watch: (b) => [b.owner_amount, b.status], render: (b) => live(b) ? <span className="font-semibold text-ok">{money(n(b.owner_amount))}</span> : <span className="text-muted">{money(0)}<span className="block text-xs">{b.status === 'cancelled' ? 'Cancelled' : 'Not booked'}</span></span> },
+          { key: 'amount', header: 'Total amount', watch: (b) => [b.total, b.discount], render: (b) => <div><b>{money(n(b.total))}</b>{b.discount > 0 && <div className="text-xs text-ok">−{money(b.discount)} off</div>}<div className="text-xs text-muted">{b.booking_source === 'offline' ? 'Offline' : 'PlaynX'}</div>{isAdvance(b) && <div className="text-xs text-muted">Advance {money(n(b.advance_amount))} paid online</div>}</div> },
+          { key: 'owner', header: 'You get', watch: (b) => [b.owner_amount, b.status], render: (b) => live(b) ? <span className="font-semibold text-ok">{money(youGetOf(b))}{isAdvance(b) && pendingOf(b) > 0 && <span className="block text-xs font-normal text-muted">of {money(n(b.owner_amount))} after the balance</span>}</span> : <span className="text-muted">{money(0)}<span className="block text-xs">{b.status === 'cancelled' ? 'Cancelled' : 'Not booked'}</span></span> },
           { key: 'fee', header: 'Platform fee', watch: (b) => b.commission_amount, render: (b) => (live(b) ? money(n(b.commission_amount)) : <span className="text-muted">{money(0)}</span>) },
-          { key: 'pending', header: 'Pending', watch: (b) => [b.amount_paid, b.payment_discount, b.status], render: (b) => { const p = pendingOf(b), r = receivedOf(b); if (!live(b)) return <span className="text-muted" aria-label="Nothing pending">—</span>; return <div>{p > 0 ? <span className="font-semibold text-danger">{money(p)}</span> : <span className="font-semibold text-ok">Fully paid</span>}{r > 0 && <div className="text-xs text-muted">Received {money(r)}</div>}</div>; } },
+          { key: 'pending', header: 'Pending', watch: (b) => [b.amount_paid, b.payment_discount, b.status], render: (b) => { const p = pendingOf(b), r = receivedOf(b); if (!live(b)) return <span className="text-muted" aria-label="Nothing pending">—</span>; return <div>{p > 0 ? <span className="font-semibold text-danger">{money(p)}</span> : <span className="font-semibold text-ok">{money(0)}</span>}{r > 0 && <div className="text-xs text-muted">Received {money(r)}</div>}</div>; } },
           { key: 'status', header: 'Status', render: (b) => <Badge status={b.status} /> },
-          { key: 'actions', header: 'Actions', render: (b) => !live(b) && b.booking_source !== 'offline' ? <span className="text-xs text-muted">{b.status === 'cancelled' ? 'Cancelled, nothing to collect' : 'Not booked, nothing to collect'}</span> : b.booking_source !== 'offline' ? <span className="text-xs font-semibold text-ok">Paid through KickOff</span> : <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>{pendingOf(b) > 0 && <ConfirmButton className="!px-2 !py-1" aria-label={`Mark ${b.reference} as paid`} loading={markPaid.isPending && markPaid.variables?.id === b.id} message={`Mark ${b.reference} as paid? The pending ${money(pendingOf(b))} is recorded as received.`} onConfirm={() => markPaid.mutate(b)}>Mark as paid</ConfirmButton>}<Button variant="ghost" className="!px-2 !py-1" aria-label={`Edit ${b.reference}`} onClick={() => setEditB(b)}>Edit</Button><Button variant="ghost" className="!px-2 !py-1 text-danger" aria-label={`Delete ${b.reference}`} onClick={() => setDelB(b)}>Delete</Button></div> }]} />
+          { key: 'actions', header: 'Actions', render: (b) => !live(b) && b.booking_source !== 'offline' ? <span className="text-xs text-muted">{b.status === 'cancelled' ? 'Cancelled, nothing to collect' : 'Not booked, nothing to collect'}</span> : b.booking_source !== 'offline' && !(isAdvance(b) && pendingOf(b) > 0) ? <span className="text-xs font-semibold text-ok">{isAdvance(b) ? 'Fully paid' : 'Paid through PlaynX'}</span> : isAdvance(b) ? <div onClick={(e) => e.stopPropagation()}><Button className="!px-2 !py-1" aria-label={`Collect balance for ${b.reference}`} onClick={() => setCollect({ b, amount: String(pendingOf(b)), mode: 'cash', err: '' })}>Collect balance</Button></div> : <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>{pendingOf(b) > 0 && <Button className="!px-2 !py-1" aria-label={`Mark ${b.reference} as paid`} onClick={() => setCollect({ b, amount: String(pendingOf(b)), mode: 'cash', err: '' })}>Mark as paid</Button>}<Button variant="ghost" className="!px-2 !py-1" aria-label={`Edit ${b.reference}`} onClick={() => setEditB(b)}>Edit</Button><Button variant="ghost" className="!px-2 !py-1 text-danger" aria-label={`Delete ${b.reference}`} onClick={() => setDelB(b)}>Delete</Button></div> }]} />
         <Pager page={page} total={d.total} size={SIZE} onPage={setPage} /></>)}</QueryBoundary>
 
+      <Modal open={!!collect} onClose={() => setCollect(null)} title={collect ? `Payment for ${collect.b.reference}` : ''}>{collect && (() => { const due = pendingOf(collect.b); return (
+        <form className="space-y-3 text-sm" noValidate onSubmit={(e) => { e.preventDefault(); const a = Number(collect.amount); if (!(a > 0)) return setCollect({ ...collect, err: 'Enter the amount received.' }); if (a > due + 0.001) return setCollect({ ...collect, err: `Only ${money(due)} is pending.` }); markPaid.mutate({ b: collect.b, amount: Math.round(a * 100) / 100, mode: collect.mode }); }}>
+          <dl className="grid grid-cols-3 gap-2"><div><dt className="text-xs text-muted">Total</dt><dd className="font-bold">{money(n(collect.b.total))}</dd></div><div><dt className="text-xs text-muted">Received</dt><dd className="font-bold">{money(receivedOf(collect.b))}</dd></div><div><dt className="text-xs text-muted">Pending</dt><dd className="font-bold text-danger">{money(due)}</dd></div></dl>
+          <Input mandatory label="Amount received (₹)" type="number" min={1} max={due} inputMode="decimal" value={collect.amount} onChange={(e) => setCollect({ ...collect, amount: e.target.value, err: '' })} hint="The full pending amount is filled in. Change it if the customer paid less." />
+          <Select label="Paid by" value={collect.mode} onChange={(e) => setCollect({ ...collect, mode: e.target.value })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option></Select>
+          {collect.err && <p role="alert" className="text-danger">{collect.err}</p>}
+          <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setCollect(null)}>Cancel</Button><Button type="submit" loading={markPaid.isPending}>Mark as paid</Button></div>
+        </form>); })()}</Modal>
       {editB && <EditBookingModal b={editB} onClose={() => setEditB(null)} onSaved={(m) => { setEditB(null); toast(m); }} />}
       {delB && <DeleteBookingModal b={delB} onClose={() => setDelB(null)} onDeleted={(m) => { setDelB(null); toast(m); }} />}
       <Modal open={!!open} onClose={() => setOpen(null)} title={open ? `Booking ${open.reference}` : ''} wide>{open && (<div className="space-y-4 text-sm">
@@ -106,8 +123,8 @@ export function BookingsPage({ view }: { view: keyof typeof VIEWS }) {
       <Modal open={!!cancelFor} onClose={() => setCancelFor(null)} title="Cancel booking"><p className="mb-3 text-sm text-muted">The customer is notified and refunded in full. Use this only when you cannot host the game.</p>
         <Textarea label="Reason (shown to customer)" value={reason} onChange={(e) => setReason(e.target.value)} /><div className="mt-4 flex justify-end gap-2"><Button variant="ghost" onClick={() => setCancelFor(null)}>Back</Button><Button variant="danger" disabled={reason.trim().length < 3} loading={cancel.isPending} onClick={() => cancel.mutate()}>Cancel & refund</Button></div></Modal>
       <Modal open={scan} onClose={() => { setScan(false); setScanRes(null); setScanErr(''); }} title="Check a booking">
-        <p className="mb-3 text-sm text-muted">Type the booking reference the player shows you (for example <code>KO-AB12CD3</code>).</p>
-        <div className="flex gap-2"><input className="field uppercase" aria-label="Booking reference" placeholder="KO-XXXXXXX" value={code} onChange={(e) => setCode(e.target.value)} /><Button onClick={verify} disabled={code.trim().length < 6}>Check</Button></div>
+        <p className="mb-3 text-sm text-muted">Type the booking reference the player shows you (for example <code>PX-AB12CD3</code>).</p>
+        <div className="flex gap-2"><input className="field uppercase" aria-label="Booking reference" placeholder="PX-XXXXXXX" value={code} onChange={(e) => setCode(e.target.value)} /><Button onClick={verify} disabled={code.trim().length < 6}>Check</Button></div>
         {scanErr && <p role="alert" className="mt-3 text-sm text-danger">{scanErr}</p>}
         {scanRes && <div className={`mt-4 rounded-xl border p-4 ${scanRes.valid ? 'border-ok/50 bg-ok/10' : 'border-danger/50 bg-danger/10'}`}><p className="text-lg font-bold">{scanRes.valid ? '✓ Valid booking' : '✗ Not valid for entry'}</p><p className="text-sm">{scanRes.booking.customer_name} · {scanRes.booking.area_name}</p><p className="text-xs text-muted">{fmtRange(scanRes.booking.starts_at, scanRes.booking.ends_at)} · {titleCase(scanRes.booking.status)}</p></div>}
       </Modal>
@@ -121,7 +138,7 @@ const RELEASE: Record<string, [string, string]> = { released: ['Ready to pay', '
 function ReleaseCell({ t }: { t: any }) {
   const r = RELEASE[t.release_state as string];
   if (!r) return <span className="text-xs text-muted">—</span>;
-  return <span className="block min-w-[8.5rem] text-xs"><b className={`whitespace-nowrap ${r[1]}`}>{r[0]}</b>{t.release_state === 'holding' && t.release_at && <span className="block whitespace-nowrap text-muted">{fmtDate(t.release_at)}</span>}{t.release_state === 'released' && <span className="block text-muted">reaches your bank when KickOff pays you</span>}</span>;
+  return <span className="block min-w-[8.5rem] text-xs"><b className={`whitespace-nowrap ${r[1]}`}>{r[0]}</b>{t.release_state === 'holding' && t.release_at && <span className="block whitespace-nowrap text-muted">{fmtDate(t.release_at)}</span>}{t.release_state === 'released' && <span className="block text-muted">reaches your bank when PlaynX pays you</span>}</span>;
 }
 
 export function PaymentsPage() {
@@ -141,22 +158,22 @@ export function PaymentsPage() {
       {bal.data && (<section aria-label="Your balance" className="mb-5">
         {/* how a booking's money moves: gross value -> on hold -> (ready to pay | dispute) -> paid to your bank */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <Stat label="Gross value" value={money(ps.data?.totals.gross ?? 0)} hint="What customers paid for KickOff bookings" />
+          <Stat label="Gross value" value={money(ps.data?.totals.gross ?? 0)} hint="What customers paid for PlaynX bookings" />
           <Stat label="On hold" value={money(bal.data.summary.holding)} hint={`Your share, kept for ${bal.data.summary.holdHours} hours after the game. Then it moves to Ready to pay, or to Dispute if the customer complains.`} />
           <Stat label="Ready to pay" value={money(bal.data.summary.available)} accent hint="No complaint: due to you (gross value less the platform fee), not yet sent" />
           <Stat label="Dispute" value={money(ps.data?.totals.dispute ?? bal.data.summary.disputed)} hint="A customer complained: held, or refunded to the customer" />
-          <div className="col-span-2 md:col-span-1"><Stat label="Paid to your bank" value={money(bal.data.summary.completed)} hint={(bal.data.summary as any).testPaid > 0 ? `Includes ${money((bal.data.summary as any).testPaid)} paid in TEST mode: no real money was sent to your bank` : 'Sent by KickOff to your bank account'} /></div>
+          <div className="col-span-2 md:col-span-1"><Stat label="Paid to your bank" value={money(bal.data.summary.completed)} hint={(bal.data.summary as any).testPaid > 0 ? `Includes ${money((bal.data.summary as any).testPaid)} paid in TEST mode: no real money was sent to your bank` : 'Sent by PlaynX to your bank account'} /></div>
         </div>
-        <p className="mt-2 text-xs text-muted">Customers pay KickOff first. Your share stays on hold for {bal.data.summary.holdHours} hours after the game. With no complaint it becomes <b>Ready to pay</b>; it moves to <b>Paid to your bank</b> only when KickOff transfers it and records the bank reference. Walk-in (offline) bookings are paid to you directly and are not part of this.</p></section>)}
+        <p className="mt-2 text-xs text-muted">Customers pay PlaynX first. Your share stays on hold for {bal.data.summary.holdHours} hours after the game. With no complaint it becomes <b>Ready to pay</b>; it moves to <b>Paid to your bank</b> only when PlaynX transfers it and records the bank reference. Walk-in (offline) bookings are paid to you directly and are not part of this.</p></section>)}
       {bal.data && (<section aria-label="Settlements" className="mb-6">
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-bold">Settlements</h2><p className="text-xs text-muted">Each amount KickOff has sent, or is sending, to your bank. The admin enters the amount and the bank reference when they pay you.</p></div>
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-bold">Settlements</h2><p className="text-xs text-muted">Each amount PlaynX has sent, or is sending, to your bank. The admin enters the amount and the bank reference when they pay you.</p></div>
           <div className="w-44"><Select label="Settlement" value={setl} onChange={(e) => setSetl(e.target.value)}><option value="">Any</option><option value="paid">Paid to my bank</option><option value="pending">Pending</option><option value="failed">Failed</option></Select></div></div>
         {(() => { const rows = bal.data.payouts.filter((p) => !setl || p.status === setl);
           return rows.length === 0 ? <p className="text-sm text-muted">{bal.data.payouts.length === 0 ? 'No settlements yet. Once the admin sends you money it is listed here with the amount and bank reference.' : 'No settlements match this filter.'}</p>
             : <Table rows={rows} columns={[{ key: 'when', header: 'Date', render: (p: any) => fmtDate(p.paid_at ?? p.created_at) }, { key: 'period', header: 'For games between', render: (p: any) => `${String(p.period_start).slice(0, 10)} → ${String(p.period_end).slice(0, 10)}` }, { key: 'amount', header: 'Amount sent', render: (p: any) => <b>{money(p.amount)}</b> }, { key: 'reference', header: 'Bank reference', render: (p: any) => p.reference ?? '—' }, { key: 'status', header: 'Status', render: (p: any) => <><Badge status={p.status === 'paid' ? 'completed' : p.status === 'failed' ? 'cancelled' : 'pending'}>{p.status === 'paid' ? 'Paid' : p.status === 'failed' ? 'Failed' : 'Pending'}</Badge>{p.is_test && <span className="ml-1 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warn">Test: no real transfer</span>}</> }]} />; })()}
       </section>)}
       <section aria-label="Monthly statement" className="card mb-5 flex flex-wrap items-end justify-between gap-3 p-4">
-        <div><h2 className="text-xl font-bold">Monthly statement</h2><p className="text-xs text-muted">Every online booking for the month: what it made, what KickOff kept, what you earn and when each payout is released.</p></div>
+        <div><h2 className="text-xl font-bold">Monthly statement</h2><p className="text-xs text-muted">Every online booking for the month: what it made, what PlaynX kept, what you earn and when each payout is released.</p></div>
         <div className="flex items-end gap-2"><div className="w-44"><Input label="Month" type="month" max={todayISO().slice(0, 7)} value={month} onChange={(e) => setMonth(e.target.value)} /></div><Button variant="ghost" loading={dl} disabled={!month} onClick={statement}>Download CSV</Button></div></section>
       <div className="mb-4 grid gap-3 sm:grid-cols-4"><Input label="Search" placeholder="Booking, customer, payment ID" value={f.q} onChange={(e) => set('q', e.target.value)} />
         <Select label="Status" value={f.status} onChange={(e) => set('status', e.target.value)}><option value="">Any</option>{['captured', 'failed', 'refunded', 'partially_refunded'].map((s) => <option key={s} value={s}>{PAY_LABEL[s]}</option>)}</Select>
@@ -193,7 +210,7 @@ export function RefundsPage() {
   return (
     <div><PageHeader title="Refunds" subtitle="Every cancelled booking, with the money to give back: what was refunded, and what is still to give back." />
       <div className="mb-4 max-w-md"><Input label="Search" placeholder="Customer name, mobile or booking ID" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-      <p className="mb-4 rounded-xl border border-line bg-surface p-3 text-sm text-muted">Refunds are issued automatically by the platform: in full when a customer cancels before your cancellation window or when you or KickOff cancel, and not at all inside the window. You can't issue refunds manually. For exceptions, <Link className="underline" to="/owner/support">contact support</Link>.</p>
+      <p className="mb-4 rounded-xl border border-line bg-surface p-3 text-sm text-muted">Refunds are issued automatically by the platform: in full when a customer cancels before your cancellation window or when you or PlaynX cancel, and not at all inside the window. You can't issue refunds manually. For exceptions, <Link className="underline" to="/owner/support">contact support</Link>.</p>
       {rec && <RecordRefundModal w={rec} onClose={() => setRec(null)} />}
       <QueryBoundary q={q} empty={(d) => d.refunds.length === 0 && (d.walkIns ?? []).length === 0 && <Empty icon="↩️" title="No refunds" hint="Refunds appear here after a booking is cancelled." />}>
         {(d) => <>{(d.walkIns ?? []).length > 0 && (
@@ -255,7 +272,7 @@ export function AnalyticsPage() {
         <Select label="Playing area" value={f.areaId} onChange={(e) => setF({ ...f, areaId: e.target.value })}><option value="">All playing areas</option>{(areasQ.data?.areas ?? []).filter((x) => !f.venueId || x.venue_id === f.venueId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select>
         <Select label="Sport" value={f.sportId} onChange={(e) => setF({ ...f, sportId: e.target.value })}><option value="">All sports</option>{sports.data?.sports.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
         <Select label="Booking status" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}><option value="">All statuses</option>{['confirmed', 'completed', 'cancelled', 'pending'].map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}</Select>
-        <Select label="Source" value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}><option value="">All sources</option><option value="online">KickOff</option><option value="offline">Offline</option></Select>
+        <Select label="Source" value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}><option value="">All sources</option><option value="online">PlaynX</option><option value="offline">Offline</option></Select>
         <Select label="Group by" value={f.groupBy} onChange={(e) => setF({ ...f, groupBy: e.target.value })}><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></Select></div>
       {f.from > f.to ? <ErrorBox error={new Error('The start date must be before the end date')} /> : (
         <QueryBoundary q={q}>{(d) => (<div className="space-y-6">

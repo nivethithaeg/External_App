@@ -10,7 +10,7 @@ const booking = { reference: 'KO-XP74YPV', status: 'confirmed', payment_status: 
 describe('receipt download', () => {
   it('produces a real PDF file named after the booking reference', async () => {
     await downloadReceiptPdf(booking, [{ amount: 700, status: 'processed' }], 'Asha Rao');
-    expect(saved.name).toBe('KickOff-receipt-KO-XP74YPV.pdf');
+    expect(saved.name).toBe('PlaynX-receipt-KO-XP74YPV.pdf');
     const bytes = new Uint8Array(await new Promise<ArrayBuffer>((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result as ArrayBuffer); fr.readAsArrayBuffer(saved.blob!); }));
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
     expect(bytes.length).toBeGreaterThan(1000);

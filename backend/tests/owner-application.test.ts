@@ -331,7 +331,7 @@ describe('owner endpoints need an approved owner', () => {
       expect(res.body.error.code, path).toBe('owner_not_approved');
     }
     const create = await request(env.app).post('/api/owner/venues').set(o.auth).send(venue).expect(403);
-    expect(create.body.error.message).toMatch(/approved by KickOff/);
+    expect(create.body.error.message).toMatch(/approved by PlaynX/);
     expect((await app(o).expect(200)).body.accountStatus).toBe('profile_incomplete'); // the application, profile and notifications still work
     await request(env.app).get('/api/me/notifications').set(o.auth).expect(200);
 

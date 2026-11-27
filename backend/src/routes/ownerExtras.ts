@@ -87,7 +87,7 @@ export function adminExtraRoutes(ctx: Ctx) {
       `SELECT s.id, s.name, s.slug, s.is_active AS "isActive",
               (SELECT count(DISTINCT a.venue_id)::int FROM playing_area_sports x JOIN playing_areas a ON a.id=x.playing_area_id WHERE x.sport_id=s.id) AS venues,
               (SELECT count(*)::int FROM playing_area_sports x WHERE x.sport_id=s.id) AS areas
-         FROM sports s ORDER BY s.name`);
+         FROM sports s ORDER BY s.sort_order, s.name`);
     res.json({ sports: rows });
   });
   const slugOf = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -113,13 +113,18 @@ export function adminExtraRoutes(ctx: Ctx) {
   // ---------------- playing areas waiting for approval
   r.get('/areas', P('venues'), async (req, res) => {
     const status = parse(z.enum(['pending', 'approved', 'rejected']).optional(), req.query.status);
+    const deletion = parse(z.enum(['pending', 'deleted']).optional(), req.query.deletion);
     const { rows } = await ctx.db.query(
       `SELECT a.id, a.name, a.approval_status AS "approvalStatus", a.approval_note AS "approvalNote", a.surface, a.capacity,
+              a.deletion_status AS "deletionStatus", a.deletion_requested_at AS "deletionRequestedAt", a.deletion_reason AS "deletionReason", a.deleted_at AS "deletedAt",
+              (SELECT count(*)::int FROM bookings b WHERE b.area_id=a.id AND b.status IN ('pending','confirmed') AND lower(b.during) > now()) AS "upcomingBookings",
+              (SELECT count(*)::int FROM bookings b WHERE b.area_id=a.id AND b.status <> 'blocked') AS "totalBookings",
               v.id AS "venueId", v.name AS "venueName", v.city, u.full_name AS "ownerName",
-              (SELECT COALESCE(json_agg(sp.name ORDER BY sp.name), '[]') FROM playing_area_sports x JOIN sports sp ON sp.id=x.sport_id WHERE x.playing_area_id=a.id) AS sports,
+              (SELECT COALESCE(json_agg(sp.name ORDER BY sp.sort_order, sp.name), '[]') FROM playing_area_sports x JOIN sports sp ON sp.id=x.sport_id WHERE x.playing_area_id=a.id) AS sports,
               (SELECT count(*)::int FROM pricing_rules p WHERE p.area_id=a.id) AS "priceRules"
          FROM playing_areas a JOIN venues v ON v.id=a.venue_id JOIN users u ON u.id=v.owner_id
-        WHERE ($1::text IS NULL OR a.approval_status=$1) ORDER BY (a.approval_status='pending') DESC, v.name, a.name LIMIT 300`, [status ?? null]);
+        WHERE ($1::text IS NULL OR a.approval_status=$1) AND ($2::text IS NULL OR a.deletion_status=$2)
+        ORDER BY (a.deletion_status='pending') DESC, (a.approval_status='pending') DESC, v.name, a.name LIMIT 300`, [status ?? null, deletion ?? null]);
     res.json({ areas: rows });
   });
   r.post('/areas/:id/decision', P('venues'), async (req, res) => {
@@ -133,6 +138,23 @@ export function adminExtraRoutes(ctx: Ctx) {
     await ctx.notifier.notify(v.owner_id, { title: `Playing area ${b.decision === 'approve' ? 'approved' : 'rejected'}`, type: 'area_status', data: { link: '/owner/areas' },
       body: b.decision === 'approve' ? `"${a.name}" at "${v.name}" is approved. Customers can now book it.` : `"${a.name}" at "${v.name}" was rejected: ${b.note}. Edit it and it goes back for review.` });
     res.json({ id, approvalStatus: b.decision === 'approve' ? 'approved' : 'rejected' });
+  });
+
+  /** an owner asked to delete a playing area: approve (it stays in the database with its bookings, closed for good) or reject the request */
+  r.post('/areas/:id/deletion', P('venues'), async (req, res) => {
+    const id = parse(z.uuid(), req.params.id);
+    const b = parse(z.object({ decision: z.enum(['approve', 'reject']), note: z.string().trim().max(300).optional() })
+      .refine((x) => x.decision === 'approve' || (x.note && x.note.length >= 3), { message: 'Tell the owner why the delete request was rejected', path: ['note'] }), req.body);
+    const a = (await ctx.db.query(b.decision === 'approve'
+      ? `UPDATE playing_areas SET deletion_status='deleted', deleted_at=now(), is_active=false WHERE id=$1 AND deletion_status='pending' RETURNING id, name, venue_id`
+      : `UPDATE playing_areas SET deletion_status=NULL, deletion_requested_at=NULL, deletion_reason=NULL, deletion_note=$2, is_active=COALESCE(active_before_delete, is_active), active_before_delete=NULL
+          WHERE id=$1 AND deletion_status='pending' RETURNING id, name, venue_id`, b.decision === 'approve' ? [id] : [id, b.note])).rows[0];
+    if (!a) throw notFound('No deletion request for this playing area');
+    const v = (await ctx.db.query('SELECT owner_id, name FROM venues WHERE id=$1', [a.venue_id])).rows[0];
+    await audit(ctx.db, req, b.decision === 'approve' ? 'admin.area_deleted' : 'admin.area_deletion_rejected', 'area', id, { note: b.note ?? null });
+    await ctx.notifier.notify(v.owner_id, { title: b.decision === 'approve' ? 'Playing area deleted' : 'Playing area not deleted', type: 'area_status', data: { link: '/owner/areas' },
+      body: b.decision === 'approve' ? `"${a.name}" at "${v.name}" is deleted. Its booking history is kept.` : `Your request to delete "${a.name}" at "${v.name}" was rejected: ${b.note}. It is not deleted and is open for booking again.` });
+    res.json({ id, deletionStatus: b.decision === 'approve' ? 'deleted' : null });
   });
 
   // ---------------- listing changes: edits to live venues waiting for review

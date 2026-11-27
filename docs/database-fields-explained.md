@@ -1,6 +1,6 @@
-# KickOff database: what each table is for and what each field means
+# PlaynX database: what each table is for and what each field means
 
-Open **Supabase > Table Editor** and you will see these 48 tables. Tables such as `auth.*` or `storage.*` belong to Supabase itself; KickOff uses only the ones below.
+Open **Supabase > Table Editor** and you will see these 48 tables. Tables such as `auth.*` or `storage.*` belong to Supabase itself; PlaynX uses only the ones below.
 
 **How to read it:** *Type* is the Supabase column type (uuid = unique id, text, numeric = money or number, timestamptz = date and time, jsonb = flexible data, boolean = yes/no). `?` after the type means the field can be empty.
 
@@ -380,7 +380,7 @@ The most important table. One row per booking (also blocked slots, offline walk-
 | `discount` | numeric | Total discount (venue discount + coupon) |
 | `total` | numeric | What the customer pays: subtotal - discount + extras |
 | `commission_rate` | numeric | Platform % on this booking |
-| `commission_amount` | numeric | KickOff share in rupees |
+| `commission_amount` | numeric | PlaynX share in rupees |
 | `owner_amount` | numeric | Owner share in rupees (total - commission) |
 | `coupon_id` | uuid ? | Coupon used |
 | `notes` | text ? | Free text |
@@ -544,7 +544,7 @@ Which user used which coupon on which booking.
 | `booking_id` | uuid | Booking |
 
 ### `owner_payouts`
-Money sent from KickOff to owners.
+Money sent from PlaynX to owners.
 
 | Field | Type | Meaning |
 |---|---|---|

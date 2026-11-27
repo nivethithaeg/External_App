@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { GoogleButton } from './GoogleButton';
 import { Button, Input, Modal } from './ui';
 import { apiCode, apiError } from '../lib/api';
-import { homeFor, landing, useAuth } from '../lib/auth';
+import { homeFor, landing, useAuth, needsOwnerSignup } from '../lib/auth';
 import { cx } from '../lib/utils';
 
 /** Google sign-in: existing accounts log straight in; new users choose Customer or Turf Owner first. */
@@ -19,7 +19,11 @@ export function GoogleSignIn({ text = 'continue_with', role: fixedRole }: { text
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const finish = (u: Awaited<ReturnType<typeof googleLogin>>) => { const l = u.role === 'customer' ? landing(u, from) : { to: homeFor(u), state: undefined }; nav(l.to, { replace: true, state: l.state }); };
+  // players and venue owners who come in with Google still confirm their email with the emailed code
+  const finish = (u: Awaited<ReturnType<typeof googleLogin>>) => {
+    const l = u.role === 'customer' ? landing(u, from) : u.role === 'owner' && !u.emailVerified ? { to: '/verify-account', state: { from: '/owner/complete-signup' } } : u.role === 'owner' && needsOwnerSignup(u) ? { to: '/owner/complete-signup', state: undefined } : { to: homeFor(u), state: undefined };
+    nav(l.to, { replace: true, state: l.to === '/verify-account' ? { ...(l.state ?? {}), fresh: true } : l.state });
+  };
 
   const onCredential = async (credential: string) => {
     setError(''); setBusy(true);
@@ -45,7 +49,7 @@ export function GoogleSignIn({ text = 'continue_with', role: fixedRole }: { text
     <>
       <GoogleButton onCredential={onCredential} disabled={busy} text={text} />
       {!pending && error && <p role="alert" className="mt-2 text-center text-sm text-danger">{error}</p>}
-      <Modal open={!!pending} onClose={() => { setPending(null); setError(''); }} title={fixedRole === 'owner' ? 'Create your venue owner account' : fixedRole === 'customer' ? 'Create your customer account' : 'How will you use KickOff?'}>
+      <Modal open={!!pending} onClose={() => { setPending(null); setError(''); }} title={fixedRole === 'owner' ? 'Create your venue owner account' : fixedRole === 'customer' ? 'Create your customer account' : 'How will you use PlaynX?'}>
         <div className="space-y-4">
           <p className="text-sm text-muted">We couldn't find an account for this Google email. {fixedRole ? `We'll create a ${fixedRole === 'owner' ? 'venue owner' : 'customer'} account.` : 'Choose the type of account to create.'}</p>
           {!fixedRole && <div role="radiogroup" aria-label="Account type" className="grid gap-3 sm:grid-cols-2">

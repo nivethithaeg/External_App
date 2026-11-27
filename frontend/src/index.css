@@ -2,33 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-:root, [data-theme='dark'] {
-  /* Charcoal Black + Orange: bg #151515, secondary #292929, primary #FF6B22, text #FFFFFF, accent #FFC857 */
-  --bg: 21 21 21; --surface: 41 41 41; --surface2: 52 52 52; --line: 70 70 70;
-  --ink: 255 255 255; --muted: 176 176 176;
-  --brand: 255 107 34; --brand-ink: 21 21 21; --brand-text: 255 107 34;
-  --accent: 255 200 87;
-  --danger: 255 107 107; --warn: 255 200 87; --ok: 84 222 132;
-  color-scheme: dark;
-}
-[data-theme='light'] {
-  --bg: 250 247 244; --surface: 255 255 255; --surface2: 243 239 235; --line: 224 217 210;
-  --ink: 21 21 21; --muted: 105 98 92;
-  --brand: 255 107 34; --brand-ink: 21 21 21; --brand-text: 194 65 12;
-  --accent: 255 200 87;
-  --danger: 211 47 47; --warn: 160 100 0; --ok: 22 133 70;
+/* PlaynX brand: navy #101B5C, purple #7200FF, violet #A100FF, orange #FF8C00 (sparingly), white, lavender #F5F0FF */
+:root, [data-theme='light'] {
+  --bg: 248 250 252; --surface: 255 255 255; --surface2: 243 244 248; --line: 229 231 235;
+  --ink: 15 23 42; --muted: 82 92 115;
+  --brand: 114 0 255; --brand-ink: 255 255 255; --brand-text: 114 0 255;
+  --accent: 255 140 0; --navy: 16 27 92; --violet: 161 0 255;
+  --danger: 211 47 47; --warn: 176 96 0; --ok: 22 133 70;
   color-scheme: light;
 }
-
-/* Customer portal: premium orange + black palette (the owner and admin portals keep theirs) */
-:root:not([data-theme='light']) .customer-theme {
-  --bg: 16 16 16; --surface: 27 27 27; --surface2: 38 38 38; --line: 48 48 48; --muted: 166 166 166;
-  --brand: 255 101 0; --brand-text: 255 138 50;
-}
-/* Admin portal: matte black + electric orange (dark mode only) */
-:root:not([data-theme='light']) .admin-theme {
-  --bg: 8 8 8; --surface: 26 26 26; --surface2: 34 34 34; --line: 48 48 48; --muted: 160 160 160;
-  --brand: 255 106 0; --brand-text: 255 140 50;
+[data-theme='dark'] {
+  --bg: 9 13 41; --surface: 18 24 66; --surface2: 27 35 87; --line: 46 55 112;
+  --ink: 255 255 255; --muted: 170 176 205;
+  --brand: 140 60 255; --brand-ink: 255 255 255; --brand-text: 182 130 255;
+  --accent: 255 140 0; --navy: 16 27 92; --violet: 161 0 255;
+  --danger: 255 107 107; --warn: 255 190 90; --ok: 84 222 132;
+  color-scheme: dark;
 }
 .fancy-nav aside nav a .nav-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9999px; background: rgb(var(--surface2)); font-size: 14px; transition: background-color .2s, box-shadow .2s; }
 .fancy-nav aside nav a[aria-current='page'] .nav-ico { background: rgb(8 8 8 / .22); }
@@ -36,7 +25,7 @@
 .fancy-nav aside nav a .nav-ico { flex: none; }
 .fancy-nav aside nav a:not([aria-current='page']):hover { transform: translateX(3px); box-shadow: inset 0 0 0 1px rgb(var(--brand) / .55), 0 0 18px -6px rgb(var(--brand) / .5); }
 .fancy-nav aside nav a[aria-current='page'] { box-shadow: 0 0 22px -6px rgb(var(--brand) / .65); }
-.admin-theme header [aria-haspopup='menu'] > span.rounded-full, .admin-theme header [aria-haspopup='menu'] > div.rounded-full { box-shadow: 0 0 0 2px #080808, 0 0 0 4px #FF6A00; }
+.admin-theme header [aria-haspopup='menu'] > span.rounded-full, .admin-theme header [aria-haspopup='menu'] > div.rounded-full { box-shadow: 0 0 0 2px #070D33, 0 0 0 4px #7200FF; }
 /* admin sidebar: animated width, labels that slide away, staggered page content */
 @keyframes navPillSwell { 0% { transform: scale(1); } 45% { transform: scale(1.03); } 100% { transform: scale(1); } }
 .nav-pill-swell { animation: navPillSwell .5s ease-in-out; }
@@ -57,6 +46,11 @@
 .page-stagger > * > *:nth-child(5) { animation-delay: .24s; } .page-stagger > * > *:nth-child(6) { animation-delay: .3s; } .page-stagger > * > *:nth-child(n+7) { animation-delay: .36s; }
 html { background: rgb(var(--bg)); }
 body { @apply bg-bg text-ink font-sans antialiased; margin: 0; }
+/* Light mode: a clean neutral off-white (#F8FAFC); hierarchy comes from white cards on it, not from a tint */
+:root:not([data-theme='dark']) body { background-color: rgb(var(--bg)); background-image: none; }
+/* a gradient-bordered panel for the key sections */
+.brand-panel { position: relative; border-radius: 2rem; background: rgb(var(--surface)); box-shadow: 0 24px 60px -30px rgb(114 0 255 / .35); }
+.brand-panel::before { content: ''; position: absolute; inset: 0; padding: 1.5px; border-radius: inherit; background: linear-gradient(135deg, #7200FF, #A100FF 45%, #FF8C00); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
 h1, h2, h3 { @apply font-display tracking-tight; }
 ::selection { background: rgb(var(--brand) / .35); }
 :focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 2px; }
@@ -75,20 +69,20 @@ h1, h2, h3 { @apply font-display tracking-tight; }
 @media (hover: hover) { .spot:hover::after { opacity: 1; } }
 /* ---- filter controls: checkbox tick, radio dot, dual price slider ---- */
 .fx-box svg path { stroke-dasharray: 24; stroke-dashoffset: 24; transition: stroke-dashoffset .25s ease-out .05s; }
-.fx-check input:checked + .fx-box { background: #FF6500; border-color: #FF6500; }
+.fx-check input:checked + .fx-box { background: #7200FF; border-color: #7200FF; }
 .fx-check input:checked + .fx-box svg path { stroke-dashoffset: 0; }
-.fx-check input:focus-visible + .fx-box, .fx-radio input:focus-visible + .fx-dot { outline: 2px solid #FF6500; outline-offset: 2px; }
-.fx-dot i { background: #FF6500; transform: scale(0); transition: transform .2s cubic-bezier(.2,.9,.3,1.4); }
-.fx-radio input:checked + .fx-dot { border-color: #FF6500; box-shadow: 0 0 0 3px rgb(255 101 0 / .18); }
+.fx-check input:focus-visible + .fx-box, .fx-radio input:focus-visible + .fx-dot { outline: 2px solid #7200FF; outline-offset: 2px; }
+.fx-dot i { background: #7200FF; transform: scale(0); transition: transform .2s cubic-bezier(.2,.9,.3,1.4); }
+.fx-radio input:checked + .fx-dot { border-color: #7200FF; box-shadow: 0 0 0 3px rgb(114 0 255 / .18); }
 .fx-radio input:checked + .fx-dot i { transform: scale(1); }
 .dual-range input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: transparent; pointer-events: none; -webkit-appearance: none; appearance: none; }
 .dual-range input[type=range]::-webkit-slider-runnable-track { background: transparent; height: 100%; }
 .dual-range input[type=range]::-moz-range-track { background: transparent; }
-.dual-range input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; pointer-events: auto; cursor: grab; width: 20px; height: 20px; margin-top: 2px; border-radius: 9999px; background: #fff; border: 3px solid #FF6500; box-shadow: 0 2px 8px rgb(0 0 0 / .5); transition: transform .15s ease, box-shadow .15s ease; }
-.dual-range input[type=range]::-moz-range-thumb { pointer-events: auto; cursor: grab; width: 14px; height: 14px; border-radius: 9999px; background: #fff; border: 3px solid #FF6500; box-shadow: 0 2px 8px rgb(0 0 0 / .5); transition: transform .15s ease; }
-.dual-range input[type=range]:active::-webkit-slider-thumb { transform: scale(1.25); cursor: grabbing; box-shadow: 0 0 0 6px rgb(255 101 0 / .22), 0 2px 8px rgb(0 0 0 / .5); }
+.dual-range input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; pointer-events: auto; cursor: grab; width: 20px; height: 20px; margin-top: 2px; border-radius: 9999px; background: #fff; border: 3px solid #7200FF; box-shadow: 0 2px 8px rgb(0 0 0 / .5); transition: transform .15s ease, box-shadow .15s ease; }
+.dual-range input[type=range]::-moz-range-thumb { pointer-events: auto; cursor: grab; width: 14px; height: 14px; border-radius: 9999px; background: #fff; border: 3px solid #7200FF; box-shadow: 0 2px 8px rgb(0 0 0 / .5); transition: transform .15s ease; }
+.dual-range input[type=range]:active::-webkit-slider-thumb { transform: scale(1.25); cursor: grabbing; box-shadow: 0 0 0 6px rgb(114 0 255 / .22), 0 2px 8px rgb(0 0 0 / .5); }
 .dual-range input[type=range]:active::-moz-range-thumb { transform: scale(1.25); cursor: grabbing; }
-.dual-range input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgb(255 101 0 / .35); }
+.dual-range input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgb(114 0 255 / .35); }
 /* ---- animated tables (bookings): hover edge, selection, changed cells, status badges ---- */
 .bk-row { transition: background-color .2s ease, box-shadow .2s ease; }
 .bk-row > td:first-child { position: relative; }
@@ -141,3 +135,332 @@ h1, h2, h3 { @apply font-display tracking-tight; }
 
 /* a detail that was given on an earlier page: shown filled in, but only editable on the page where it was first entered */
 .field[readonly] { cursor: not-allowed; opacity: .75; background-image: none; }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Light theme: premium and professional. Quiet surfaces, hairline borders, soft layered shadows, medium-weight headings,
+ * a refined sidebar and form controls. Dark mode is not affected.
+ * ---------------------------------------------------------------------------------------------------------------- */
+:root:not([data-theme='dark']) {
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / .05);
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / .04), 0 4px 12px -4px rgb(15 23 42 / .08);
+  --shadow-md: 0 2px 6px -2px rgb(15 23 42 / .06), 0 14px 28px -10px rgb(15 23 42 / .14);
+  --shadow-lg: 0 8px 16px -8px rgb(15 23 42 / .10), 0 28px 56px -16px rgb(15 23 42 / .22);
+  --line-strong: 209 213 219;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+}
+/* headings: bold page titles, clear section headings; secondary text in slate (never too faint to read) */
+:root:not([data-theme='dark']) h1 { font-weight: 750; letter-spacing: -0.03em; color: rgb(var(--ink)); }
+:root:not([data-theme='dark']) h2, :root:not([data-theme='dark']) h3 { font-weight: 650; letter-spacing: -0.015em; color: rgb(var(--ink)); }
+/* cards: white, #E5E7EB hairline, soft layered shadow; clickable ones lift 2px */
+:root:not([data-theme='dark']) .card { border-color: rgb(var(--line)); box-shadow: var(--shadow-sm); border-radius: 1rem; }
+/* buttons: refined purple, a 2px lift and a soft brand shadow on hover */
+:root:not([data-theme='dark']) .btn { border-radius: .75rem; transition: transform .2s var(--ease-out), box-shadow .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, filter .2s ease; }
+:root:not([data-theme='dark']) .btn-primary { background-image: linear-gradient(180deg, #7A14F7 0%, #6400E0 100%); color: #fff; box-shadow: 0 1px 2px rgb(15 23 42 / .12), 0 4px 10px -4px rgb(100 0 224 / .35), inset 0 1px 0 rgb(255 255 255 / .16); }
+:root:not([data-theme='dark']) .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgb(15 23 42 / .08), 0 10px 20px -8px rgb(100 0 224 / .5), inset 0 1px 0 rgb(255 255 255 / .16); filter: brightness(1.06); }
+:root:not([data-theme='dark']) .btn-primary:active { transform: translateY(0) scale(.98); box-shadow: 0 1px 2px rgb(15 23 42 / .12); }
+:root:not([data-theme='dark']) .btn-ghost { background: rgb(var(--surface)); border-color: rgb(var(--line)); color: rgb(var(--ink)); box-shadow: var(--shadow-xs); }
+:root:not([data-theme='dark']) .btn-ghost:hover { transform: translateY(-2px); background: rgb(var(--surface)); border-color: rgb(var(--brand) / .35); color: rgb(var(--brand-text)); box-shadow: var(--shadow-sm); }
+:root:not([data-theme='dark']) .btn-danger { background: rgb(254 242 242); border-color: rgb(254 202 202); color: rgb(185 28 28); }
+:root:not([data-theme='dark']) .btn-danger:hover { transform: translateY(-2px); background: rgb(254 226 226); box-shadow: 0 8px 16px -10px rgb(185 28 28 / .45); }
+/* form fields, dropdowns: white with a hairline border and a clear focus ring */
+:root:not([data-theme='dark']) .field { background-color: rgb(var(--surface)); border-color: rgb(var(--line)); border-radius: .75rem; box-shadow: var(--shadow-xs); }
+:root:not([data-theme='dark']) .field:hover:not(:focus):not([readonly]):not(:disabled) { border-color: rgb(var(--line-strong)); }
+:root:not([data-theme='dark']) .field:focus { border-color: rgb(var(--brand)); box-shadow: 0 0 0 4px rgb(var(--brand) / .12); }
+:root:not([data-theme='dark']) .field::placeholder { color: rgb(148 156 175); }
+:root:not([data-theme='dark']) .chip { background: rgb(var(--surface)); color: rgb(var(--muted)); }
+/* tabs: a quiet track, the chosen tab in brand purple with a soft shadow */
+:root:not([data-theme='dark']) [role='tablist'] { background: rgb(var(--surface2)); border-color: rgb(var(--line)); box-shadow: inset 0 1px 2px rgb(15 23 42 / .04); }
+:root:not([data-theme='dark']) [role='tablist'] > [role='tab'] { transition: background-color .2s ease, color .2s ease, box-shadow .2s ease; }
+:root:not([data-theme='dark']) [role='tablist'] > [role='tab'][aria-selected='true'] { box-shadow: 0 1px 2px rgb(15 23 42 / .10), 0 4px 10px -4px rgb(100 0 224 / .35); }
+:root:not([data-theme='dark']) [role='tablist'] > [role='tab'][aria-selected='false']:hover { background: rgb(var(--surface)); }
+/* tables: a tinted header row, soft row hover */
+:root:not([data-theme='dark']) .table-head { background: rgb(248 250 252); }
+:root:not([data-theme='dark']) .table-head th { color: rgb(var(--muted)); font-weight: 600; letter-spacing: .04em; }
+:root:not([data-theme='dark']) .bk-row:hover { background-color: rgb(248 250 252); box-shadow: 0 4px 12px -8px rgb(15 23 42 / .18); }
+/* drop-down menus (profile, navigation) and dialogs */
+:root:not([data-theme='dark']) [role='menu'] { border-color: rgb(var(--line)); box-shadow: var(--shadow-lg); animation: menuIn .18s ease-out both; }
+@keyframes menuIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+:root:not([data-theme='dark']) .modal-backdrop { background: rgb(15 23 42 / .42); }
+:root:not([data-theme='dark']) [role='dialog'].card { box-shadow: var(--shadow-lg); }
+/* portal top bar: crisp white with a hairline shadow */
+:root:not([data-theme='dark']) .portal-top { background: rgb(255 255 255 / .88); box-shadow: 0 1px 0 rgb(var(--line)), 0 4px 14px -10px rgb(15 23 42 / .18); border-bottom-color: transparent; }
+:root:not([data-theme='dark']) .portal-top a.rounded-xl, :root:not([data-theme='dark']) .portal-top button.rounded-xl:not([aria-label^='Switch']) { background: rgb(var(--surface)); box-shadow: var(--shadow-xs); transition: transform .2s var(--ease-out), box-shadow .2s ease, background-color .2s ease; }
+:root:not([data-theme='dark']) .portal-top a.rounded-xl:hover, :root:not([data-theme='dark']) .portal-top button.rounded-xl:not([aria-label^='Switch']):hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+/* Back button: white pill, hairline border, soft shadow; it lifts and its arrow nudges left on hover */
+:root:not([data-theme='dark']) .back-btn { background: rgb(var(--surface)); border-color: rgb(var(--line)); box-shadow: var(--shadow-xs); transition: transform .25s var(--ease-out), box-shadow .25s ease, border-color .25s ease, color .25s ease; }
+:root:not([data-theme='dark']) .back-btn:hover { transform: translateY(-1px); border-color: rgb(var(--brand) / .35); box-shadow: var(--shadow-sm); }
+:root:not([data-theme='dark']) .back-btn .back-ico { box-shadow: 0 2px 6px -2px rgb(100 0 224 / .5); transition: transform .25s var(--ease-out); }
+:root:not([data-theme='dark']) .back-btn:hover .back-ico { transform: translateX(-3px); }
+/* breadcrumbs: muted slate, the current page darker; links tint to brand on hover */
+:root:not([data-theme='dark']) .crumbs { color: rgb(100 112 135); font-weight: 500; }
+:root:not([data-theme='dark']) .crumbs a { transition: color .2s ease; }
+:root:not([data-theme='dark']) .crumbs a:hover { color: rgb(var(--brand-text)); }
+:root:not([data-theme='dark']) .crumbs [aria-hidden='true'] { color: rgb(var(--line-strong)); font-size: 1.05em; }
+:root:not([data-theme='dark']) .crumbs [aria-current='page'] { color: rgb(var(--ink)); font-weight: 650; }
+/* empty states: an intentional card, the icon in a soft lavender tile, clear heading and hint, a rise-in once */
+@keyframes emptyIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+:root:not([data-theme='dark']) .empty-state { gap: .5rem; padding: 2.75rem 1.5rem; animation: emptyIn .5s var(--ease-out) both; }
+:root:not([data-theme='dark']) .empty-ico { display: grid; place-items: center; width: 4.5rem; height: 4.5rem; margin-bottom: .75rem; border-radius: 1.25rem; font-size: 2rem; background: linear-gradient(160deg, #F7F2FF 0%, #EFE6FF 100%); border: 1px solid #E6D9FF; box-shadow: 0 8px 18px -10px rgb(114 0 255 / .35), inset 0 1px 0 #fff; }
+:root:not([data-theme='dark']) .empty-state h3 { font-size: 1.125rem; font-weight: 700; }
+:root:not([data-theme='dark']) .empty-state p { color: rgb(var(--muted)); line-height: 1.55; }
+:root:not([data-theme='dark']) .empty-action { margin-top: .75rem; }
+/* venue owner portal background (light theme only), three quiet layers behind everything:
+ *   1. the #F8FAFC base (body), 2. ::before a soft lavender wash toward #F3EEFF with a purple glow top-right and a lavender one
+ *   bottom-left, plus ::after a barely visible dot texture that fades out down the page, 3. the white cards on top.
+ * Both layers are fixed to the viewport (no overflow, no repaint while scrolling), sit behind the content and never take clicks. */
+@keyframes portalBgIn { from { opacity: 0; } to { opacity: 1; } }
+:root:not([data-theme='dark']) .owner-portal { position: relative; isolation: isolate; }
+:root:not([data-theme='dark']) .owner-portal::before, :root:not([data-theme='dark']) .owner-portal::after { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; animation: portalBgIn .7s ease-out both; }
+:root:not([data-theme='dark']) .owner-portal::before {
+  background:
+    radial-gradient(60vmax 45vmax at 100% 0%, rgb(124 58 237 / .10), transparent 65%),
+    radial-gradient(50vmax 40vmax at 0% 100%, rgb(196 170 255 / .16), transparent 65%),
+    linear-gradient(160deg, #F8FAFC 0%, #F8FAFC 40%, #F3EEFF 100%);
+}
+:root:not([data-theme='dark']) .owner-portal::after {
+  background-image: radial-gradient(rgb(71 85 105 / .13) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, transparent 100%);
+}
+/* the top bar lets a hint of the background through */
+:root:not([data-theme='dark']) .owner-portal .portal-top { background: rgb(255 255 255 / .78); }
+/* switching themes: colours cross-fade instead of snapping */
+@media (prefers-reduced-motion: no-preference) {
+  .theme-switching, .theme-switching *, .theme-switching *::before, .theme-switching *::after { transition: background-color .3s ease, border-color .3s ease, color .3s ease, fill .3s ease, box-shadow .3s ease !important; }
+}
+/* sidebar: white, a lavender highlight with a brand bar instead of a solid purple pill */
+:root:not([data-theme='dark']) aside { background: rgb(var(--surface)); }
+:root:not([data-theme='dark']) .nav-pill { background: rgb(241 234 255); box-shadow: inset 3px 0 0 rgb(var(--brand)); }
+:root:not([data-theme='dark']) .fancy-nav aside nav a[aria-current='page'] { color: rgb(var(--brand-text)); box-shadow: none; }
+:root:not([data-theme='dark']) .fancy-nav aside nav a[aria-current='page'] .nav-ico { background: rgb(255 255 255); box-shadow: var(--shadow-xs); }
+:root:not([data-theme='dark']) .fancy-nav aside nav a:not([aria-current='page']) { color: rgb(70 76 99); }
+:root:not([data-theme='dark']) .fancy-nav aside nav a:not([aria-current='page']):hover { transform: none; box-shadow: none; background: rgb(var(--surface2)); color: rgb(var(--ink)); }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Dashboard stat cards: a gentle lift, a brighter border and a soft shadow on hover, the arrow nudges right, the
+ * revenue card glows purple, the cards fade up one after another once. Reduced motion turns it all off (rule above).
+ * ---------------------------------------------------------------------------------------------------------------- */
+:root .stat-card { transition: transform .3s cubic-bezier(.22, 1, .36, 1), box-shadow .3s ease, border-color .3s ease; will-change: transform; }
+:root .stat-card:hover, :root .stat-card:focus-visible { transform: translateY(-4px); border-color: rgb(var(--brand) / .55); box-shadow: 0 14px 28px -16px rgb(16 24 40 / .28), 0 0 0 1px rgb(var(--brand) / .10); }
+.stat-card:focus-visible { outline: 2px solid rgb(var(--brand) / .6); outline-offset: 2px; }
+:root .stat-accent:hover, :root .stat-accent:focus-visible { border-color: rgb(var(--brand) / .8); box-shadow: 0 16px 34px -14px rgb(var(--brand) / .55), 0 0 0 1px rgb(var(--brand) / .18); }
+.stat-arrow { opacity: .55; transition: transform .3s cubic-bezier(.22, 1, .36, 1), color .3s ease, opacity .3s ease; }
+.stat-card:hover .stat-arrow, .stat-card:focus-visible .stat-arrow { transform: translateX(4px); opacity: 1; color: rgb(var(--brand-text)); }
+@keyframes statEnter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.stat-enter { animation: statEnter .5s cubic-bezier(.22, 1, .36, 1) backwards; } /* backwards: once in, the hover lift owns the transform */
+@keyframes statPing { 0% { transform: scale(1); opacity: .55; } 70%, 100% { transform: scale(2.4); opacity: 0; } }
+.stat-ping { animation: statPing 2.4s cubic-bezier(0, 0, .2, 1) infinite; }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Sidebar animations (venue owner and admin portals). All subtle, all one-off except hover; reduced motion turns them off.
+ * ---------------------------------------------------------------------------------------------------------------- */
+/* 1. the sidebar slides in from the left when the portal opens */
+@keyframes sideEnter { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+.side-enter { animation: sideEnter .55s cubic-bezier(.22, 1, .36, 1) backwards; }
+/* 2. the menu rows fade in one after another */
+@keyframes sideRow { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+.side-nav > *:not(span) { animation: sideRow .45s cubic-bezier(.22, 1, .36, 1) backwards; }
+.side-nav > *:nth-child(2) { animation-delay: .08s; } .side-nav > *:nth-child(3) { animation-delay: .12s; } .side-nav > *:nth-child(4) { animation-delay: .16s; }
+.side-nav > *:nth-child(5) { animation-delay: .20s; } .side-nav > *:nth-child(6) { animation-delay: .24s; } .side-nav > *:nth-child(7) { animation-delay: .28s; }
+.side-nav > *:nth-child(8) { animation-delay: .32s; } .side-nav > *:nth-child(n+9) { animation-delay: .36s; }
+/* 3. opening a group: its links cascade in */
+@keyframes sideCascade { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.side-group > * { animation: sideCascade .32s cubic-bezier(.22, 1, .36, 1) backwards; }
+.side-group > *:nth-child(2) { animation-delay: .04s; } .side-group > *:nth-child(3) { animation-delay: .08s; } .side-group > *:nth-child(4) { animation-delay: .12s; }
+.side-group > *:nth-child(5) { animation-delay: .16s; } .side-group > *:nth-child(n+6) { animation-delay: .2s; }
+/* 4. the group arrow turns with a little spring, and 11. nudges down on hover */
+.side-chevron { transition: transform .4s cubic-bezier(.34, 1.56, .64, 1), opacity .2s; opacity: .7; }
+.side-group-btn { transition: background-color .2s ease, color .2s ease, padding-left .25s ease; }
+.side-group-btn:hover { padding-left: 1rem; color: rgb(var(--ink)); }
+.side-group-btn:hover .side-chevron { opacity: 1; }
+.side-group-btn:hover .side-chevron:not(.rotate-180) { transform: translateY(2px); }
+/* 5. a soft sweep of light across the row on hover */
+.side-link { isolation: isolate; overflow: hidden; }
+.side-link::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(90deg, transparent, rgb(var(--brand) / .10), transparent); transform: translateX(-110%); transition: transform .55s cubic-bezier(.22, 1, .36, 1); pointer-events: none; }
+.side-link:not([aria-current='page']):hover::before { transform: translateX(110%); }
+/* 6. the label slides a touch to the right */
+.side-label { transition: transform .25s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, max-width .3s ease; }
+.side-link:hover .side-label { transform: translateX(3px); }
+/* 7. the active bar grows in each time a new page is chosen (the pill is redrawn per page) */
+.nav-pill { position: relative; }
+@keyframes sideBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.nav-pill::after { content: ''; position: absolute; left: 0; top: 18%; bottom: 18%; width: 3px; border-radius: 3px; background: rgb(255 255 255 / .75); transform-origin: center; animation: sideBar .45s cubic-bezier(.34, 1.56, .64, 1) .1s backwards; }
+:root:not([data-theme='dark']) .nav-pill::after { background: rgb(var(--brand)); }
+:root:not([data-theme='dark']) .nav-pill { box-shadow: none; }
+/* 8. a ripple from where the row was pressed */
+@keyframes sideRipple { from { transform: translate(-50%, -50%) scale(0); opacity: .35; } to { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+.side-ripple::after { content: ''; position: absolute; left: var(--rx); top: var(--ry); width: 240px; height: 240px; border-radius: 50%; background: rgb(var(--brand) / .5); pointer-events: none; z-index: -1; animation: sideRipple .6s ease-out forwards; }
+/* 9. the logo lifts gently on hover */
+.side-logo { transition: transform .35s cubic-bezier(.22, 1, .36, 1), filter .35s ease; transform-origin: left center; }
+.side-logo:hover { transform: translateY(-2px) rotate(-1.5deg); filter: drop-shadow(0 6px 10px rgb(114 0 255 / .25)); }
+/* 10. the collapse button: the arrow flips with a spring, and a ring pulses once on hover */
+.side-toggle-ico { transition: transform .5s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes sideRing { from { box-shadow: 0 0 0 0 rgb(var(--brand) / .35); } to { box-shadow: 0 0 0 8px rgb(var(--brand) / 0); } }
+.side-toggle:hover { animation: sideRing .7s ease-out; }
+/* 12. keyboard focus gets a soft glow */
+.fancy-nav aside a:focus-visible, .fancy-nav aside button:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--brand) / .6); transition: box-shadow .2s ease; }
+/* 13. the phone menu: the panel slides in from the left over a fading backdrop */
+@keyframes drawerIn { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
+.drawer-panel { animation: drawerIn .35s cubic-bezier(.22, 1, .36, 1) both; box-shadow: 12px 0 40px -12px rgb(16 24 40 / .35); }
+.drawer-backdrop { animation: backdropIn .3s ease both; }
+/* 14. the icon disc glows softly on hover */
+.fancy-nav aside nav a .nav-ico { transition: background-color .25s ease, box-shadow .25s ease; }
+.fancy-nav aside nav a:not([aria-current='page']):hover .nav-ico { box-shadow: 0 0 0 3px rgb(var(--brand) / .12); }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Venue owner portal: each page's main heading enters once when the page opens (fade up, blur to sharp) and a short
+ * purple underline draws in from the left. The underline is absolutely placed, so nothing below moves. The breadcrumb
+ * fades in. Reduced motion turns it off (rule above).
+ * ---------------------------------------------------------------------------------------------------------------- */
+@keyframes headingIn { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } 60% { filter: blur(0); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes headingLine { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+@keyframes crumbIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.owner-portal main h1 { position: relative; animation: headingIn .56s cubic-bezier(.22, 1, .36, 1) both; }
+.owner-portal main h1::after { content: ''; position: absolute; left: 0; bottom: 0; width: 44px; height: 3px; border-radius: 3px;
+  background: linear-gradient(90deg, #7200FF, #A100FF); transform-origin: left center; animation: headingLine .55s cubic-bezier(.22, 1, .36, 1) .28s both; pointer-events: none; }
+[data-theme='dark'] .owner-portal main h1::after { background: linear-gradient(90deg, #8C3CFF, #C084FC); }
+.owner-portal main .crumb-in { animation: crumbIn .4s ease-out both; }
+
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Cards, site-wide (both themes): calm, physical motion.
+ *  - Reveal: a card rises in softly the first time it scrolls into view (scroll-driven, so no JS; cards already on screen
+ *    at load are simply shown; browsers without scroll timelines just show the card).
+ *  - Clickable cards (a link, a button, or .group): on hover they lift 4px on a springy ease, the shadow deepens, the
+ *    border warms to brand purple and a faint light sweeps across once; pressing settles them back down.
+ *  - Plain cards: only the shadow breathes a little on hover; they never move, so nothing looks clickable that is not.
+ * The venue cards (.spot) and dashboard stat cards keep their own effects. Reduced motion turns all of it off (rule above).
+ * ---------------------------------------------------------------------------------------------------------------- */
+:root {
+  --card-ease: cubic-bezier(.22, 1, .36, 1);
+  --card-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --card-hover-shadow: 0 2px 6px -2px rgb(15 23 42 / .06), 0 18px 36px -14px rgb(15 23 42 / .20), 0 0 0 1px rgb(var(--brand) / .06);
+  --card-rest-hover-shadow: 0 1px 2px rgb(15 23 42 / .04), 0 8px 20px -8px rgb(15 23 42 / .12);
+  --card-sheen: rgb(var(--brand) / .07);
+}
+[data-theme='dark'] {
+  --card-hover-shadow: 0 20px 40px -16px rgb(0 0 0 / .65), 0 0 0 1px rgb(var(--brand) / .30), 0 0 28px -10px rgb(var(--brand) / .45);
+  --card-rest-hover-shadow: 0 12px 28px -14px rgb(0 0 0 / .55);
+  --card-sheen: rgb(255 255 255 / .05);
+}
+.card:not(.spot) { transition: transform .45s var(--card-spring), box-shadow .35s var(--card-ease), border-color .35s var(--card-ease), background-position .9s var(--card-ease); }
+
+/* reveal on scroll (top-level cards only, not dialogs, not cards that already have an entrance animation) */
+/* translate / scale (not transform) so the finished reveal never overrides the hover lift */
+@keyframes cardReveal { from { opacity: 0; translate: 0 18px; scale: .985; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@supports (animation-timeline: view()) {
+  .card:not(.card .card):not([role='dialog']):not([class*='animate-']):not(.stat-enter):not(.empty-state) {
+    animation: cardReveal linear both; animation-timeline: view(); animation-range: entry 0% entry 70%;
+  }
+}
+
+@media (hover: hover) {
+  /* plain cards: a soft breath of shadow */
+  .card:not(a):not(button):not(.group):not(.spot):not(.stat-card):not([role='dialog']):hover { box-shadow: var(--card-rest-hover-shadow); }
+  /* clickable cards: lift, deeper shadow, brand border, one light sweep */
+  :is(a.card, button.card, .card.group):not(.spot):not(.stat-card) {
+    background-image: linear-gradient(115deg, transparent 35%, var(--card-sheen) 50%, transparent 65%);
+    background-size: 250% 100%; background-position: 130% 0; background-repeat: no-repeat;
+  }
+  :is(a.card, button.card, .card.group):not(.spot):not(.stat-card):hover {
+    transform: translateY(-4px); box-shadow: var(--card-hover-shadow); border-color: rgb(var(--brand) / .40); background-position: -30% 0;
+  }
+  /* pictures inside a clickable card ease in a touch */
+  :is(a.card, button.card, .card.group):not(.spot) img { transition: transform .7s var(--card-ease); }
+  :is(a.card, button.card, .card.group):not(.spot):hover img { transform: scale(1.04); }
+}
+:is(a.card, button.card, .card.group):not(.spot):not(.stat-card):active { transform: translateY(-1px) scale(.99); transition-duration: .12s; }
+:is(a.card, button.card):focus-visible { outline: 2px solid rgb(var(--brand) / .6); outline-offset: 3px; }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Venue owner portal: text animations. Each plays once when its element appears (a page opens, a table loads);
+ * none loop. Text is only faded, moved or wiped (clip-path), so nothing around it reflows. Reduced motion: off.
+ * ---------------------------------------------------------------------------------------------------------------- */
+@keyframes txtUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes txtFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes txtWipe { from { clip-path: inset(0 100% 0 0); opacity: .2; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes titleSwap { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes wave { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(16deg); } 20% { transform: rotate(-8deg); } 40% { transform: rotate(-4deg); } 50% { transform: rotate(10deg); } }
+/* 1. the line under the page heading follows it in */
+.owner-portal main h1 + p { animation: txtUp .5s cubic-bezier(.22, 1, .36, 1) .16s backwards; }
+/* 2. section and card headings rise in */
+.owner-portal main h2, .owner-portal main h3 { animation: txtUp .45s cubic-bezier(.22, 1, .36, 1) .1s backwards; }
+/* 3. stat card labels wipe in from the left, one card after another (they follow the card's own delay) */
+.owner-portal main .stat-card > p:first-child { animation: txtWipe .6s cubic-bezier(.22, 1, .36, 1) .2s backwards; }
+/* 4. table: the header fades, then the rows come in one by one */
+.owner-portal main .table-head th { animation: txtFade .4s ease-out backwards; }
+.owner-portal main tbody tr { animation: rowFlip .5s cubic-bezier(.16, 1, .3, 1) backwards; transform-origin: top center; }
+.owner-portal main tbody tr:nth-child(1) { animation-delay: .05s; } .owner-portal main tbody tr:nth-child(2) { animation-delay: .09s; } .owner-portal main tbody tr:nth-child(3) { animation-delay: .13s; }
+.owner-portal main tbody tr:nth-child(4) { animation-delay: .17s; } .owner-portal main tbody tr:nth-child(5) { animation-delay: .21s; } .owner-portal main tbody tr:nth-child(6) { animation-delay: .25s; }
+.owner-portal main tbody tr:nth-child(7) { animation-delay: .29s; } .owner-portal main tbody tr:nth-child(8) { animation-delay: .33s; } .owner-portal main tbody tr:nth-child(n+9) { animation-delay: .37s; }
+/* 5. the greeting's hand waves once */
+.wave-hand { display: inline-block; transform-origin: 70% 75%; animation: wave 1.6s ease-in-out .5s 1; }
+/* 6. the page title in the top bar swaps with a small rise when the page changes */
+.title-swap { animation: titleSwap .42s cubic-bezier(.22, 1, .36, 1) both; }
+/* 7. form labels and their small hints settle in on a new page */
+.owner-portal main label > span:first-child { animation: txtFade .45s ease-out .12s backwards; }
+/* 8. the "No bookings found" style messages: title then hint */
+.owner-portal main .empty-state h3 { animation: txtUp .45s cubic-bezier(.22, 1, .36, 1) .15s backwards; }
+.owner-portal main .empty-state p { animation: txtUp .45s cubic-bezier(.22, 1, .36, 1) .25s backwards; }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Motion in the style of jusgo.in, in PlaynX colours: 3D modal entrance, dropdown drop-in, button ripple, error drop
+ * and shake, bell swing and badge pop, a beam and ball along the top bar on page change, table rows flipping in,
+ * password Show/Hide flip, a ball rolling past Log out, a ring when a chip is chosen, and toasts that pop in.
+ * Everything plays once per event; reduced motion turns it off (rule above).
+ * ---------------------------------------------------------------------------------------------------------------- */
+@keyframes mModal { from { opacity: 0; transform: perspective(1000px) rotateX(-10deg) translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes mFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mSettle { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+@keyframes mMenu { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes mRipple { from { opacity: .4; transform: translate(-50%, -50%) scale(0); } to { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
+@keyframes mError { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@keyframes mShake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 50% { transform: translateX(4px); } 75% { transform: translateX(-2px); } }
+@keyframes bellSwing { 0%, 100% { rotate: 0deg; } 30% { rotate: 12deg; } 65% { rotate: -7deg; } }
+@keyframes mNudge { 0% { transform: scale(.7); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes routeBeam { 0% { opacity: 1; transform: translateX(-110%) skewX(-16deg); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateX(260%) skewX(-16deg); } }
+@keyframes routeBall { 0% { opacity: 1; transform: translateX(-2rem) rotate(0deg); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(calc(100cqw + 2rem)) rotate(540deg); } }
+@keyframes rowFlip { from { opacity: 0; transform: perspective(800px) rotateX(-50deg); } to { opacity: 1; transform: none; } }
+@keyframes eyeFlip { from { opacity: 0; transform: rotateX(-80deg); } to { opacity: 1; transform: none; } }
+@keyframes logoutRoll { 0% { opacity: 1; transform: translateX(-1rem) rotate(0deg); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateX(9rem) rotate(540deg); } }
+@keyframes chipRing { from { box-shadow: 0 0 0 0 rgb(var(--brand) / .45); } to { box-shadow: 0 0 0 9px rgb(var(--brand) / 0); } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes checkPop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1); } }
+
+/* 1. pop-ups tip forward in 3D over a fading backdrop; inline panels settle */
+.m-modal { animation: mModal .32s cubic-bezier(.16, 1, .3, 1) both; transform-origin: center top; }
+.modal-backdrop { animation: mFade .22s ease-out both; }
+.m-settle { animation: mSettle .25s cubic-bezier(.16, 1, .3, 1) both; }
+/* 2. dropdown menus drop in */
+.m-menu { animation: mMenu .18s ease-out both; transform-origin: top right; }
+/* 3. button ripple (set up by ButtonRipple) */
+.btn-ripple-rel { position: relative; }
+.btn-ripple { overflow: hidden; isolation: isolate; }
+.btn-ripple::after { content: ''; position: absolute; left: var(--rx); top: var(--ry); width: var(--rs, 200px); height: var(--rs, 200px); border-radius: 50%; background: currentColor; opacity: .25; pointer-events: none; z-index: -1; animation: mRipple .55s ease-out forwards; }
+/* 4. error messages drop in; form errors shake once */
+[role='alert'] { animation: mError .22s ease-out both; }
+[role='alert'][class*='danger'] { animation: mError .22s ease-out both, mShake .4s ease-in-out .05s 1; }
+/* 5. the bell swings on hover; the unread badge pops when the count changes */
+.bell-ico { transform-origin: 50% 10%; }
+.bell:hover .bell-ico { animation: bellSwing .6s ease-in-out 1; }
+.bell-badge { animation: mNudge .45s cubic-bezier(.34, 1.56, .64, 1) both; }
+/* 6. page change: a light beam and a ball run along the bottom edge of the portal top bar */
+.route-sweep { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: visible; pointer-events: none; container-type: inline-size; }
+.route-beam { position: absolute; inset: 0; width: 30%; background: linear-gradient(90deg, transparent, rgb(var(--brand) / .9), rgb(161 0 255 / .9), transparent); border-radius: 2px; animation: routeBeam .7s cubic-bezier(.45, 0, .2, 1) forwards; }
+.route-ball { position: absolute; left: 0; bottom: -5px; font-size: 11px; font-style: normal; line-height: 1; animation: routeBall .7s cubic-bezier(.45, 0, .2, 1) forwards; }
+/* 7. table rows flip in (owner portal rows also stagger, rule above) */
+.admin-theme main tbody tr { animation: rowFlip .5s cubic-bezier(.16, 1, .3, 1) backwards; transform-origin: top center; }
+/* 8. password Show / Hide flips */
+.eye-flip { animation: eyeFlip .3s cubic-bezier(.16, 1, .3, 1) both; }
+/* 9. a ball rolls past "Log out" on hover */
+.logout-roll { position: relative; overflow: hidden; }
+.logout-roll::after { content: '⚽'; position: absolute; left: 0; top: 50%; margin-top: -.55em; font-size: .9em; opacity: 0; pointer-events: none; }
+.logout-roll:hover::after { animation: logoutRoll .9s cubic-bezier(.45, 0, .2, 1) 1; }
+/* 10. a ring goes out when a chip (date preset, filter) is chosen */
+.chip[aria-pressed='true'] { animation: chipRing .6s ease-out 1; }
+/* 11. toasts pop in and their mark pops */
+.toast-in { animation: toastIn .3s cubic-bezier(.16, 1, .3, 1) both; }
+.toast-mark { animation: checkPop .45s cubic-bezier(.34, 1.56, .64, 1) .1s both; }
+

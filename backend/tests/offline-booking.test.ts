@@ -17,7 +17,7 @@ describe('offline (walk-in) booking', () => {
   it('books a slot for someone without an account: confirmed at once, at the slot price, with no commission and no payment record', async () => {
     const f = await fresh(); const date = nextDay();
     const r = await book(f, body(f, date, '10:00', { customerEmail: 'ravi@example.com', notes: 'Birthday match' })).expect(201);
-    expect(r.body).toMatchObject({ subtotal: 800, total: 800, discount: 0, venueName: 'Green Arena', areaName: 'Turf A' }); expect(r.body.reference).toMatch(/^KO-/);
+    expect(r.body).toMatchObject({ subtotal: 800, total: 800, discount: 0, venueName: 'Green Arena', areaName: 'Turf A' }); expect(r.body.reference).toMatch(/^PX-/);
     const b = await row(r.body.reference);
     expect(b).toMatchObject({ source: 'offline', status: 'confirmed', customer_id: null, walkin_name: 'Ravi Kumar', walkin_phone: '+919876543210', walkin_email: 'ravi@example.com', payment_method: 'cash', notes: 'Birthday match' });
     expect(Number(b.commission_amount)).toBe(0); expect(Number(b.owner_amount)).toBe(800);
@@ -113,12 +113,12 @@ describe('where an offline booking shows up', () => {
     expect(adminList.find((x) => x.reference === r.body.reference)).toMatchObject({ customer_name: 'Admin Visible' });
     expect(((await request(env.app).get('/api/bookings').set(c.auth).expect(200)).body.bookings as any[]).some((x) => x.reference === r.body.reference)).toBe(false);
   });
-  it('as revenue for the owner, but not as money KickOff owes: it never appears in settlements or payouts', async () => {
+  it('as revenue for the owner, but not as money PlaynX owes: it never appears in settlements or payouts', async () => {
     const f = await fresh(); const date = nextDay();
     const r = await book(f, body(f, date, '10:00')).expect(201);
     await env.db.query(`UPDATE bookings SET status='completed' WHERE reference=$1`, [r.body.reference]); // the game has been played
     const s = (await request(env.app).get('/api/owner/settlements').set(f.owner.auth).expect(200)).body.summary;
-    expect(s.totalEarnings).toBe(0); expect(s.available).toBe(0); // KickOff never received this money
+    expect(s.totalEarnings).toBe(0); expect(s.available).toBe(0); // PlaynX never received this money
     const owed = (await request(env.app).get('/api/admin/payouts').set(admin.auth).expect(200)).body.balances as any[];
     expect(owed.find((b) => b.owner_id === f.owner.id)).toBeUndefined();
     const rep = (await request(env.app).get('/api/owner/analytics').query({ from: dateIn(-1), to: dateIn(60) }).set(f.owner.auth).expect(200)).body;
@@ -127,7 +127,7 @@ describe('where an offline booking shows up', () => {
 });
 
 describe('cancelling an offline booking', () => {
-  it('frees the slot, refunds nothing (nothing was paid through KickOff), and does not fail for lack of a customer', async () => {
+  it('frees the slot, refunds nothing (nothing was paid through PlaynX), and does not fail for lack of a customer', async () => {
     const f = await fresh(); const date = nextDay(); const c = await registerUser(env, 'customer');
     const r = await book(f, body(f, date, '10:00')).expect(201);
     const b = await row(r.body.reference);

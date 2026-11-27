@@ -10,6 +10,8 @@ export interface Storage {
   /** Sensitive documents (identity, business, venue proofs). Stored privately; returns an opaque key, never a URL. */
   putPrivate(folder: string, data: Buffer, contentType: string): Promise<string>;
   getPrivate(key: string): Promise<{ data: Buffer; contentType: string }>;
+  /** removes a private file (for example documents a person asked us to delete) */
+  deletePrivate?(key: string): Promise<void>;
 }
 
 const EXT: Record<string, string> = {
@@ -42,6 +44,7 @@ export function createStorage(cfg: Config, uploadDir = path.resolve('uploads'), 
         if (error || !data) throw new Error(`Private download failed: ${error?.message ?? 'not found'}`);
         return { data: Buffer.from(await data.arrayBuffer()), contentType: data.type || TYPE_BY_EXT[key.split('.').pop() ?? ''] || 'application/octet-stream' };
       },
+      async deletePrivate(key) { await sb.storage.from(cfg.SUPABASE_PRIVATE_BUCKET).remove([key]); },
     };
   }
   return {
@@ -63,6 +66,10 @@ export function createStorage(cfg: Config, uploadDir = path.resolve('uploads'), 
       const full = path.join(privateDir, safeFolder(path.dirname(key)), path.basename(key));
       if (!full.startsWith(privateDir)) throw new Error('Invalid key');
       return { data: fs.readFileSync(full), contentType: TYPE_BY_EXT[path.extname(full).slice(1)] ?? 'application/octet-stream' };
+    },
+    async deletePrivate(key) {
+      const full = path.join(privateDir, safeFolder(path.dirname(key)), path.basename(key));
+      if (full.startsWith(privateDir)) fs.rmSync(full, { force: true });
     },
   };
 }

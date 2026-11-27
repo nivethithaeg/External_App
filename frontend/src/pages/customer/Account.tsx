@@ -1,3 +1,4 @@
+import { TicketAttachmentList, TicketFilePicker, uploadTicketFiles } from '../../components/TicketAttachments';
 import { useMemo, useState, type FormEvent } from 'react';
 import { NotificationPreferences } from '../../components/NotificationPreferences';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -49,7 +50,7 @@ export function BookingsPage() {
               <Link to={`/bookings/${b.id}`} className="flex flex-wrap items-center justify-between gap-3">
                 <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-bold">{b.venue_name}</h3><Badge status={b.status} />{b.payment_status && <Badge status={b.payment_status}>Payment {titleCase(b.payment_status)}</Badge>}</div>
                   <p className="text-sm text-muted">{b.area_name} · {b.sport} · {fmtRange(b.starts_at, b.ends_at, b.timezone)} · {Math.round((new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 60000)} min</p><p className="text-xs text-muted">Booking {b.reference}</p></div>
-                <div className="text-right"><div className="font-display text-2xl font-bold">{money(b.total)}</div>{b.refund_status && <Badge status={b.refund_status}>Refund {b.refund_status}</Badge>}</div>
+                <div className="text-right"><div className="font-display text-2xl font-bold">{money(b.total)}</div>{b.advance_amount != null && <div className="text-xs text-muted">Paid {money(b.advance_amount)} advance{Number(b.amount_paid ?? b.advance_amount) < Number(b.total) ? ` · ${money(Math.max(0, Number(b.total) - Number(b.amount_paid ?? b.advance_amount)))} at the venue` : ''}</div>}{b.refund_status && <Badge status={b.refund_status}>Refund {b.refund_status}</Badge>}</div>
               </Link>
               <div className="flex flex-wrap gap-2 border-t border-line pt-3 text-sm">
                 <Link className="btn-ghost !py-1.5" to={`/bookings/${b.id}`}>Details</Link>
@@ -118,7 +119,7 @@ export function BookingDetailPage() {
   const resume = useMutation({
     mutationFn: async () => {
       const { order } = await get<{ order: { id: string; amount: number; keyId: string } }>(`/bookings/${id}/order`);
-      const res = await openCheckout({ keyId: order.keyId, orderId: order.id, amount: order.amount, name: 'KickOff', description: 'Turf booking', prefill: { name: user?.fullName, email: user?.email } });
+      const res = await openCheckout({ keyId: order.keyId, orderId: order.id, amount: order.amount, name: 'PlaynX', description: 'Turf booking', prefill: { name: user?.fullName, email: user?.email } });
       await post(`/bookings/${id}/verify-payment`, res);
       celebratePayment(); // the server has verified the payment
     },
@@ -151,6 +152,16 @@ export function BookingDetailPage() {
                 <div className="space-y-1 border-t border-line pt-4 text-sm"><div className="flex justify-between"><span className="text-muted">Subtotal</span><span>{money(b.subtotal)}</span></div>
                   {b.discount > 0 && <div className="flex justify-between text-ok"><span>Discount</span><span>−{money(b.discount)}</span></div>}
                   <div className="flex justify-between text-lg font-bold"><span>Total</span><span>{money(b.total)}</span></div>
+                  {b.advance_amount != null ? (() => {
+                    // an advance booking: only part was paid online; the rest is paid at the venue
+                    const total = Number(b.total), adv = Number(b.advance_amount), paid = Number(b.amount_paid ?? adv), left = Math.max(0, Math.round((total - paid - Number(b.payment_discount ?? 0)) * 100) / 100);
+                    const pct = total > 0 ? Math.round((adv / total) * 100) : 0;
+                    return (<div aria-label="Advance payment" className="mt-2 space-y-1 rounded-xl border border-brand/40 bg-brand/10 p-3">
+                      <div className="flex justify-between"><span>Paid online (advance {pct}%)</span><b>{money(adv)}</b></div>
+                      {paid > adv && <div className="flex justify-between"><span>Paid at the venue</span><b>{money(Math.round((paid - adv) * 100) / 100)}</b></div>}
+                      <div className="flex justify-between"><span>{left > 0 ? 'To pay at the venue after the game' : 'Balance'}</span><b className={left > 0 ? 'text-warn' : 'text-ok'}>{left > 0 ? money(left) : 'Fully paid'}</b></div>
+                      <p className="text-xs text-muted">You paid {pct}% when you booked. {left > 0 ? `Pay the remaining ${money(left)} at the venue after your game.` : 'Nothing is left to pay.'}</p></div>);
+                  })() : null}
                   <div className="flex justify-between text-xs text-muted"><span>Payment</span><span>{b.payment_status ? titleCase(b.payment_status) : 'Not required'}</span></div></div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {b.status === 'pending' && <Button onClick={() => resume.mutate()} loading={resume.isPending}>Complete payment</Button>}
@@ -178,7 +189,7 @@ export function BookingDetailPage() {
 
           {canMove && <RescheduleDialog b={b} open={moveOpen} onClose={() => setMoveOpen(false)} onDone={refresh} />}
           <Modal open={cancelOpen} onClose={() => setCancelOpen(false)} title="Cancel this booking?">
-            <p className="mb-3 text-sm text-muted">{b.status === 'pending' ? 'This booking has not been paid yet and will simply be released.' : refundable ? `You'll get a full refund of ${money(b.total)}.` : `This is within ${b.cancellation_hours}h of start time, so it is not eligible for a refund.`}</p>
+            <p className="mb-3 text-sm text-muted">{b.status === 'pending' ? 'This booking has not been paid yet and will simply be released.' : refundable ? `You'll get a full refund of ${money(b.advance_amount ?? b.total)}.` : `This is within ${b.cancellation_hours}h of start time, so it is not eligible for a refund.`}</p>
             {b.series_id && b.status === 'confirmed' && (b.series_count ?? 0) > 1 && (
               <div role="radiogroup" aria-label="Which games" className="mb-3 space-y-1.5 text-sm">
                 {([['one', 'Only this game'], ['later', 'This game and every later one in the series']] as const).map(([v, l]) => <label key={v} className="flex cursor-pointer items-center gap-2"><input type="radio" name="scope" checked={scope === v} onChange={() => setScope(v)} />{l}</label>)}</div>)}
@@ -241,7 +252,7 @@ export function ProfilePage() {
     }),
     onSuccess: (r: any) => {
       setUser(r.user); setForm(null); setAltOpen(null); setErrs({}); qc.invalidateQueries({ queryKey: ['profile'] });
-      try { localStorage.setItem('kickoff_pref_sports', JSON.stringify(f.sports)); } catch { /* ignore */ }
+      try { localStorage.setItem('playnx_pref_sports', JSON.stringify(f.sports)); } catch { /* ignore */ }
       toast(changed.email || changed.phone ? 'Profile saved. Please verify your new ' + [changed.email && 'email', changed.phone && 'mobile number'].filter(Boolean).join(' and ') + '.' : 'Profile saved');
     },
     onError: (e) => { setErrs(fieldErrors(e)); toast(apiError(e), 'error'); },
@@ -331,18 +342,20 @@ export function SupportPage() {
   const [bookingId, setBookingId] = useState(params.get('booking') ?? ''); const [bkErr, setBkErr] = useState(''); // the booking the ticket is about (so support can refund it)
   const list = useQuery({ queryKey: ['tickets'], queryFn: () => get<{ tickets: any[] }>('/me/tickets') });
   const myBookings = useQuery({ queryKey: ['bookings', 'for-ticket'], enabled: open, queryFn: () => get<{ bookings: any[] }>('/bookings', { limit: 50 }) });
-  const create = useMutation({ mutationFn: () => post('/me/tickets', { ...form, bookingId: bookingId && bookingId !== 'none' ? bookingId : undefined }),
-    onSuccess: () => { setOpen(false); setBookingId(''); setForm({ subject: '', message: '', priority: 'normal' }); qc.invalidateQueries({ queryKey: ['tickets'] }); toast('Ticket submitted. We\'ll reply soon.'); }, onError: (e) => toast(apiError(e), 'error') });
+  const [files, setFiles] = useState<File[]>([]);
+  const create = useMutation({ mutationFn: async () => { const r: any = await post('/me/tickets', { ...form, bookingId: bookingId && bookingId !== 'none' ? bookingId : undefined }); const failed = files.length && r?.ticket?.id ? await uploadTicketFiles(r.ticket.id, files) : 0; if (failed) toast(`${failed} file${failed === 1 ? '' : 's'} could not be attached. Open the ticket to try again.`, 'error'); return r; },
+    onSuccess: () => { setOpen(false); setBookingId(''); setFiles([]); setForm({ subject: '', message: '', priority: 'normal' }); qc.invalidateQueries({ queryKey: ['tickets'] }); toast('Ticket submitted. We\'ll reply soon.'); }, onError: (e) => toast(apiError(e), 'error') });
   const { user } = useAuth(); const owner = user?.role === 'owner'; const [attempted, setAttempted] = useState(false);
   if (owner) return ( // a venue owner's page, laid out like JusGo support page: raise a ticket on the page, and the tickets under it
-    <div className="mx-auto max-w-3xl space-y-5"><PageHeader title="Admin Support" subtitle="Raise a ticket and KickOff support will get back to you." />
+    <div className="mx-auto max-w-3xl space-y-5"><PageHeader title="Admin Support" subtitle="Raise a ticket and PlaynX support will get back to you." />
       <Card className="space-y-4 p-5"><h2 className="text-2xl font-bold">Raise a ticket</h2>
         <form className="space-y-4" noValidate onSubmit={(e) => { e.preventDefault(); setAttempted(true); if (form.subject.trim().length < 3 || form.message.trim().length < 5) return; create.mutate(); setAttempted(false); }}>
           <Input mandatory label="Subject" placeholder="What do you need help with?" maxLength={150} value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} error={attempted && form.subject.trim().length < 3 ? 'Enter a subject (at least 3 letters).' : undefined} />
           <Textarea mandatory label="Description" placeholder="Tell us what happened, and where (venue, playing area, booking ID)." maxLength={2000} rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} error={attempted && form.message.trim().length < 5 ? 'Describe the problem (at least 5 letters).' : undefined} />
+          <TicketFilePicker files={files} onChange={setFiles} />
           <div className="flex justify-end"><Button type="submit" loading={create.isPending}>Raise ticket</Button></div></form></Card>
       <Card className="space-y-3 p-5"><h2 className="text-2xl font-bold">Your tickets</h2>
-        <QueryBoundary q={list} empty={(d) => d.tickets.length === 0 && <Empty icon="🎧" title="No tickets yet" hint="Tickets you raise appear here, with KickOff's reply." />}>
+        <QueryBoundary q={list} empty={(d) => d.tickets.length === 0 && <Empty icon="🎧" title="No tickets yet" hint="Tickets you raise appear here, with PlaynX's reply." />}>
           {(d) => <ul className="space-y-2" aria-label="Your tickets">{d.tickets.map((t) => <li key={t.id}><button onClick={() => setSel(t.id)} className="card flex w-full items-center justify-between gap-3 p-4 text-left transition hover:border-brand/50"><div><h3 className="text-lg font-bold">{t.subject}</h3><p className="text-xs text-muted">Updated {fmtDateTime(t.updated_at)}</p></div><Badge status={t.status === 'closed' || t.status === 'resolved' ? 'approved' : 'pending'}>{titleCase(t.status)}</Badge></button></li>)}</ul>}
         </QueryBoundary></Card>
       {sel && <TicketThread id={sel} onClose={() => setSel(null)} base="/me/tickets" />}
@@ -358,6 +371,7 @@ export function SupportPage() {
           <Select mandatory label="Which booking had the problem?" value={bookingId} onChange={(e) => { setBookingId(e.target.value); setBkErr(''); }} error={bkErr || undefined}><option value="" disabled>Choose the booking</option><option value="none">Something else (not about a booking)</option>{(myBookings.data?.bookings ?? []).map((b: any) => <option key={b.id} value={b.id}>{b.reference} · {b.venue_name} · {fmtDateTime(b.starts_at)}</option>)}</Select>
           <Input label="Subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} required minLength={3} maxLength={150} />
           <Textarea label="How can we help?" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required minLength={5} rows={5} />
+          <TicketFilePicker files={files} onChange={setFiles} />
           <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" loading={create.isPending}>Submit</Button></div>
         </form></Modal>
       {sel && <TicketThread id={sel} onClose={() => setSel(null)} base="/me/tickets" />}
@@ -369,7 +383,7 @@ export function TicketThread({ id, onClose, base, admin }: { id: string; onClose
   const qc = useQueryClient();
   const { toast } = useToast();
   const [msg, setMsg] = useState(''); const [status, setStatus] = useState('in_progress');
-  const q = useQuery({ queryKey: ['ticket', id], queryFn: () => get<{ ticket: any; messages: any[]; booking?: any }>(`${base}/${id}`) });
+  const q = useQuery({ queryKey: ['ticket', id], queryFn: () => get<{ ticket: any; messages: any[]; booking?: any; attachments?: { id: string; kind: 'image' | 'video' }[] }>(`${base}/${id}`) });
   // admin: settle the complaint with a refund of all that is left, or a part
   const [rf, setRf] = useState<{ mode: 'full' | 'part'; amount: string; reason: string }>({ mode: 'full', amount: '', reason: '' }); const [rfErr, setRfErr] = useState('');
   const [linkId, setLinkId] = useState('');
@@ -381,12 +395,13 @@ export function TicketThread({ id, onClose, base, admin }: { id: string; onClose
   return (
     <Modal open onClose={onClose} title={q.data?.ticket.subject ?? 'Ticket'} wide>
       {q.isLoading ? <Loading /> : q.isError ? <ErrorBox error={q.error} /> : (<div className="space-y-4">
+        <TicketAttachmentList base={base} ticketId={id} items={q.data!.attachments ?? []} />
         <div className="max-h-80 space-y-2 overflow-y-auto">{q.data!.messages.map((m) => (
           <div key={m.id} className={`rounded-xl p-3 text-sm ${m.author_role === 'admin' ? 'bg-brand/15' : 'bg-surface2'}`}><div className="mb-1 flex justify-between text-xs text-muted"><b>{m.author}{m.author_role === 'admin' ? ' (Support)' : ''}</b><span>{fmtDateTime(m.created_at)}</span></div>{m.body}</div>))}</div>
         {admin && !q.data!.booking && (q.data as any).bookings && (
           <section aria-label="Booking and refund" className="space-y-2 rounded-xl border border-line p-4 text-sm">
-            <p className="text-muted">The customer did not say which booking this is about. Choose one of their paid KickOff bookings to refund it.</p>
-            {(q.data as any).bookings.length === 0 ? <p className="text-muted">This customer has no paid KickOff booking to refund.</p>
+            <p className="text-muted">The customer did not say which booking this is about. Choose one of their paid PlaynX bookings to refund it.</p>
+            {(q.data as any).bookings.length === 0 ? <p className="text-muted">This customer has no paid PlaynX booking to refund.</p>
               : <Select label="Booking" value={linkId} onChange={(e) => setLinkId(e.target.value)}><option value="">Choose a booking</option>{(q.data as any).bookings.map((b: any) => <option key={b.id} value={b.id}>{b.reference} · {b.venue_name} · {fmtDateTime(b.starts_at)} · can refund {money(b.refundable)}</option>)}</Select>}
           </section>)}
         {admin && (q.data!.booking || ((q.data as any).bookings ?? []).find((b: any) => b.id === linkId)) && (() => { const bk = q.data!.booking ?? (q.data as any).bookings.find((b: any) => b.id === linkId); const max = Number(bk.refundable);

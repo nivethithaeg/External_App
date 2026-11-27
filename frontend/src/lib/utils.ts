@@ -34,7 +34,7 @@ const toBase64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
 
 /**
  * Saves a generated file (CSV report, PDF…).
- * - Inside the KICKOFF mobile app (a WebView) browsers can't save blobs, so the file is handed to the app, which saves and shares it.
+ * - Inside the PlaynX mobile app (a WebView) browsers can't save blobs, so the file is handed to the app, which saves and shares it.
  * - On a phone browser the share sheet ("Save to Files", Drive, WhatsApp…) is offered first.
  * - Everywhere else it is an ordinary download.
  */

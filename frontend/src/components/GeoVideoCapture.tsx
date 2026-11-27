@@ -39,6 +39,7 @@ function Recorder({ onClose, onDone }: { onClose(): void; onDone(v: GeoVideo): v
       .catch((e: Error) => setCam(e?.name === 'NotAllowedError' ? 'Camera access was blocked. Allow the camera and microphone for this site in your browser settings, then try again.' : 'No camera could be started on this device.'));
     return () => { cancelled = true; stream.current?.getTracks().forEach((t) => t.stop()); };
   }, []);
+  useEffect(() => { if (cam === 'ready' && video.current && stream.current && video.current.srcObject !== stream.current) { video.current.srcObject = stream.current; video.current.play?.().catch(() => {}); } }, [cam]);
   useEffect(() => { // the live location, kept fresh while the camera is open
     if (!navigator.geolocation) { setPlace('This device cannot share its location.'); return; }
     const id = navigator.geolocation.watchPosition((p) => { pos.current = { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }; setPlace(`Location ready, accurate to about ${Math.round(p.coords.accuracy)} m`); },
@@ -66,8 +67,11 @@ function Recorder({ onClose, onDone }: { onClose(): void; onDone(v: GeoVideo): v
   return (
     <Modal open onClose={() => { if (!recording) onClose(); }} title="Record a video at the venue">
       <div className="space-y-3">
-        {cam === 'starting' ? <p className="text-sm text-muted">Starting the camera…</p> : cam !== 'ready' ? <p role="alert" className="text-sm text-danger">{cam}</p>
-          : <video ref={video} muted playsInline className="aspect-video w-full rounded-xl bg-black object-cover" aria-label="Camera" />}
+        {/* the video box is always on the page, so the camera picture has somewhere to go the moment it is ready (it used to stay black) */}
+        <div className={cam !== 'starting' && cam !== 'ready' ? 'hidden' : 'relative overflow-hidden rounded-xl bg-black'}>
+          <video ref={video} muted playsInline autoPlay className="aspect-video w-full object-cover" aria-label="Camera" />
+          {cam === 'starting' && <p className="absolute inset-0 grid place-items-center text-sm text-white/80">Starting the camera…</p>}</div>
+        {cam !== 'starting' && cam !== 'ready' && <p role="alert" className="text-sm text-danger">{cam}</p>}
         <p className="text-xs text-muted" aria-live="polite">{place || 'Getting your location…'}</p>
         {recording && <p className="text-sm font-semibold text-danger" aria-live="polite">● Recording {secs} s (up to {MAX_SECONDS} s)</p>}
         {err && <p role="alert" className="text-sm text-danger">{err}</p>}

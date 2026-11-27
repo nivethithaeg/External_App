@@ -46,7 +46,7 @@ export function ownerInsightRoutes(ctx: Ctx) {
     const q = (sql: string, p: unknown[] = [id]) => ctx.db.query(sql, p);
     const [counts, today, month, upcoming, awaiting, slots, status, schedule, next, popular, tx, venues, d, w, m, y, gtv] = await Promise.all([
       q(`SELECT (SELECT count(*)::int FROM venues WHERE owner_id=$1) AS venues, (SELECT count(*)::int FROM venues WHERE owner_id=$1 AND status='approved') AS active_venues,
-            (SELECT count(*)::int FROM playing_areas a JOIN venues v ON v.id=a.venue_id WHERE v.owner_id=$1) AS areas,
+            (SELECT count(*)::int FROM playing_areas a JOIN venues v ON v.id=a.venue_id WHERE v.owner_id=$1 AND a.deletion_status IS DISTINCT FROM 'deleted') AS areas,
             (SELECT count(*)::int FROM playing_areas a JOIN venues v ON v.id=a.venue_id WHERE v.owner_id=$1 AND a.is_active) AS active_areas`),
       q(`SELECT count(*)::int AS bookings, COALESCE(sum(b.owner_amount),0)::float8 AS revenue FROM bookings b JOIN venues v ON v.id=b.venue_id
           WHERE v.owner_id=$1 AND b.status IN ${LIVE} AND ${local('lower(b.during)')}::date = ${nowLocal}::date`),
@@ -108,8 +108,8 @@ export function ownerInsightRoutes(ctx: Ctx) {
   r.get('/areas', async (req, res) => {
     const { rows } = await ctx.db.query(
       `SELECT a.id, a.name, a.surface, a.capacity, a.slot_minutes, a.min_duration_minutes, a.max_duration_minutes, a.is_active, v.id AS venue_id, v.name AS venue_name, v.status AS venue_status,
-         (SELECT COALESCE(json_agg(sp.name ORDER BY sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id) AS sports,
-         (SELECT COALESCE(json_agg(s.sport_id ORDER BY s.sport_id), '[]') FROM playing_area_sports s WHERE s.playing_area_id=a.id) AS sport_ids,
+         (SELECT COALESCE(json_agg(sp.name ORDER BY sp.sort_order, sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id) AS sports,
+         (SELECT COALESCE(json_agg(s.sport_id ORDER BY (SELECT sort_order FROM sports WHERE id=s.sport_id), s.sport_id), '[]') FROM playing_area_sports s WHERE s.playing_area_id=a.id) AS sport_ids,
          (SELECT min(price_per_hour) FROM pricing_rules p WHERE p.area_id=a.id)::float8 AS min_price, (SELECT max(price_per_hour) FROM pricing_rules p WHERE p.area_id=a.id)::float8 AS max_price,
          (SELECT count(*)::int FROM playing_area_hours d WHERE d.playing_area_id=a.id AND NOT d.is_closed) AS open_days,
          (SELECT count(*)::int FROM bookings b WHERE b.area_id=a.id AND b.status IN ${LIVE}) AS bookings
@@ -242,7 +242,7 @@ export function ownerInsightRoutes(ctx: Ctx) {
     const b = bank.rows[0];
     const e = (await escrowByOwner(ctx.db, ctx.now(), id)).get(id) ?? emptyEscrow;
     res.json({
-      // customers pay KickOff first: money is released to the owner holdHours after the game, unless the customer has an open complaint
+      // customers pay PlaynX first: money is released to the owner holdHours after the game, unless the customer has an open complaint
       summary: { totalEarnings: earn.rows[0].total, completed: Math.round(paid * 100) / 100, testPaid: Math.round(payouts.rows.filter((p: any) => p.status === 'paid' && p.is_test).reduce((n: number, p: any) => n + Number(p.amount), 0) * 100) / 100, pending: Math.round(pending * 100) / 100, available: Math.max(0, Math.round((e.released - paid - pending) * 100) / 100), holding: e.holding, disputed: e.disputed, holdHours: await holdHours(ctx.db) },
       payouts: payouts.rows, bank: { accountName: b.bank_account_name, accountNumber: mask(b.bank_account_number), ifsc: b.bank_ifsc, upi: b.upi_id, verified: b.bank_verified },
     });
@@ -261,7 +261,7 @@ export function ownerInsightRoutes(ctx: Ctx) {
     const v = (await ctx.db.query(`SELECT id, name, status FROM venues WHERE owner_id=$1 AND status <> 'suspended' ORDER BY created_at DESC LIMIT 1`, [id])).rows[0] ?? null;
     type Item = { id: string; label: string; done: boolean; link: string };
     const items: Item[] = [
-      { id: 'verified', label: 'Business details verified by KickOff', done: op?.verification_status === 'verified', link: '/owner/account/business' },
+      { id: 'verified', label: 'Business details verified by PlaynX', done: op?.verification_status === 'verified', link: '/owner/account/business' },
       { id: 'bank', label: 'Bank account added for payouts', done: !!op?.bank_account_number, link: '/owner/account/bank' },
       { id: 'venue', label: 'Create your venue', done: !!v, link: '/owner/venues/new' }];
     if (v) {

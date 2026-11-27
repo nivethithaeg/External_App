@@ -2,10 +2,13 @@ import { Router } from 'express';
 import type { Ctx } from '../types.js';
 import { confirmPayment, recordPaymentFailure } from '../lib/bookings.js';
 import { settlePayout } from '../lib/payouts.js';
+import { handleJusgoWebhook } from './jusgoLink.js';
 
 /** Mounted with express.raw() BEFORE the JSON parser: the signature is computed over the exact raw body. */
 export function webhookRoutes(ctx: Ctx) {
   const r = Router();
+  /** JusGo customer-link events (signed with the JusGo webhook secret) */
+  r.post('/jusgo', (req, res) => handleJusgoWebhook(ctx, req, res));
   r.post('/razorpay', async (req, res) => {
     const raw: Buffer = req.body;
     const sig = req.header('x-razorpay-signature') ?? '';

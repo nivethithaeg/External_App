@@ -4,10 +4,11 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react
 import { Logo } from '../../components/Logo';
 import { Button, Input, Loading, Modal, PasswordInput, Select } from '../../components/ui';
 import { VerifyRow, useVerificationOptions } from '../../components/VerifyRow';
-import { useAuth, homeFor, landing } from '../../lib/auth';
+import { useAuth, homeFor, landing, type MfaChallenge, type User } from '../../lib/auth';
+import { AuthenticatorStep } from '../../components/AuthenticatorStep';
 import { apiError, fieldErrors, get, post, put, uploadAvatar } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-import { ThemeToggle } from '../../components/Layouts';
+import { BackButton, ThemeToggle } from '../../components/Layouts';
 import { GoogleSignIn } from '../../components/GoogleSignIn';
 import { FILTERS } from '../../lib/inputFilters';
 import { TermsCheckbox } from '../../components/TermsCheckbox';
@@ -20,23 +21,23 @@ const COPY: Record<Portal, { title: string; sub: string; side: string }> = {
   admin: { title: 'Control room.', sub: 'Administrator access', side: 'Approvals, payments, refunds and platform health in one place.' },
 };
 
-export function Shell({ portal, children }: { portal: Portal; children: React.ReactNode }) {
+export function Shell({ portal, children, back = true }: { portal: Portal; children: React.ReactNode; back?: boolean }) {
   const c = COPY[portal];
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="pitch-stripes relative hidden flex-col justify-between overflow-hidden bg-[#151515] p-10 text-white lg:flex">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-[#FF6B22]/20 blur-3xl" />
-        <Logo />
+      <div className="pitch-stripes relative hidden flex-col justify-between overflow-hidden bg-[#101B5C] p-10 text-white lg:flex">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-[#7200FF]/20 blur-3xl" />
+        <Logo onDark />
         <svg viewBox="0 0 400 240" className="mx-auto w-full max-w-md opacity-90" aria-hidden="true">
-          <rect x="10" y="10" width="380" height="220" rx="14" fill="#292929" stroke="#FF6B22" strokeWidth="3" />
-          <line x1="200" y1="10" x2="200" y2="230" stroke="#FF6B22" strokeWidth="3" /><circle cx="200" cy="120" r="38" fill="none" stroke="#FF6B22" strokeWidth="3" />
-          <rect x="10" y="70" width="60" height="100" fill="none" stroke="#FF6B22" strokeWidth="3" /><rect x="330" y="70" width="60" height="100" fill="none" stroke="#FF6B22" strokeWidth="3" />
-          <circle cx="200" cy="120" r="7" fill="#FF6B22" />
+          <rect x="10" y="10" width="380" height="220" rx="14" fill="#1B2A80" stroke="#7200FF" strokeWidth="3" />
+          <line x1="200" y1="10" x2="200" y2="230" stroke="#7200FF" strokeWidth="3" /><circle cx="200" cy="120" r="38" fill="none" stroke="#7200FF" strokeWidth="3" />
+          <rect x="10" y="70" width="60" height="100" fill="none" stroke="#7200FF" strokeWidth="3" /><rect x="330" y="70" width="60" height="100" fill="none" stroke="#7200FF" strokeWidth="3" />
+          <circle cx="200" cy="120" r="7" fill="#7200FF" />
         </svg>
         <div><h2 className="font-display text-6xl font-extrabold uppercase leading-none">{c.title}</h2><p className="mt-3 max-w-sm text-white/70">{c.side}</p></div>
       </div>
       <div className="flex flex-col p-6">
-        <div className="flex items-center justify-between"><Link to="/" className="lg:hidden"><Logo /></Link><span className="hidden lg:block" /><ThemeToggle /></div>
+        <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3">{back && <div className="[&>button]:!mb-0"><BackButton home="/" /></div>}<Link to="/" className="lg:hidden"><Logo /></Link></div><ThemeToggle /></div>
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-10">{children}</div>
       </div>
     </div>
@@ -50,12 +51,13 @@ export function LoginPage({ portal }: { portal: Portal }) {
   const { toast } = useToast();
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const [mfa, setMfa] = useState<MfaChallenge | null>(null);
   const from = (loc.state as any)?.from as string | undefined;
-  if (user) { const l = user.role === 'customer' ? landing(user, from) : { to: from ?? homeFor(user), state: undefined }; return <Navigate to={l.to} replace state={l.state} />; }
+  if (user && !mfa) { const l = user.role === 'customer' ? landing(user, from) : { to: from ?? homeFor(user), state: undefined }; return <Navigate to={l.to} replace state={l.state} />; }
 
   const google = async (credential: string) => {
     setError(''); setBusy(true);
-    try { const u = await googleLogin(credential, portal === 'customer' ? { create: true } : {}); nav(u.role === portal && from ? from : homeFor(u), { replace: true }); }
+    try { const u = await googleLogin(credential, portal === 'customer' ? { create: true } : {}); const l = u.role === 'customer' ? landing(u, u.role === portal ? from : undefined) : { to: u.role === portal && from ? from : homeFor(u), state: undefined }; nav(l.to, { replace: true, state: l.state }); } // a new Google player still confirms the emailed code
     catch (err) { setError(apiError(err)); } finally { setBusy(false); }
   };
   const submit = async (e: FormEvent) => {
@@ -63,12 +65,17 @@ export function LoginPage({ portal }: { portal: Portal }) {
     if (!email || !password) return setError('Enter your email or mobile number and password');
     setBusy(true);
     try {
-      const u = await login(email.trim(), password);
-      if (u.role !== portal) { toast(`Signed in as ${u.role}. Redirecting to the ${u.role} portal.`, 'info'); }
-      const l = u.role === 'customer' ? landing(u, u.role === portal ? from : undefined) : { to: u.role === portal && from ? from : homeFor(u), state: undefined };
-      nav(l.to, { replace: true, state: l.state });
+      const r = await login(email.trim(), password);
+      if ('mfa' in r) return setMfa(r.mfa); // an admin: the authenticator code comes next
+      finish(r);
     } catch (err) { setError(apiError(err)); } finally { setBusy(false); }
   };
+  const finish = (u: User) => {
+    if (u.role !== portal) { toast(`Signed in as ${u.role}. Redirecting to the ${u.role} portal.`, 'info'); }
+    const l = u.role === 'customer' ? landing(u, u.role === portal ? from : undefined) : { to: u.role === portal && from ? from : homeFor(u), state: undefined };
+    nav(l.to, { replace: true, state: l.state });
+  };
+  if (mfa) return <Shell portal={portal}><AuthenticatorStep challenge={mfa} onDone={finish} onCancel={() => { setMfa(null); setPassword(''); }} /></Shell>;
   return (
     <Shell portal={portal}>
       <h1 className="text-5xl font-extrabold">Welcome back</h1>
@@ -87,12 +94,12 @@ export function LoginPage({ portal }: { portal: Portal }) {
 }
 
 const CUSTOMER_MORE = {
-  intro: 'Customers are the players. KickOff helps you find a turf near you, check its real availability and book it in a few taps.',
+  intro: 'Customers are the players. PlaynX helps you find a turf near you, check its real availability and book it in a few taps.',
   sections: [
     { title: 'Find the right turf', items: ['Search venues by city, locality or name.', 'Filter by sport, date, time and price.', 'See photos, facilities, ratings and reviews before you book.', 'Save your favourite venues.'] },
-    { title: 'Book and pay', items: ['Pick a playing area, a date and a time slot that is really free.', 'See the exact price, including any offer or coupon, before paying.', 'Pay online and get a booking reference instantly.', 'Use your KickOff wallet balance and refunds on your next booking.'] },
+    { title: 'Book and pay', items: ['Pick a playing area, a date and a time slot that is really free.', 'See the exact price, including any offer or coupon, before paying.', 'Pay online and get a booking reference instantly.', 'Use your PlaynX wallet balance and refunds on your next booking.'] },
     { title: 'Manage your games', items: ['See upcoming and past bookings in one place.', 'Cancel according to the venue’s cancellation rules; eligible refunds go back to you.', 'Show your booking reference at the venue to check in.', 'Join open games and play with new people.'] },
-    { title: 'After the game', items: ['Rate the venue and write a review.', 'Get booking, payment and refund updates as notifications.', 'Contact KickOff support from Help & Support if something goes wrong.'] },
+    { title: 'After the game', items: ['Rate the venue and write a review.', 'Get booking, payment and refund updates as notifications.', 'Contact PlaynX support from Help & Support if something goes wrong.'] },
   ],
 };
 
@@ -150,8 +157,8 @@ function AccountTypeChoice() {
   ];
   return (
     <Shell portal="customer">
-      <h1 className="text-5xl font-extrabold">Join KickOff</h1>
-      <p className="mb-6 mt-1 text-sm text-muted">First, tell us how you will use KickOff.</p>
+      <h1 className="text-5xl font-extrabold">Join PlaynX</h1>
+      <p className="mb-6 mt-1 text-sm text-muted">First, tell us how you will use PlaynX.</p>
       <div className="grid gap-3" role="group" aria-label="Choose account type">
         {cards.map((c) => <RoleCard key={c.title} {...c} />)}
       </div>
@@ -172,7 +179,7 @@ function OwnerRegisterForm({ portal }: { portal: 'customer' | 'owner' }) {
   const google = async (credential: string) => {
     setError('');
     setBusy(true);
-    try { const u = await googleLogin(credential, { create: true, role: portal }); nav(homeFor(u), { replace: true }); }
+    try { const u = await googleLogin(credential, { create: true, role: portal }); const l = u.role === 'customer' ? landing(u) : u.role === 'owner' && !u.emailVerified ? { to: '/verify-account', state: { from: '/owner/complete-signup' } } : { to: homeFor(u), state: undefined }; nav(l.to, { replace: true, state: { ...(l.state ?? {}), fresh: true } }); } // the code was emailed at sign-up, so the verify step opens next
     catch (err) { setError(apiError(err)); } finally { setBusy(false); }
   };
   const submit = async (e: FormEvent) => {
@@ -195,7 +202,7 @@ function OwnerRegisterForm({ portal }: { portal: 'customer' | 'owner' }) {
   };
   return (
     <Shell portal={portal}>
-      <h1 className="text-5xl font-extrabold">{portal === 'owner' ? 'List your turf' : 'Join KickOff'}</h1>
+      <h1 className="text-5xl font-extrabold">{portal === 'owner' ? 'List your turf' : 'Join PlaynX'}</h1>
       <p className="mb-6 mt-1 text-sm text-muted">{portal === 'owner' ? 'Create your owner account. We verify every venue before it goes live.' : 'Create an account to book turfs near you.'}</p>
       <form onSubmit={submit} className="space-y-3.5" noValidate>
         <div className="grid grid-cols-2 gap-3">
@@ -314,7 +321,7 @@ function CustomerSignup() {
   return (
     <Shell portal="customer">
       <ChangeType />
-      <h1 className="text-5xl font-extrabold">Join KickOff</h1>
+      <h1 className="text-5xl font-extrabold">Join PlaynX</h1>
       <p className="mb-6 mt-1 text-sm text-muted">Create an account to book turfs near you.</p>
       <form onSubmit={submit} className="space-y-3.5" noValidate>
         <Input mandatory label="Full name" filter={FILTERS.personName} autoComplete="name" value={f.fullName} onChange={set('fullName')} error={errs.fullName} />
@@ -349,15 +356,15 @@ export function VerifyAccountPage() {
   const opts = useVerificationOptions();
   if (loading) return <Loading />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'customer') return <Navigate to={homeFor(user)} replace />;
-  const done = () => nav(st?.from ?? '/', { replace: true });
+  if (user.role !== 'customer' && user.role !== 'owner') return <Navigate to={homeFor(user)} replace />; // a venue owner who signed up with Google confirms the email here too
+  const done = () => nav(st?.from ?? homeFor(user), { replace: true });
   const verified = async () => { await refresh(); qc.invalidateQueries({ queryKey: ['profile'] }); };
   // The email code is required. The only exception is a server with no email provider at all, where a code could never arrive.
   const noEmailProvider = opts.data?.email === false;
   const emailOk = user.emailVerified || noEmailProvider, phoneOk = user.phoneVerified || !user.phone || !opts.data?.sms;
   const justSent = !!st?.fresh; // right after sign-up the server has already emailed a code
   return (
-    <Shell portal="customer">
+    <Shell portal={user.role === 'owner' ? 'owner' : 'customer'} back={false}>
       <h1 className="text-4xl font-extrabold">Verify your email</h1>
       <p className="mb-5 mt-1 text-sm text-muted">{user.emailVerified ? 'Your email is verified.' : `${justSent ? 'We sent' : 'We will send'} a 6-digit code to ${user.email}. Enter it below to finish setting up your account. The code expires in 10 minutes.`}</p>
       {opts.isLoading ? <p className="text-sm text-muted">Checking…</p> : (
@@ -367,7 +374,7 @@ export function VerifyAccountPage() {
         </div>)}
       {noEmailProvider && !user.emailVerified && <p className="mt-3 text-xs text-muted">This server cannot send email yet, so verification is not possible right now.</p>}
       <Button className="mt-6 w-full" disabled={!emailOk} onClick={done}>Continue</Button>
-      {!user.emailVerified && !noEmailProvider && <p className="mt-2 text-center text-xs text-muted">Verify your email to continue. <button type="button" className="underline" onClick={() => { localStorage.removeItem('kickoff_token'); sessionStorage.removeItem('kickoff_token'); location.assign('/login'); }}>Use a different account</button></p>}
+      {!user.emailVerified && !noEmailProvider && <p className="mt-2 text-center text-xs text-muted">Verify your email to continue. <button type="button" className="underline" onClick={() => { localStorage.removeItem('playnx_token'); sessionStorage.removeItem('playnx_token'); location.assign('/login'); }}>Use a different account</button></p>}
       {user.emailVerified && !phoneOk && <p className="mt-2 text-center text-xs text-muted">You can verify your mobile any time from My Profile.</p>}
     </Shell>
   );
@@ -385,7 +392,8 @@ export function CompleteProfilePage() {
   if (loading) return <Loading />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'customer') return <Navigate to={homeFor(user)} replace />;
-  const done = () => nav(from ?? '/', { replace: true });
+  // next: the email code (a Google sign-up still confirms its email), then where the player was going
+  const done = () => { const l = landing(user, from); nav(l.to === '/complete-profile' ? (from ?? '/home') : l.to, { replace: true, state: l.to === '/verify-account' ? { ...(l.state ?? {}), fresh: true } : l.state }); };
   const save = async (e: FormEvent) => {
     e.preventDefault(); setErr('');
     const phone = f.phone.replace(/[\s-]/g, '');
@@ -397,10 +405,10 @@ export function CompleteProfilePage() {
     } catch (x) { setErr(apiError(x)); } finally { setBusy(false); }
   };
   return (
-    <Shell portal="customer">
+    <Shell portal="customer" back={false}>
       <h1 className="text-4xl font-extrabold">Almost there, {user.fullName.split(' ')[0]}</h1>
       {!user.phone ? (<>
-        <p className="mb-5 mt-1 text-sm text-muted">Add your mobile number so turf owners and KickOff can reach you about your bookings.</p>
+        <p className="mb-5 mt-1 text-sm text-muted">Add your mobile number so turf owners and PlaynX can reach you about your bookings.</p>
         <form onSubmit={save} className="space-y-3.5" noValidate>
           <Input mandatory label="Mobile number" filter={FILTERS.mobile} type="tel" inputMode="tel" autoComplete="tel" placeholder="9876543210" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} hint="We'll text a 6-digit code to verify it" />
           <Select label="Preferred sport (optional)" value={f.sport} onChange={(e) => setF({ ...f, sport: e.target.value })}><option value="">No preference</option>{sports.data?.sports.map((s) => <option key={s.id} value={s.slug}>{s.name}</option>)}</Select>

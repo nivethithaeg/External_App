@@ -23,7 +23,7 @@ const calls: { method: string; url: string; body?: any; params?: any }[] = [];
 let slotsReply: any;
 
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('kickoff_token', 't'); calls.length = 0; slotsReply = { slots: SLOTS, timezone: 'Asia/Kolkata' };
+  vi.clearAllMocks(); localStorage.clear(); sessionStorage.setItem('playnx_token', 't'); calls.length = 0; slotsReply = { slots: SLOTS, timezone: 'Asia/Kolkata' };
   vi.mocked(api.get).mockImplementation(async (url: string, params?: any) => {
     calls.push({ method: 'GET', url, params });
     if (/^\/areas\/.+\/slots$/.test(url)) { if (slotsReply instanceof Error) throw slotsReply; return slotsReply; }
@@ -123,7 +123,7 @@ describe('Add offline booking page', () => {
     await fillCustomer();
     await userEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
     const ok = await screen.findByLabelText('Booking confirmed');
-    expect(ok).toHaveTextContent('KO-ABC123'); expect(ok).toHaveTextContent('Ravi Kumar'); expect(ok).toHaveTextContent('Unpaid'); expect(ok).toHaveTextContent(/Nothing was charged through KickOff/);
+    expect(ok).toHaveTextContent('KO-ABC123'); expect(ok).toHaveTextContent('Ravi Kumar'); expect(ok).toHaveTextContent('Unpaid'); expect(ok).toHaveTextContent(/Nothing was charged through PlaynX/);
     await userEvent.click(within(ok).getByRole('button', { name: 'Add another offline booking' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Add offline booking' })).toBeInTheDocument(); expect(screen.getByLabelText(/Customer name/)).toHaveValue('');
   });

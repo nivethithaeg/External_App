@@ -1,4 +1,4 @@
-# KickOff: Turf Booking Platform
+# PlaynX: Turf Booking Platform
 
 Three portals in one app: **Customer** (`/`), **Turf Owner** (`/owner`), **Admin** (`/admin`).
 React + TypeScript + Tailwind + React Query (frontend) · Node/Express/TypeScript REST API · PostgreSQL (Supabase) · Razorpay · Google Maps · FCM · SMTP · Socket.IO.
@@ -12,7 +12,7 @@ backend/   Express API, SQL migrations, tests      frontend/  Vite React app, te
 cd backend  && npm i && DEMO=1 npm run dev:local     # real API on embedded Postgres (PGlite), loads optional demo venues
 cd frontend && npm i && npm run dev                  # http://localhost:5173 (proxies /api to :4000)
 ```
-Demo logins (only with `DEMO=1`): `admin@kickoff.local`, `owner@kickoff.local`, password `Kickoff@12345`. Customers register themselves; with no SMTP configured, OTP emails are only logged as a subject line, so read the code from the `otp_codes` flow in tests or configure SMTP.
+Demo logins (only with `DEMO=1`): `admin@playnx.local`, `owner@playnx.local`, password `PlaynX@12345`. Customers register themselves; with no SMTP configured, OTP emails are only logged as a subject line, so read the code from the `otp_codes` flow in tests or configure SMTP.
 Payments need Razorpay **test** keys in `backend/.env` (copy `.env.example`); without them checkout returns "Payments are not configured".
 
 ## Run against Supabase / Postgres

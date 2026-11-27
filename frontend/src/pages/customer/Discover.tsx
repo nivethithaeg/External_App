@@ -24,30 +24,14 @@ const SPORT_ICON: Record<string, string> = { football: '⚽', cricket: '🏏', b
 
 function useSports() { return useQuery({ queryKey: ['sports'], queryFn: () => get<{ sports: Sport[] }>('/sports'), staleTime: Infinity }); }
 
-function GuestHome() {
-  const sports = useSports();
+/** The booking page (/book): admin banners, then choose the venue, its playing area and a slot. Guests reach it from the landing page. */
+export function BookPage() {
   const banners = useQuery({ queryKey: ['banners'], queryFn: () => get<{ banners: any[] }>('/banners'), staleTime: 300000 });
-  const cities = useQuery({ queryKey: ['cities'], queryFn: () => get<{ cities: { city: string; venues: number }[] }>('/cities'), staleTime: 300000 });
-  const top = useQuery({ queryKey: ['venues', 'top'], queryFn: () => get<{ venues: VenueSummary[] }>('/venues', { limit: 6, sort: 'rating' }) });
   const [bannerIdx, setBannerIdx] = useState(0);
   const bn = banners.data?.banners ?? [];
   useEffect(() => { if (bn.length < 2) return; const id = setInterval(() => setBannerIdx((i) => (i + 1) % bn.length), 5000); return () => clearInterval(id); }, [bn.length]);
-
-
   return (
-    <div className="space-y-14">
-      <section className="pitch-stripes relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#151515] via-[#292929] to-[#151515] p-6 text-white sm:p-12">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-[#FF6B22]/25 blur-3xl" />
-        <svg viewBox="0 0 400 240" className="pointer-events-none absolute -bottom-6 -right-10 hidden w-[520px] opacity-25 md:block" aria-hidden="true"><rect x="10" y="10" width="380" height="220" rx="14" fill="none" stroke="#FF6B22" strokeWidth="3" /><line x1="200" y1="10" x2="200" y2="230" stroke="#FF6B22" strokeWidth="3" /><circle cx="200" cy="120" r="38" fill="none" stroke="#FF6B22" strokeWidth="3" /></svg>
-        <div className="relative max-w-2xl">
-          <p className="mb-3 inline-block rounded-full border border-[#FF6B22]/40 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#FF6B22]">Live availability · Instant confirmation</p>
-          <h1 className="font-display text-6xl font-extrabold uppercase leading-[.9] sm:text-8xl">Find your pitch.<br /><span className="text-[#FF6B22]">Own the game.</span></h1>
-          <p className="mt-4 max-w-lg text-white/75">Book football, cricket, badminton and more at verified turfs near you. Pick a slot, pay securely, get a booking confirmation.</p>
-          <div className="mt-7 flex flex-wrap gap-3"><Link to="/venues" className="btn-primary !px-6 !py-3 text-base">Browse turfs</Link><Link to="/register" className="btn !px-6 !py-3 text-base border border-white/30 text-white hover:bg-white/10">Create free account</Link></div>
-          
-        </div>
-      </section>
-
+    <div className="space-y-10">
       {bn.length > 0 && (
         <section aria-label="Offers" className="relative grid overflow-hidden rounded-2xl">
           {bn.map((b, i) => (
@@ -55,29 +39,7 @@ function GuestHome() {
           {bn.length > 1 && <span key={bannerIdx} aria-hidden="true" className="absolute bottom-0 left-0 h-1 w-full origin-left animate-bar bg-brand/80" />}
           {bn.length > 1 && <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">{bn.map((_, i) => <button key={i} aria-label={`Banner ${i + 1}`} onClick={() => setBannerIdx(i)} className={`h-2 rounded-full transition-all ${i === bannerIdx ? 'w-6 bg-brand' : 'w-2 bg-white/60'}`} />)}</div>}
         </section>)}
-
-      {(() => { const venues = (cities.data?.cities ?? []).reduce((n, c) => n + c.venues, 0); const nCities = cities.data?.cities.length ?? 0; const nSports = sports.data?.sports.length ?? 0;
-        return venues > 0 ? (
-          <Reveal><ul className="grid grid-cols-3 divide-x divide-line rounded-2xl border border-line bg-surface py-5 text-center" aria-label="KickOff at a glance">
-            {([['Turfs listed', venues], ['Cities', nCities], ['Sports', nSports]] as [string, number][]).map(([l, n]) => <li key={l}><div className="font-display text-4xl font-extrabold text-[rgb(var(--brand-text))] sm:text-5xl"><CountUp value={n} /></div><div className="text-xs font-semibold uppercase tracking-wider text-muted">{l}</div></li>)}
-          </ul></Reveal>) : null; })()}
-
       <HomeBooking />
-      <Reveal><AboutSection /></Reveal>
-      <Reveal><SportsSection sports={sports.data?.sports} /></Reveal>
-
-
-      {(cities.data?.cities.length ?? 0) > 0 && (
-        <section><h2 className="mb-4 text-4xl font-extrabold">Popular cities</h2>
-          <div className="flex flex-wrap gap-2">{cities.data!.cities.map((c) => <Link key={c.city} className="chip !px-4 !py-2 text-sm hover:border-brand hover:text-ink" to={`/venues?city=${encodeURIComponent(c.city)}`}>{c.city} · {c.venues}</Link>)}</div></section>)}
-
-      <Reveal><FeaturesSection /></Reveal>
-      <Reveal><StepsSection /></Reveal>
-      <Reveal><PlayerBenefits /></Reveal>
-      <Reveal><OwnerSection /></Reveal>
-      <Reveal><Testimonials /></Reveal>
-      <Reveal><FAQSection /></Reveal>
-      <Reveal><FinalCTA /></Reveal>
     </div>
   );
 }
@@ -109,8 +71,8 @@ export function HomeBooking() {
   useEffect(() => { const vs = list.data?.venues ?? []; if (!venueId && vs.length === 1) setVenueId(vs[0].id); }, [list.data, venueId]);
   useEffect(() => { if (window.location.hash === '#book') setTimeout(() => document.getElementById('book')?.scrollIntoView?.({ behavior: 'smooth' }), 50); }, []);
   return (
-    <section id="book" aria-label="Book a turf" className="scroll-mt-24 space-y-5">
-      <div><h2 className="text-4xl font-extrabold">Book a turf</h2><p className="text-sm text-muted">Filter by any detail you like, then choose a turf, its playing area and your slot.</p></div>
+    <section id="book" aria-label="Book a turf" className="brand-panel scroll-mt-24 space-y-5 p-5 sm:p-8">
+      <div><p className="mb-1 text-xs font-bold uppercase tracking-[.25em] text-[rgb(var(--brand-text))]">Book your game</p><h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Find Your Perfect <span className="bg-gradient-to-r from-[#7200FF] to-[#A100FF] bg-clip-text text-transparent">Playing Spot</span></h2><p className="text-sm text-muted">Filter by any detail you like, then choose a turf, its playing area and your slot.</p></div>
       <form className="grid grid-cols-2 items-end gap-3 sm:grid-cols-3 xl:grid-cols-[repeat(3,minmax(9rem,1fr))_auto_auto_auto] [&_[role=group]]:flex-nowrap" role="group" aria-label="Filters" noValidate onSubmit={(e) => { e.preventDefault(); applyFilters(); }}>
         <Select label="City" value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })}><option value="">All cities</option>{(citiesQ.data?.cities ?? []).map((c) => <option key={c.city} value={c.city}>{c.city}</option>)}</Select>
         <Select label="Sport" value={draft.sport} onChange={(e) => setDraft({ ...draft, sport: e.target.value })}><option value="">All sports</option>{(sportsQ.data?.sports ?? []).map((x) => <option key={x.id} value={x.slug}>{x.name}</option>)}</Select>
@@ -131,7 +93,7 @@ export function HomeBooking() {
               className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${venueId === x.id ? 'border-brand bg-brand/10' : 'border-line hover:border-brand/60'}`}>
               <span className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-surface2">{x.cover_image ? <img src={x.cover_image} alt="" className="h-full w-full object-cover" /> : null}</span>
               <span className="min-w-0 flex-1"><b className="block truncate text-base">{x.name}</b><span className="block truncate text-xs text-muted">{[x.address, x.city].filter(Boolean).join(', ')}</span>
-                {x.min_price != null && <span className="text-xs font-semibold text-[rgb(var(--brand-text))]">from {money(Number(x.min_price))}/hr</span>}</span>
+</span>
               {venueId === x.id && <span className="text-xs font-semibold text-[rgb(var(--brand-text))]">Selected</span>}</button></li>))}</ul></>)}
       </section>
       {venueId && (det.isLoading ? <Loading /> : det.isError ? <ErrorBox error={det.error} retry={() => det.refetch()} /> : v && (
@@ -139,14 +101,14 @@ export function HomeBooking() {
           <div className="space-y-8">
             <section id="home-areas" aria-label="Playing areas" className="scroll-mt-24"><h3 className="mb-1 text-2xl font-bold">Playing areas at {v.name}</h3><p className="mb-3 text-sm text-muted">{areaId ? 'Pick your slot, or choose another playing area.' : 'Choose a playing area to see its free slots and book.'}</p>
               <div className="grid gap-4 sm:grid-cols-2">{v.areas.map((a: any) => <AreaCard key={a.id} pct={v.discount_percent ?? 0} a={a} selected={areaId === a.id} onBook={() => { setAreaId(a.id); setTimeout(() => document.getElementById('home-book-slot')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50); }} />)}</div></section>
-            {areaId && <section id="home-book-slot" className="scroll-mt-24 border-t border-line pt-6"><BookingWidget wide key={`${areaId}-${flt.date}-${flt.from}-${flt.to}`} venueId={v.id} venueName={v.name} areas={v.areas as AreaInfo[]} timezone={v.timezone} areaId={areaId} onAreaChange={setAreaId} discountPercent={v.discount_percent ?? 0} startDate={flt.date || undefined} timeFrom={flt.from || undefined} timeTo={flt.to || undefined} /></section>}
+            {areaId && <section id="home-book-slot" className="scroll-mt-24 border-t border-line pt-6"><BookingWidget wide key={`${areaId}-${flt.date}-${flt.from}-${flt.to}`} venueId={v.id} venueName={v.name} areas={v.areas as AreaInfo[]} timezone={v.timezone} areaId={areaId} onAreaChange={setAreaId} discountPercent={v.discount_percent ?? 0} advancePercent={v.advance_percent ?? null} startDate={flt.date || undefined} timeFrom={flt.from || undefined} timeTo={flt.to || undefined} /></section>}
           </div>)))}
     </section>);
 }
 
 export function HomePage() {
   const { user } = useAuth();
-  return user?.role === 'customer' ? <CustomerHome /> : <GuestHome />;
+  return user?.role === 'customer' ? <CustomerHome /> : <BookPage />;
 }
 
 /** Filter keys the drawer controls; the search box and sort live outside it. */
@@ -204,7 +166,7 @@ export function VenuesPage() {
   if (hasGeo) chips.push({ key: 'near', label: 'Near me', remove: () => setSp((o) => { const n = new URLSearchParams(o); ['lat', 'lng', 'radiusKm'].forEach((k) => n.delete(k)); if (n.get('sort') === 'distance') n.delete('sort'); n.delete('page'); return n; }, { replace: true }) });
   const filterCount = chips.filter((c) => c.key !== 'q').length;
 
-  const orderedSports = [...(sports.data?.sports ?? [])].sort((a, b) => ['football', 'cricket', 'badminton'].indexOf(b.slug) - ['football', 'cricket', 'badminton'].indexOf(a.slug));
+  const orderedSports = sports.data?.sports ?? []; // already in the site's sport order (Cricket, Football, Badminton, then the rest)
   const facList = new Set(draft.facilities ? draft.facilities.split(',') : []);
   const toggleFac = (id: string, on: boolean) => { on ? facList.add(id) : facList.delete(id); upd('facilities', [...facList].sort((a, b) => +a - +b).join(',')); };
   const sig = q.data ? q.data.venues.map((v) => v.id).join(',') + view : 'loading';
@@ -216,28 +178,28 @@ export function VenuesPage() {
       <section aria-label="Find a turf" className="relative mb-6 overflow-hidden rounded-3xl border border-line">
         <div aria-hidden="true" className="absolute inset-0" style={{ backgroundImage: "linear-gradient(180deg, rgb(16 16 16 / .35), rgb(16 16 16 / .92)), url('/hero-stadium.jpg'), radial-gradient(ellipse at 50% -10%, #3a2a1c 0%, #161311 45%, #0b0b0b 100%)", backgroundSize: 'cover', backgroundPosition: 'center' }} />
         <svg aria-hidden="true" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full opacity-90">
-          <defs><linearGradient id="lb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FF8A32" stopOpacity=".5" /><stop offset="1" stopColor="#FF6500" stopOpacity="0" /></linearGradient></defs>
+          <defs><linearGradient id="lb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#A100FF" stopOpacity=".5" /><stop offset="1" stopColor="#7200FF" stopOpacity="0" /></linearGradient></defs>
           {[90, 230, 570, 710].map((x) => <g key={x}><rect x={x - 22} y="14" width="44" height="9" rx="2" fill="#fff4e6" /><path d={`M${x - 22} 23 L${x - 120} 260 H${x + 120} L${x + 22} 23Z`} fill="url(#lb)" /></g>)}
-          <g fill="none" stroke="#FF8A32" strokeOpacity=".22" strokeWidth="2"><path d="M0 225 Q400 170 800 225" /><path d="M0 245 Q400 195 800 245" /></g>
+          <g fill="none" stroke="#A100FF" strokeOpacity=".22" strokeWidth="2"><path d="M0 225 Q400 170 800 225" /><path d="M0 245 Q400 195 800 245" /></g>
         </svg>
         <div className="relative px-5 py-10 text-center sm:py-14">
-          <h1 className="font-display text-4xl font-extrabold uppercase leading-[1.05] sm:text-6xl">Book Your Favourite <span className="text-[#FF6500]">Turf</span> Today!</h1>
+          <h1 className="font-display text-4xl font-extrabold uppercase leading-[1.05] sm:text-6xl">Book Your Favourite <span className="text-[#7200FF]">Turf</span> Today!</h1>
           <p className="mt-2 text-sm font-semibold tracking-[.2em] text-white/75">Play&nbsp;•&nbsp;Connect&nbsp;•&nbsp;Enjoy</p>
-          <form role="search" aria-label="Search turfs" className="mx-auto mt-6 flex max-w-2xl items-center gap-2 rounded-2xl border border-white/15 bg-black/55 p-1.5 backdrop-blur transition focus-within:border-[#FF6500] focus-within:shadow-[0_0_0_3px_rgb(255_101_0/.22)]"
+          <form role="search" aria-label="Search turfs" className="mx-auto mt-6 flex max-w-2xl items-center gap-2 rounded-2xl border border-white/15 bg-black/55 p-1.5 backdrop-blur transition focus-within:border-[#7200FF] focus-within:shadow-[0_0_0_3px_rgb(255_101_0/.22)]"
             onSubmit={(e) => { e.preventDefault(); set('q', term.trim()); }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="ml-3 shrink-0 text-white/60" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             <input aria-label="Search turfs" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search turfs by name, area or city" className="min-w-0 flex-1 bg-transparent px-2 py-2.5 text-sm text-white outline-none placeholder:text-white/45" />
-            <button type="submit" className="rounded-xl bg-[#FF6500] px-5 py-2.5 text-sm font-bold text-[#101010] transition hover:scale-[1.03] hover:shadow-[0_0_18px_rgb(255_101_0/.5)] active:scale-95">Search</button>
-            <button type="button" onClick={openDrawer} className="relative flex items-center gap-1.5 rounded-xl border border-white/20 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:border-[#FF6500] hover:text-[#FF8A32] active:scale-95">
+            <button type="submit" className="rounded-xl bg-[#7200FF] px-5 py-2.5 text-sm font-bold text-[#0B1340] transition hover:scale-[1.03] hover:shadow-[0_0_18px_rgb(255_101_0/.5)] active:scale-95">Search</button>
+            <button type="button" onClick={openDrawer} className="relative flex items-center gap-1.5 rounded-xl border border-white/20 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:border-[#7200FF] hover:text-[#A100FF] active:scale-95">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>Filters
-              {filterCount > 0 && <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#FF6500] px-1 text-[10px] font-bold text-[#101010]">{filterCount}</span>}</button>
+              {filterCount > 0 && <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#7200FF] px-1 text-[10px] font-bold text-[#0B1340]">{filterCount}</span>}</button>
           </form>
           <AnimatePresence>{chips.length > 0 && (
             <motion.ul key="chips" aria-label="Applied filters" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="mx-auto mt-4 flex max-w-3xl flex-wrap justify-center gap-2">
               <AnimatePresence initial={false} mode="popLayout">{chips.map((c) => (
                 <motion.li key={c.key} layout initial={{ opacity: 0, scale: 0.8, x: -10 }} animate={{ opacity: 1, scale: 1, x: 0 }} exit={{ opacity: 0, scale: 0.6 }} transition={{ duration: 0.22 }}>
-                  <button type="button" onClick={c.remove} aria-label={`Remove filter ${c.label}`} className="flex items-center gap-1.5 rounded-full border border-[#FF6500]/70 bg-black/45 px-3.5 py-1.5 text-sm font-medium text-white backdrop-blur transition hover:bg-[#FF6500]/15 active:scale-95">{c.label}<span aria-hidden="true" className="text-[#FF6500]">✕</span></button></motion.li>))}
-              <motion.li key="__clear" layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button type="button" onClick={clearAll} className="rounded-full px-3 py-1.5 text-sm font-semibold text-[#FF8A32] underline-offset-4 transition hover:underline active:scale-95">Clear All</button></motion.li></AnimatePresence>
+                  <button type="button" onClick={c.remove} aria-label={`Remove filter ${c.label}`} className="flex items-center gap-1.5 rounded-full border border-[#7200FF]/70 bg-black/45 px-3.5 py-1.5 text-sm font-medium text-white backdrop-blur transition hover:bg-[#7200FF]/15 active:scale-95">{c.label}<span aria-hidden="true" className="text-[#7200FF]">✕</span></button></motion.li>))}
+              <motion.li key="__clear" layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button type="button" onClick={clearAll} className="rounded-full px-3 py-1.5 text-sm font-semibold text-[#A100FF] underline-offset-4 transition hover:underline active:scale-95">Clear All</button></motion.li></AnimatePresence>
             </motion.ul>)}</AnimatePresence>
         </div>
       </section>
@@ -251,7 +213,7 @@ export function VenuesPage() {
         </div>
         {q.isLoading ? <SkeletonCards /> : q.isError ? <ErrorBox error={q.error} retry={() => q.refetch()} /> : q.data!.venues.length === 0 ? (
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="card flex flex-col items-center gap-3 px-6 py-14 text-center">
-            <motion.div initial={{ scale: 0.4, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.1 }} className="grid h-20 w-20 place-items-center rounded-full bg-[#FF6500]/12 text-4xl ring-1 ring-[#FF6500]/40" aria-hidden="true">🏟️</motion.div>
+            <motion.div initial={{ scale: 0.4, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.1 }} className="grid h-20 w-20 place-items-center rounded-full bg-[#7200FF]/12 text-4xl ring-1 ring-[#7200FF]/40" aria-hidden="true">🏟️</motion.div>
             <h3 className="text-2xl font-bold">No turfs match these filters</h3>
             <p className="max-w-sm text-sm text-muted">Try a different sport, widen the price range, or choose another location. Turfs appear here as soon as they match.</p>
             <div className="flex flex-wrap justify-center gap-2"><Button onClick={clearAll}>Clear all filters</Button><Button variant="ghost" onClick={openDrawer}>Change filters</Button></div>
@@ -286,33 +248,33 @@ export function VenuesPage() {
         {open && (<>
           <motion.div key="veil" aria-hidden="true" className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={() => !applying && setOpen(false)} />
           <motion.aside key="drawer" role="dialog" aria-modal="true" aria-label="Filters" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'tween', ease: [0.22, 1, 0.36, 1], duration: 0.35 }}
-            className="fixed inset-y-0 right-0 z-[61] flex w-full flex-col border-l border-[#FF6500]/60 bg-[#141414] shadow-[-12px_0_48px_-8px_rgb(255_101_0/.25)] sm:w-[440px] sm:rounded-l-3xl">
+            className="fixed inset-y-0 right-0 z-[61] flex w-full flex-col border-l border-[#7200FF]/60 bg-[#141414] shadow-[-12px_0_48px_-8px_rgb(255_101_0/.25)] sm:w-[440px] sm:rounded-l-3xl">
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
-              <h2 className="flex items-center gap-2 text-2xl font-bold"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[#FF6500]"><path d="M3 5h18l-7 8v6l-4-2v-4z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" /></svg>Filters</h2>
-              <button type="button" onClick={() => setOpen(false)} disabled={applying} aria-label="Close filters" className="grid h-9 w-9 place-items-center rounded-full border border-line text-muted transition hover:rotate-90 hover:border-[#FF6500] hover:text-[#FF6500] active:scale-90">✕</button>
+              <h2 className="flex items-center gap-2 text-2xl font-bold"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[#7200FF]"><path d="M3 5h18l-7 8v6l-4-2v-4z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" /></svg>Filters</h2>
+              <button type="button" onClick={() => setOpen(false)} disabled={applying} aria-label="Close filters" className="grid h-9 w-9 place-items-center rounded-full border border-line text-muted transition hover:rotate-90 hover:border-[#7200FF] hover:text-[#7200FF] active:scale-90">✕</button>
             </div>
             <motion.div key={resetKey} initial="h" animate="s" variants={{ s: { transition: { staggerChildren: 0.06, delayChildren: 0.12 } } }} className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
               {([
                 ['Location', <div key="l" className="space-y-3">
                   <FancySelect label="State" value={draft.state} onChange={(v) => setDraft((d) => ({ ...d, state: v, city: '' }))} placeholder="All states" options={[{ value: '', label: 'All states' }, ...STATES.map((st) => ({ value: st, label: st }))]} />
                   <FancySelect label="City" value={draft.city} onChange={(v) => upd('city', v)} placeholder={draft.state ? 'All cities' : 'All locations'} options={[{ value: '', label: draft.state ? 'All cities' : 'All locations' }, ...[...new Set([...(draft.city ? [draft.city] : []), ...(draft.state ? citiesOf(draft.state) : (cities.data?.cities ?? []).map((c) => c.city))])].sort((a, b) => a.localeCompare(b)).map((c) => { const n = cities.data?.cities.find((x) => x.city === c)?.venues; return { value: c, label: n ? `${c} (${n})` : c }; })]} />
-                  <button type="button" onClick={near} className="flex w-full items-center justify-center gap-2 rounded-xl border border-line py-2 text-sm font-semibold text-muted transition hover:border-[#FF6500] hover:text-ink active:scale-[.98]">{locating ? <><span className="relative flex h-3 w-3" aria-hidden="true"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF6500] opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-[#FF6500]" /></span>Finding you…</> : hasGeo ? '📍 Near me is on' : '📍 Use my live location'}</button></div>],
+                  <button type="button" onClick={near} className="flex w-full items-center justify-center gap-2 rounded-xl border border-line py-2 text-sm font-semibold text-muted transition hover:border-[#7200FF] hover:text-ink active:scale-[.98]">{locating ? <><span className="relative flex h-3 w-3" aria-hidden="true"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#7200FF] opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-[#7200FF]" /></span>Finding you…</> : hasGeo ? '📍 Near me is on' : '📍 Use my live location'}</button></div>],
                 ['Price range', <PriceRange key="p" min={draft.minPrice ? +draft.minPrice : null} max={draft.maxPrice ? +draft.maxPrice : null} onCommit={(mn, mx) => { upd('minPrice', mn === null ? '' : String(mn)); upd('maxPrice', mx === null ? '' : String(mx)); }} />],
                 ['Sports type', <SportCards key="s" sports={orderedSports} value={draft.sport} onChange={(v) => upd('sport', v)} />],
                 ['Ratings', <div key="r" role="radiogroup" aria-label="Minimum rating" className="grid grid-cols-3 gap-2">{RATINGS.map((r) => { const on = draft.minRating === r.v; return (
-                  <motion.button key={r.v} type="button" role="radio" aria-checked={on} whileTap={{ scale: 0.95 }} onClick={() => upd('minRating', on ? '' : r.v)} className={cx('flex items-center justify-center gap-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200', on ? 'border-[#FF6500] bg-[#FF6500]/10 text-ink shadow-[0_0_14px_rgb(255_101_0/.3)]' : 'border-line text-muted hover:border-[#FF6500]/50 hover:text-ink')}><span className="text-[#FF6500]" aria-hidden="true">★</span>{r.label}</motion.button>); })}</div>],
+                  <motion.button key={r.v} type="button" role="radio" aria-checked={on} whileTap={{ scale: 0.95 }} onClick={() => upd('minRating', on ? '' : r.v)} className={cx('flex items-center justify-center gap-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200', on ? 'border-[#7200FF] bg-[#7200FF]/10 text-ink shadow-[0_0_14px_rgb(255_101_0/.3)]' : 'border-line text-muted hover:border-[#7200FF]/50 hover:text-ink')}><span className="text-[#7200FF]" aria-hidden="true">★</span>{r.label}</motion.button>); })}</div>],
                 ['Amenities', <div key="a" className="grid grid-cols-2 gap-x-3">{(facilities.data?.facilities ?? []).map((f) => <FancyCheckbox key={f.id} label={f.name} checked={facList.has(String(f.id))} onChange={(on) => toggleFac(String(f.id), on)} />)}</div>],
                 ['Venue type', <FancySelect key="c" label="Type" value={draft.category} onChange={(v) => upd('category', v)} placeholder="Any type" options={[{ value: '', label: 'Any type' }, ...categoryOptions(draft.category).map((c) => ({ value: c, label: c }))]} />],
                 ['Availability', <div key="v" className="space-y-3"><div><label htmlFor="f-date" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">Date</label><input id="f-date" type="date" min={todayISO()} className="field" value={draft.date} onChange={(e) => upd('date', e.target.value)} /></div>
                   <div><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">Available between</span><div className="flex flex-wrap items-center gap-2"><TimeInput ariaLabel="From time" value={draft.from} onChange={(v) => upd('from', v)} /><span className="text-sm text-muted">to</span><TimeInput ariaLabel="To time" value={draft.to} onChange={(v) => upd('to', v)} /></div></div></div>],
               ] as [string, React.ReactNode][]).map(([title, body]) => (
                 <motion.section key={title} aria-label={title} variants={{ h: { opacity: 0, y: 14 }, s: { opacity: 1, y: 0, transition: { duration: 0.3 } } }}>
-                  <h3 className="mb-3 text-sm font-bold uppercase tracking-[.16em] text-[#FF8A32]">{title}</h3>{body}</motion.section>))}
+                  <h3 className="mb-3 text-sm font-bold uppercase tracking-[.16em] text-[#A100FF]">{title}</h3>{body}</motion.section>))}
             </motion.div>
             <div className="grid grid-cols-2 gap-3 border-t border-line bg-[#141414] px-5 py-4 sm:rounded-bl-3xl">
               <button type="button" onClick={clearAll} disabled={applying} className="rounded-xl border border-line bg-[#1B1B1B] py-3 text-sm font-bold text-white transition hover:border-white/40 active:scale-[.97] disabled:opacity-50">Clear All</button>
-              <button type="button" onClick={apply} disabled={applying} className="flex items-center justify-center gap-2 rounded-xl bg-[#FF6500] py-3 text-sm font-bold text-[#101010] shadow-[0_0_0_rgb(255_101_0/0)] transition hover:scale-[1.02] hover:brightness-110 hover:shadow-[0_0_22px_rgb(255_101_0/.5)] active:scale-95 disabled:pointer-events-none disabled:opacity-80">
-                {applying ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-[#101010]/30 border-t-[#101010]" aria-hidden="true" />Applying…</> : 'Apply Filters'}</button>
+              <button type="button" onClick={apply} disabled={applying} className="flex items-center justify-center gap-2 rounded-xl bg-[#7200FF] py-3 text-sm font-bold text-[#0B1340] shadow-[0_0_0_rgb(255_101_0/0)] transition hover:scale-[1.02] hover:brightness-110 hover:shadow-[0_0_22px_rgb(255_101_0/.5)] active:scale-95 disabled:pointer-events-none disabled:opacity-80">
+                {applying ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0B1340]/30 border-t-[#0B1340]" aria-hidden="true" />Applying…</> : 'Apply Filters'}</button>
             </div>
           </motion.aside>
         </>)}
@@ -328,13 +290,13 @@ function AreaCard({ a, selected, onBook, pct = 0 }: { a: any; selected: boolean;
   const photos: { id: string; url: string }[] = a.images ?? [];
   useAutoSlide(photos.length, n, setN, { ms: 4000 });
   const prices = (a.pricing ?? []).map((p: any) => Number(p.price_per_hour)).filter((x: number) => Number.isFinite(x));
-  const from = prices.length ? Math.min(...prices) : null;
+  const from = a.from_price != null ? Number(a.from_price) : prices.length ? Math.min(...prices) : null; // the lowest price a customer can really book
   const openDays = (a.availability ?? []).filter((d: any) => !d.is_closed);
   return (
     <article aria-label={`Playing area ${a.name}`} className={`card flex flex-col overflow-hidden transition ${selected ? 'border-brand ring-1 ring-brand' : ''}`}>
       <div className="relative h-44 bg-surface2">
         {photos.length ? <img src={photos[Math.min(n, photos.length - 1)].url} alt={`${a.name} photo ${Math.min(n, photos.length - 1) + 1}`} loading="lazy" className="h-full w-full object-cover" />
-          : <div className="pitch-stripes grid h-full place-items-center bg-gradient-to-br from-[#151515] via-[#292929] to-[#151515] text-5xl" aria-hidden="true">⚽</div>}
+          : <div className="pitch-stripes grid h-full place-items-center bg-gradient-to-br from-[#101B5C] via-[#1B2A80] to-[#101B5C] text-5xl" aria-hidden="true">⚽</div>}
         {a.surface && <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">{a.surface}</span>}
         {photos.length > 1 && <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5" role="group" aria-label={`${a.name} photos`}>{photos.map((p, i) => <button key={p.id} type="button" aria-label={`Show photo ${i + 1}`} aria-pressed={i === n} onClick={() => setN(i)} className={`h-2 w-2 rounded-full ${i === n ? 'bg-white' : 'bg-white/50'}`} />)}</div>}
       </div>
@@ -388,7 +350,7 @@ export function VenueDetailPage() {
               <h1 className="text-5xl font-extrabold">{v.name}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted">
                 {v.rating_count > 0 ? <span className="flex items-center gap-1.5"><Stars value={Number(v.rating_avg)} /> {Number(v.rating_avg).toFixed(1)} ({v.rating_count} reviews)</span> : <span className="chip">New</span>}
-                <span>📍 {v.address}, {v.city}</span><span className="chip text-ok">✓ KickOff verified</span><span className="text-xs">Venue ID {String(v.id).slice(0, 8).toUpperCase()}</span>{v.contact_phone && <a href={`tel:${v.contact_phone}`} className="underline">📞 {v.contact_phone}</a>}
+                <span>📍 {v.address}, {v.city}</span><span className="chip text-ok">✓ PlaynX verified</span><span className="text-xs">Venue ID {String(v.id).slice(0, 8).toUpperCase()}</span>{v.contact_phone && <a href={`tel:${v.contact_phone}`} className="underline">📞 {v.contact_phone}</a>}
               </div>
               {v.description && <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-muted">{v.description}</p>}
             </div>
@@ -397,7 +359,7 @@ export function VenueDetailPage() {
 
             <section aria-label="Playing areas"><h2 className="mb-3 text-3xl font-bold">Playing areas & pricing</h2>
               <div className="grid gap-4 sm:grid-cols-2">{v.areas.map((a: any) => <AreaCard key={a.id} pct={v.discount_percent ?? 0} a={a} selected={areaId === a.id} onBook={() => { setAreaId(a.id); setTimeout(() => document.getElementById('book-a-slot')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50); }} />)}</div></section>
-          {areaId && <section id="book-a-slot" className="scroll-mt-24 rounded-3xl border border-line bg-surface p-5 sm:p-8"><div className="mb-2 flex justify-end"><button type="button" className="text-sm font-semibold text-muted hover:text-ink" onClick={() => setAreaId(undefined)}>✕ Close</button></div><BookingWidget wide key={areaId} venueId={v.id} venueName={v.name} areas={v.areas as AreaInfo[]} timezone={v.timezone} areaId={areaId} onAreaChange={setAreaId} discountPercent={v.discount_percent ?? 0} /></section>}
+          {areaId && <section id="book-a-slot" className="scroll-mt-24 rounded-3xl border border-line bg-surface p-5 sm:p-8"><div className="mb-2 flex justify-end"><button type="button" className="text-sm font-semibold text-muted hover:text-ink" onClick={() => setAreaId(undefined)}>✕ Close</button></div><BookingWidget wide key={areaId} venueId={v.id} venueName={v.name} areas={v.areas as AreaInfo[]} timezone={v.timezone} areaId={areaId} onAreaChange={setAreaId} discountPercent={v.discount_percent ?? 0} advancePercent={v.advance_percent ?? null} /></section>}
 
 
             <section><h2 className="mb-3 text-3xl font-bold">Reviews</h2>

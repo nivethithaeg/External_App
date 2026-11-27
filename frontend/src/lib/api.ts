@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 
-export const TOKEN_KEY = 'kickoff_token';
+export const TOKEN_KEY = 'playnx_token';
 export const API_BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`;
 export const api = axios.create({ baseURL: API_BASE, timeout: 20000 });
 
@@ -8,7 +8,7 @@ export const api = axios.create({ baseURL: API_BASE, timeout: 20000 });
  * The login lives only as long as the browser is open: it is kept in sessionStorage, never in localStorage, so closing Chrome
  * signs the account out even without pressing Log out. Tabs of the same open browser share it (a new tab asks an open one).
  */
-const SHARE_ASK = 'kickoff_token_ask', SHARE_GIVE = 'kickoff_token_give', LOGOUT_ALL_TABS = 'kickoff_logout';
+const SHARE_ASK = 'playnx_token_ask', SHARE_GIVE = 'playnx_token_give', LOGOUT_ALL_TABS = 'playnx_logout';
 export const getToken = () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } };
 export const setToken = (t: string | null, _persist = true) => {
   try {

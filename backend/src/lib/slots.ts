@@ -19,6 +19,7 @@ export async function loadAreaContext(q: Queryable, areaId: string, sportId: num
        FROM playing_areas a JOIN venues v ON v.id = a.venue_id WHERE a.id = $1`, [areaId]);
   if (!a.rows[0]) throw notFound('Playing area not found');
   const r = a.rows[0];
+  if (r.deletion_status) throw new HttpError(409, r.deletion_status === 'deleted' ? 'This playing area has been deleted.' : 'This playing area is being removed and cannot be booked.', 'area_deleting'); // owners and staff too
   if (!forOwner && (!r.is_active || r.venue_status !== 'approved' || r.approval_status === 'pending' || r.approval_status === 'rejected')) throw new HttpError(409, 'This area is not open for booking', 'area_unavailable');
   const s = await q.query('SELECT 1 FROM playing_area_sports WHERE playing_area_id=$1 AND sport_id=$2', [areaId, sportId]);
   if (!s.rows[0]) throw badRequest('This sport is not offered on the selected area', 'sport_not_offered');

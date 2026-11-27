@@ -29,7 +29,7 @@ let routes: Record<string, any> = {};
 let calls: { method: string; url: string; body?: any; params?: any }[] = [];
 
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('kickoff_token', 't'); calls = [];
+  vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('playnx_token', 't'); calls = [];
   routes = {
     '/auth/me': { user: USER }, '/me/notifications': { notifications: [], unread: 0 }, '/sports': { sports: [{ id: 1, name: 'Football', slug: 'football' }, { id: 2, name: 'Cricket', slug: 'cricket' }] },
     '/facilities': { facilities: [{ id: 1, name: 'Parking' }, { id: 2, name: 'Floodlights' }] }, '/cities': { cities: [{ city: 'Bengaluru', venues: 1 }] },
@@ -46,7 +46,7 @@ describe('customer navigation', () => {
   const LIVE_OFFER = { id: 'o1', code: 'WELCOME10', description: null, discount_type: 'percent', value: 10, max_discount: null, min_amount: 0, valid_from: '2030-01-01T00:00:00Z', valid_to: '2030-12-31T00:00:00Z', per_user_limit: 1, venue_id: null, venue_name: null, uses_left: null, used_by_me: 0 };
   it('groups the portal into menus that open and link to every customer page', async () => {
     routes['/offers'] = { offers: [LIVE_OFFER] };
-    renderAt('/');
+    renderAt('/home');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     for (const [menu, items] of [['Bookings', ['My Bookings', 'Favourites']], ['Offers', ['Offers & Coupons']], ['Priya', ['Payments', 'My Reviews', 'Notifications', 'Help & Support', 'My Profile', 'Settings']]] as const) {
       await userEvent.click((menu === 'Priya' ? screen : within(nav)).getByRole('button', { name: new RegExp(menu) }));
@@ -59,7 +59,7 @@ describe('customer navigation', () => {
 describe('the Offers menu only exists while a coupon is live', () => {
   it('is hidden in the menu and on the home page when no owner or admin has added a coupon', async () => {
     routes['/offers'] = { offers: [] };
-    renderAt('/');
+    renderAt('/home');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     await within(nav).findByRole('button', { name: /Bookings/ }); expect(within(nav).queryByRole('button', { name: /Explore/ })).toBeNull(); // no Explore menu
     expect(within(nav).queryByRole('button', { name: /Offers/ })).toBeNull();
@@ -67,7 +67,7 @@ describe('the Offers menu only exists while a coupon is live', () => {
   });
   it('appears once a coupon is live, including the home-page shortcut', async () => {
     routes['/offers'] = { offers: [{ id: 'o1', code: 'WELCOME10', discount_type: 'percent', value: 10, valid_to: '2030-12-31T00:00:00Z' }] };
-    renderAt('/');
+    renderAt('/home');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     expect(await within(nav).findByRole('button', { name: /Offers/ })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: 'Explore offers' })).toHaveAttribute('href', '/offers');
@@ -78,8 +78,8 @@ describe('customer home dashboard', () => {
   it('greets the customer and books from home: venue, then its playing areas, then a slot (no Explore page)', async () => {
     routes['/venues'] = { venues: [VENUE], total: 1, limit: 50 };
     routes[`/venues/${VENUE.id}`] = { venue: { ...VENUE, timezone: 'Asia/Kolkata', facilities: [], images: [], areas: [{ id: 'a1', name: 'Turf A', slot_minutes: 60, min_duration_minutes: 60, max_duration_minutes: 120, sports: [{ id: 1, name: 'Football' }], pricing: [] }, { id: 'a2', name: 'Court B', slot_minutes: 60, min_duration_minutes: 60, max_duration_minutes: 120, sports: [{ id: 1, name: 'Football' }], pricing: [] }] } };
-    renderAt('/');
-    expect(await screen.findByText(/Welcome back, Priya/)).toBeInTheDocument(); expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Your game\. Your turf\./);
+    renderAt('/home');
+    expect(await screen.findByText(/Welcome back, Priya/)).toBeInTheDocument(); expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Your Game\.\s*Your Place\.\s*Your Play\./);
     expect(screen.queryByText('Your upcoming games')).toBeNull(); expect(calls.some((c) => c.url === '/bookings')).toBe(false);
     expect(screen.queryByRole('search', { name: 'Search turfs' })).toBeNull();
     const book = screen.getByRole('region', { name: 'Book a turf' });
@@ -97,7 +97,7 @@ describe('customer home dashboard', () => {
     routes[`/venues/${VENUE.id}`] = { venue: { ...VENUE, timezone: 'Asia/Kolkata', facilities: [], images: [], areas: [
       { id: 'a1', name: 'Turf A', slot_minutes: 60, min_duration_minutes: 60, max_duration_minutes: 120, sports: [{ id: 1, name: 'Football' }], pricing: [] },
       { id: 'a2', name: 'Nets B', slot_minutes: 60, min_duration_minutes: 60, max_duration_minutes: 120, sports: [{ id: 2, name: 'Cricket' }], pricing: [] }] } };
-    renderAt('/');
+    renderAt('/home');
     await screen.findByText(/Welcome back, Priya/); // the signed-in home (not the guest page shown while signing in)
     const book = screen.getByRole('region', { name: 'Book a turf' });
     await waitFor(() => expect(within(book).getByRole('option', { name: 'Cricket' })).toBeInTheDocument());
@@ -112,7 +112,7 @@ describe('customer home dashboard', () => {
     routes[`/venues/${VENUE.id}`] = { venue: { ...VENUE, timezone: 'Asia/Kolkata', facilities: [], images: [], areas: [{ id: 'a1', name: 'Turf A', slot_minutes: 60, min_duration_minutes: 60, max_duration_minutes: 120, sports: [{ id: 1, name: 'Football' }], pricing: [] }] } };
     const at = (h: number) => ({ startsAt: `2030-01-05T${String(h - 5).padStart(2, '0')}:30:00.000Z`, endsAt: `2030-01-05T${String(h - 4).padStart(2, '0')}:30:00.000Z`, price: 800, available: true }); // h = IST hour
     routes['/areas/a1/slots'] = { slots: [at(7), at(18), at(19), at(21)], timezone: 'Asia/Kolkata' };
-    renderAt('/');
+    renderAt('/home');
     await screen.findByText(/Welcome back, Priya/);
     const book = screen.getByRole('region', { name: 'Book a turf' });
     fireEvent.change(within(book).getByLabelText(/^Date/), { target: { value: '2030-01-05' } });
@@ -131,7 +131,7 @@ describe('customer home dashboard', () => {
     expect(within(within(book).getByRole('listbox', { name: 'Time slots' })).getAllByRole('option').length).toBe(4);
   });
   it('one filter on its own is enough: only a sport, then Filter', async () => {
-    renderAt('/');
+    renderAt('/home');
     await screen.findByText(/Welcome back, Priya/);
     const book = screen.getByRole('region', { name: 'Book a turf' });
     await waitFor(() => expect(within(book).getByRole('option', { name: 'Cricket' })).toBeInTheDocument());
@@ -141,7 +141,7 @@ describe('customer home dashboard', () => {
   });
   it('a search with no free slot says so', async () => {
     routes['/venues'] = { venues: [], total: 0, limit: 50 };
-    renderAt('/');
+    renderAt('/home');
     await screen.findByText(/Welcome back, Priya/);
     const book = screen.getByRole('region', { name: 'Book a turf' });
     fireEvent.change(within(book).getByLabelText(/^Date/), { target: { value: '2030-01-05' } });
@@ -155,6 +155,22 @@ describe('customer home dashboard', () => {
   });
 });
 
+describe('advance bookings in my bookings', () => {
+  it('the booking details say only the advance was paid, and what is left to pay at the venue', async () => {
+    routes['/bookings/b1'] = { booking: { ...BOOKING, total: 1000, subtotal: 1000, discount: 0, advance_amount: 500, amount_paid: 500, payment_discount: 0, status: 'confirmed', payment_status: 'captured' }, refunds: [] };
+    renderAt('/bookings/b1');
+    const box = await screen.findByLabelText('Advance payment');
+    expect(box).toHaveTextContent('Paid online (advance 50%)₹500'); expect(box).toHaveTextContent('To pay at the venue after the game₹500');
+  });
+  it('the receipt shows the advance as the amount paid, not the whole total', async () => {
+    routes['/bookings/b1'] = { booking: { ...BOOKING, total: 1000, subtotal: 1000, discount: 0, advance_amount: 500, amount_paid: 500, status: 'confirmed', payment_status: 'captured' }, refunds: [] };
+    routes['/bookings/b1/invoice'] = { invoice: null };
+    renderAt('/bookings/b1/receipt');
+    expect(await screen.findByText('Amount paid (advance 50%)')).toBeInTheDocument();
+    expect(screen.getByText('Balance, paid at the venue')).toBeInTheDocument();
+  });
+});
+
 describe('payment success celebration', () => {
   const areas = [{ id: 'a1', name: 'Turf A', slot_minutes: 60, min_duration_minutes: 60, max_duration_minutes: 60, sports: [{ id: 1, name: 'Football' }] }];
   const slots = [{ startsAt: '2030-01-01T14:30:00.000Z', endsAt: '2030-01-01T15:30:00.000Z', price: 800, available: true }];
@@ -165,7 +181,7 @@ describe('payment success celebration', () => {
     routes['POST /bookings'] = { bookingId: 'b1', total: 800, order: { id: 'order_1', amount: 800, keyId: 'rzp_test' } };
     vi.mocked(openCheckout).mockResolvedValueOnce({ razorpay_payment_id: 'pay_1', razorpay_order_id: 'order_1', razorpay_signature: 'sig' } as any);
     const view = render(<React.StrictMode><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ToastProvider><MemoryRouter initialEntries={['/pay']}><AuthProvider>
-      <PaymentCelebrationHost /><Routes><Route path="/pay" element={<BookingWidget venueId="v1" venueName="Green Arena" areas={areas} />} /><Route path="/bookings/:id" element={<BookingDetailPage />} /><Route path="/" element={<p>Customer dashboard</p>} /></Routes></AuthProvider></MemoryRouter></ToastProvider></QueryClientProvider></React.StrictMode>);
+      <PaymentCelebrationHost /><Routes><Route path="/pay" element={<BookingWidget venueId="v1" venueName="Green Arena" areas={areas} />} /><Route path="/bookings/:id" element={<BookingDetailPage />} /><Route path="/home" element={<p>Customer dashboard</p>} /></Routes></AuthProvider></MemoryRouter></ToastProvider></QueryClientProvider></React.StrictMode>);
     await userEvent.click((await screen.findAllByRole('option', { name: /pm|am/i }))[0]);
     await userEvent.click(await screen.findByRole('button', { name: /Review & pay/ })); await userEvent.click(await screen.findByRole('button', { name: /Confirm and pay/ })); // the summary comes first
     return view;
@@ -195,15 +211,15 @@ describe('payment success celebration', () => {
 
 describe('customer logout', () => {
   it('asks before logging out, and only ends the session when confirmed', async () => {
-    renderAt('/');
+    renderAt('/home');
     await userEvent.click(await screen.findByRole('button', { name: 'Log out' }));
     const dlg = await screen.findByRole('dialog', { name: 'Log out?' });
     await userEvent.click(within(dlg).getByRole('button', { name: 'Stay logged in' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Log out?' })).toBeNull());
-    expect(sessionStorage.getItem('kickoff_token')).toBe('t');
+    expect(sessionStorage.getItem('playnx_token')).toBe('t');
     await userEvent.click(screen.getByRole('button', { name: 'Log out' }));
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Log out?' })).getByRole('button', { name: 'Log out' }));
-    await waitFor(() => expect(sessionStorage.getItem('kickoff_token')).toBeNull());
+    await waitFor(() => expect(sessionStorage.getItem('playnx_token')).toBeNull());
   });
 });
 
@@ -249,6 +265,14 @@ describe('venue discount and the booking summary', () => {
     await userEvent.click(within(dlg).getByRole('button', { name: /Confirm and pay/ }));
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.url === '/slots/lock')?.body).toMatchObject({ startsAt: s3[0].startsAt, durationMinutes: 120 }));
     dismissPaymentCelebration();
+  });
+
+  it('a venue that takes an advance says so before a slot is chosen, and charges only the advance', async () => {
+    routes['/areas/a1/slots'] = { slots, timezone: 'Asia/Kolkata', discountPercent: 0 };
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ToastProvider><MemoryRouter><AuthProvider><BookingWidget venueId="v1" venueName="Green Arena" areas={areas} discountPercent={0} advancePercent={50} /></AuthProvider></MemoryRouter></ToastProvider></QueryClientProvider>);
+    expect(await screen.findByText('Pay 50% now, the rest at the venue.')).toBeInTheDocument();
+    await userEvent.click((await screen.findAllByRole('option', { name: /pm|am/i }))[0]);
+    expect(await screen.findByRole('button', { name: /Review & pay ₹400/ })).toBeInTheDocument(); // half of ₹800
   });
 
   it('tells the customer why prices differ on a holiday date', async () => {
@@ -311,7 +335,7 @@ describe('notification preferences', () => {
     routes['PUT /me/notification-preferences'] = { preferences: { bookings: true, reminders: false, announcements: true } };
     renderAt('/profile');
     const box = await screen.findByRole('region', { name: 'Notification preferences' });
-    expect(within(box).getByText(/always appear inside KickOff/)).toBeInTheDocument();
+    expect(within(box).getByText(/always appear inside PlaynX/)).toBeInTheDocument();
     const sw = await within(box).findByRole('switch', { name: 'Game reminders' });
     expect(sw).toHaveAttribute('aria-checked', 'true');
     routes['/me/notification-preferences'] = { preferences: { bookings: true, reminders: false, announcements: true } }; // what the server will return after the save
@@ -421,15 +445,15 @@ describe('cancelling with a wallet refund or a weekly series', () => {
 
 describe('cookie notice and policy', () => {
   it('tells visitors what is stored once, remembers they saw it, and links to the policy', async () => {
-    localStorage.removeItem('kickoff_cookie_notice');
-    const view = renderAt('/');
+    localStorage.removeItem('playnx_cookie_notice');
+    const view = renderAt('/home');
     const note = await screen.findByRole('region', { name: 'Cookie notice' });
     expect(within(note).getByRole('link', { name: 'Cookie policy' })).toHaveAttribute('href', '/cookies');
     await userEvent.click(within(note).getByRole('button', { name: 'Got it' }));
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Cookie notice' })).toBeNull());
-    expect(localStorage.getItem('kickoff_cookie_notice')).toBe('1');
-    view.unmount(); renderAt('/');
-    await screen.findByRole('heading', { level: 1, name: /Your game/ }); expect(screen.queryByRole('region', { name: 'Cookie notice' })).toBeNull();
+    expect(localStorage.getItem('playnx_cookie_notice')).toBe('1');
+    view.unmount(); renderAt('/home');
+    await screen.findByRole('heading', { level: 1, name: /Your Game/ }); expect(screen.queryByRole('region', { name: 'Cookie notice' })).toBeNull();
   });
   it('the Cookie policy page lists what is stored and links to account deletion in the privacy policy', async () => {
     renderAt('/cookies');
@@ -501,7 +525,7 @@ describe('offers and coupons', () => {
     for (const t of [/Valid till/, /All venues and sports/, /One use per customer/]) expect(within(ticket).getByText(t)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy WELCOME10' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Use Now/ }));
-    expect(sessionStorage.getItem('kickoff_coupon')).toBe('WELCOME10');
+    expect(sessionStorage.getItem('playnx_coupon')).toBe('WELCOME10');
     expect(await screen.findByRole('region', { name: 'Book a turf' })).toBeInTheDocument(); // sent to book a turf on home
   });
   it('has an Expired tab that asks the server for expired offers', async () => {
@@ -545,7 +569,7 @@ describe('settings', () => {
     for (const h of ['Account', 'Change password', 'Preferences', 'Privacy']) expect(screen.getByRole('heading', { name: h })).toBeInTheDocument();
     expect(await screen.findByText('Signed in')).toBeInTheDocument(); // login history
     expect(screen.getByText(/Two-factor authentication is not available yet/)).toBeInTheDocument(); // not pretending it exists
-    await userEvent.click(screen.getByRole('button', { name: 'Switch to light' })); expect(document.documentElement.getAttribute('data-theme')).toBe('light'); expect(localStorage.getItem('kickoff_theme')).toBe('light'); // remembered
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to dark' })); expect(document.documentElement.getAttribute('data-theme')).toBe('dark'); expect(localStorage.getItem('playnx_theme')).toBe('dark'); // remembered
     window.confirm = () => true;
     await userEvent.click(screen.getByRole('button', { name: 'Request account deletion' }));
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.url === '/me/tickets')?.body.subject).toBe('Account deletion request'));

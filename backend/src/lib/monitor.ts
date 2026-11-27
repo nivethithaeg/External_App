@@ -37,7 +37,7 @@ export function reportError(err: unknown, ctx: ErrorContext = {}) {
     void fetch(`${dsn.protocol}//${dsn.host}/api/${dsn.project}/store/?sentry_version=7&sentry_key=${dsn.key}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
   }
   if (cfgRef.ERROR_WEBHOOK_URL) {
-    const text = `KickOff ${env} error${ctx.ref ? ` [${ctx.ref}]` : ''}${ctx.source && ctx.source !== 'server' ? ` (${ctx.source})` : ''}\n${ctx.method ? `${ctx.method} ` : ''}${ctx.path ?? ''}\n${e.name}: ${e.message}`.slice(0, 1500);
+    const text = `PlaynX ${env} error${ctx.ref ? ` [${ctx.ref}]` : ''}${ctx.source && ctx.source !== 'server' ? ` (${ctx.source})` : ''}\n${ctx.method ? `${ctx.method} ` : ''}${ctx.path ?? ''}\n${e.name}: ${e.message}`.slice(0, 1500);
     void fetch(cfgRef.ERROR_WEBHOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, content: text }) }).catch(() => {});
   }
 }

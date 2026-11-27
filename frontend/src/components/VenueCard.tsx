@@ -18,7 +18,7 @@ export interface VenueSummary {
 
 export function VenueCover({ src, name, className = '' }: { src: string | null; name: string; className?: string }) {
   return src ? <img src={src} alt={name} loading="lazy" className={`h-full w-full object-cover ${className}`} /> : (
-    <div className="pitch-stripes grid h-full w-full place-items-center bg-gradient-to-br from-[#292929] to-[#151515] text-4xl" aria-hidden="true">⚽</div>
+    <div className="pitch-stripes grid h-full w-full place-items-center bg-gradient-to-br from-[#1B2A80] to-[#101B5C] text-4xl" aria-hidden="true">⚽</div>
   );
 }
 
@@ -36,7 +36,7 @@ export function FavouriteButton({ venueId, active }: { venueId: string; active: 
   return (
     <button type="button" aria-pressed={active} aria-label={active ? 'Remove from favourites' : 'Add to favourites'} disabled={m.isPending}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!user) return nav('/login'); if (user.role !== 'customer') return toast('Only customers can save favourites', 'info'); m.mutate(); }}
-      className="relative grid h-9 w-9 place-items-center rounded-full bg-black/55 text-lg backdrop-blur transition hover:scale-110 active:scale-90"><span key={String(active)} className={active ? 'animate-pop' : ''}>{active ? '❤️' : '🤍'}</span><Burst fire={burst} glyphs={['♥']} colors={['#FF4D6D', '#FF6B22', '#FFB3C1']} count={9} /></button>
+      className="relative grid h-9 w-9 place-items-center rounded-full bg-black/55 text-lg backdrop-blur transition hover:scale-110 active:scale-90"><span key={String(active)} className={active ? 'animate-pop' : ''}>{active ? '❤️' : '🤍'}</span><Burst fire={burst} glyphs={['♥']} colors={['#FF4D6D', '#7200FF', '#FFB3C1']} count={9} /></button>
   );
 }
 
@@ -63,7 +63,7 @@ export function VenueCard({ v }: { v: VenueSummary }) {
         <div className="flex items-center gap-2 text-xs text-muted">{v.rating_count > 0 ? <><Stars value={Number(v.rating_avg)} size={14} /><span>{Number(v.rating_avg).toFixed(1)} ({v.rating_count})</span></> : <span className="chip">New</span>}</div>
         {v.sports && v.sports.length > 0 && <div className="flex flex-wrap gap-1.5">{v.sports.slice(0, 5).map((s, i) => <span key={s} className="chip transition duration-300 [@media(hover:hover)]:group-hover:-translate-y-0.5 [@media(hover:hover)]:group-hover:border-brand/50" style={{ transitionDelay: `${i * 45}ms` }}>{s}</span>)}{v.sports.length > 5 && <span className="chip" title={v.sports.slice(5).join(', ')}>+{v.sports.length - 5} more</span>}</div>}
         {v.facilities && v.facilities.length > 0 && <p className="line-clamp-1 text-xs text-muted transition duration-300 [@media(hover:hover)]:group-hover:translate-x-1 [@media(hover:hover)]:group-hover:text-ink">{v.facilities.slice(0, 4).join(' · ')}</p>}
-        <div className="flex items-center justify-between gap-2 pt-1"><span className="inline-flex items-center gap-1 text-xs font-semibold text-ok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity=".35" /><path className="draw-tick" d="M7 12.5l3.2 3.2L17 9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg> KickOff verified</span><span className="rounded-lg bg-brand px-4 py-1.5 text-sm font-bold text-brand-ink transition duration-200 group-hover:scale-105 group-hover:shadow-[0_0_16px_rgb(var(--brand)/.45)]">Book Now</span></div>
+        <div className="flex items-center justify-between gap-2 pt-1"><span className="inline-flex items-center gap-1 text-xs font-semibold text-ok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity=".35" /><path className="draw-tick" d="M7 12.5l3.2 3.2L17 9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg> PlaynX verified</span><span className="rounded-lg bg-brand px-4 py-1.5 text-sm font-bold text-brand-ink transition duration-200 group-hover:scale-105 group-hover:shadow-[0_0_16px_rgb(var(--brand)/.45)]">Book Now</span></div>
       </div>
     </Link>
   );

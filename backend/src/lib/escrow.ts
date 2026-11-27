@@ -7,19 +7,19 @@ export const holdHours = (q: Queryable) => getSetting<number>(q, 'payout_hold_ho
 export interface Escrow { released: number; holding: number; disputed: number }
 
 /**
- * What the platform holds for each owner. Customers pay KickOff first; the owner's share is only released
+ * What the platform holds for each owner. Customers pay PlaynX first; the owner's share is only released
  *  - after the game is over and the hold period has passed, and
  *  - while the customer has no open complaint (support ticket) on that booking.
  * `released` is what may be paid out, `holding` is waiting out the hold period, `disputed` is frozen by a complaint.
- * Walk-in (offline) bookings never pass through KickOff, so they are never part of this.
+ * Walk-in (offline) bookings never pass through PlaynX, so they are never part of this.
  */
 export async function escrowByOwner(q: Queryable, now: Date, ownerId?: string): Promise<Map<string, Escrow>> {
   const hours = await holdHours(q);
   const { rows } = await q.query(
     `SELECT v.owner_id,
-       COALESCE(sum(b.owner_amount) FILTER (WHERE NOT b.disputed AND upper(b.during) + make_interval(hours => $2::int) <= $1::timestamptz), 0)::float8 AS released,
-       COALESCE(sum(b.owner_amount) FILTER (WHERE NOT b.disputed AND upper(b.during) + make_interval(hours => $2::int) >  $1::timestamptz), 0)::float8 AS holding,
-       COALESCE(sum(b.owner_amount) FILTER (WHERE b.disputed), 0)::float8 AS disputed
+       COALESCE(sum((CASE WHEN b.advance_amount IS NOT NULL THEN GREATEST(0, b.advance_amount - COALESCE(b.commission_amount,0)) ELSE b.owner_amount END)) FILTER (WHERE NOT b.disputed AND upper(b.during) + make_interval(hours => $2::int) <= $1::timestamptz), 0)::float8 AS released,
+       COALESCE(sum((CASE WHEN b.advance_amount IS NOT NULL THEN GREATEST(0, b.advance_amount - COALESCE(b.commission_amount,0)) ELSE b.owner_amount END)) FILTER (WHERE NOT b.disputed AND upper(b.during) + make_interval(hours => $2::int) >  $1::timestamptz), 0)::float8 AS holding,
+       COALESCE(sum((CASE WHEN b.advance_amount IS NOT NULL THEN GREATEST(0, b.advance_amount - COALESCE(b.commission_amount,0)) ELSE b.owner_amount END)) FILTER (WHERE b.disputed), 0)::float8 AS disputed
      FROM (SELECT b.*, EXISTS (SELECT 1 FROM support_tickets t WHERE t.booking_id=b.id AND t.user_id=b.customer_id AND t.status IN ('open','in_progress')) AS disputed
              FROM bookings b WHERE b.status='completed' AND b.source='online') b
      JOIN venues v ON v.id=b.venue_id

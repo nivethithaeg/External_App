@@ -1,4 +1,4 @@
--- Wallet credit: refunds the customer chose to keep, goodwill credits from KickOff, and money returned when a booking was not completed.
+-- Wallet credit: refunds the customer chose to keep, goodwill credits from PlaynX, and money returned when a booking was not completed.
 -- Each credit is a "lot" that expires after 12 months and is spent soonest-expiry first. Wallet money is never paid out as cash.
 CREATE TABLE IF NOT EXISTS wallet_lots (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

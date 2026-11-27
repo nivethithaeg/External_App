@@ -3,9 +3,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { get, post, setToken, getToken, askOtherTabsForToken, setUnauthorizedHandler } from './api';
 
 export interface User { permissions?: string[]; credentialSet?: boolean; id: string; email: string; phone: string | null; fullName: string; role: 'customer' | 'owner' | 'admin' | 'staff'; adminRole: string | null; emailVerified: boolean; phoneVerified: boolean }
+/** An admin's password was right; the authenticator code is still needed (and the first time, setting the app up). */
+export interface MfaChallenge { mfaToken: string; mfaRequired?: boolean; mfaSetupRequired?: boolean; secret?: string; otpauthUrl?: string; remember: boolean }
 interface AuthCtx {
   user: User | null; loading: boolean;
-  login(email: string, password: string, remember?: boolean): Promise<User>;
+  /** a user, or for an admin the code step that still has to be passed */
+  login(email: string, password: string, remember?: boolean): Promise<User | { mfa: MfaChallenge }>;
+  verifyMfa(challenge: MfaChallenge, code: string): Promise<User>;
   googleLogin(credential: string, opts?: { create?: boolean; role?: 'customer' | 'owner'; businessName?: string; expect?: 'customer' | 'owner' }): Promise<User>;
   register(input: Record<string, unknown>): Promise<User>;
   logout(): void; refresh(): Promise<void>; setUser(u: User): void;
@@ -42,8 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthCtx>(() => ({
     user, loading, logout, refresh, setUser,
     async login(email, password, remember = true) {
-      const r = await post<{ token: string; user: User }>('/auth/login', { email, password, remember });
-      setToken(r.token, remember); setUser(r.user); return r.user;
+      const r = await post<{ token?: string; user?: User } & Omit<MfaChallenge, 'remember'>>('/auth/login', { email, password, remember });
+      if (r.mfaToken) return { mfa: { ...r, mfaToken: r.mfaToken, remember } };
+      setToken(r.token!, remember); setUser(r.user!); return r.user!;
+    },
+    async verifyMfa(challenge, code) {
+      const r = await post<{ token: string; user: User }>('/auth/mfa/verify', { mfaToken: challenge.mfaToken, code });
+      setToken(r.token, challenge.remember); setUser(r.user); return r.user;
     },
     async googleLogin(credential, opts = {}) {
       const r = await post<{ token: string; user: User }>('/auth/google', { credential, ...opts });
@@ -57,10 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-export const homeFor = (u: User) => (u.role === 'admin' ? '/admin' : u.role === 'owner' ? '/owner' : u.role === 'staff' ? '/staff' : '/');
+export const homeFor = (u: User) => (u.role === 'admin' ? '/admin' : u.role === 'owner' ? '/owner' : u.role === 'staff' ? '/staff' : '/home');
 
 /** Customers who joined with Google have no mobile number yet; they finish that step before anything else. */
 export const needsMobile = (u: User) => u.role === 'customer' && !u.phone;
+/** A venue owner who signed up with Google still gives first name, last name, mobile number and a password. */
+export const needsOwnerSignup = (u: User) => u.role === 'owner' && u.credentialSet === false; // a Google sign-up that has not finished
 
 /** A customer must confirm their email with a code before using the customer pages. */
 export const needsEmailVerification = (u: User) => u.role === 'customer' && !u.emailVerified;

@@ -56,7 +56,7 @@ function mockApi(overrides: Record<string, any> = {}) {
   });
 }
 const renderAt = (path: string, user: any = OWNER) => {
-  if (user) sessionStorage.setItem('kickoff_token', 't');
+  if (user) sessionStorage.setItem('playnx_token', 't');
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={qc}><ToastProvider><MemoryRouter initialEntries={[path]}><AuthProvider><App /></AuthProvider></MemoryRouter></ToastProvider></QueryClientProvider>);
 };
@@ -67,7 +67,7 @@ const PAGES: [string, RegExp][] = [
   ['/owner/calendar', /Calendar/], ['/owner/slots', /Slot management/], ['/owner/blocked', /Blocked slots/], ['/owner/bookings', /^Bookings$/], ['/owner/bookings/new', /Add offline booking/], ['/owner/bookings/upcoming', /Upcoming bookings/],
   ['/owner/bookings/history', /Booking history/], ['/owner/bookings/cancelled', /Cancelled bookings/], ['/owner/pricing', /Pricing & rates/], ['/owner/offers', /^Offers$/], ['/owner/reports', /^Report & Payments$/],
   ['/owner/payments', /^Report & Payments$/], ['/owner/refunds', /^Report & Payments$/], ['/owner/notifications', /^Notifications$/], ['/owner/support', /^Admin Support$/],
-  ['/owner/announcements', /^Announcements$/], ['/owner/reviews', /^Reviews$/], ['/owner/account/staff', /^Staff$/], ['/owner/account/profile', /^Profile$/], ['/owner/account/payouts', /^Payouts$/], ['/owner/account/business', /Business information/], ['/owner/account/bank', /Bank account details/],
+  ['/owner/announcements', /^Announcements$/], ['/owner/reviews', /^Reviews$/], ['/owner/account/staff', /^Staff$/], ['/owner/account/profile', /^Profile$/], ['/owner/account/payouts', /^Payouts$/], ['/owner/account/business', /Business information/], ['/owner/account/bank', /Bank account details/], ['/owner/account/payment-settings', /^Payment settings$/],
   ['/owner/account/security', /^Settings$/], ['/owner/customers', /^Customers$/], ['/owner/pending-payments', /^Report & Payments$/], ['/owner/activity', /^Activity Log$/], ['/owner/delete-account', /^Delete account$/],
 ];
 
@@ -205,10 +205,10 @@ describe('owner portal navigation', () => {
     const dlg = await screen.findByRole('dialog', { name: 'Log out?' });
     await userEvent.click(within(dlg).getByRole('button', { name: 'Stay logged in' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Log out?' })).toBeNull());
-    expect(sessionStorage.getItem('kickoff_token')).toBe('t'); // still signed in
+    expect(sessionStorage.getItem('playnx_token')).toBe('t'); // still signed in
     await userEvent.click(screen.getByRole('button', { name: /Arjun Mehta/ })); await userEvent.click(screen.getByRole('menuitem', { name: 'Log out' }));
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Log out?' })).getByRole('button', { name: 'Log out' }));
-    await waitFor(() => expect(sessionStorage.getItem('kickoff_token')).toBeNull());
+    await waitFor(() => expect(sessionStorage.getItem('playnx_token')).toBeNull());
   });
 
   it('the owner adds staff logins, switches one off, and removes one', async () => {
@@ -251,7 +251,7 @@ describe('owner portal navigation', () => {
 
   it('the Overview shows what is left before the venue can go live, linking each open step, and hides once everything is done', async () => {
     routes_override['/owner/checklist'] = { venue: { name: 'Green Arena' }, done: 2, total: 4, complete: false, items: [
-      { id: 'verified', label: 'Business details verified by KickOff', done: true, link: '/owner/account/business' }, { id: 'bank', label: 'Bank account added for payouts', done: true, link: '/owner/account/bank' },
+      { id: 'verified', label: 'Business details verified by PlaynX', done: true, link: '/owner/account/business' }, { id: 'bank', label: 'Bank account added for payouts', done: true, link: '/owner/account/bank' },
       { id: 'photos', label: 'Add venue photos', done: false, link: '/owner/venues/v1' }, { id: 'area', label: 'Add a playing area with its sports', done: false, link: '/owner/areas' }] };
     renderAt('/owner');
     const box = await screen.findByRole('region', { name: 'Go-live checklist' });
@@ -280,7 +280,7 @@ describe('owner portal navigation', () => {
     await userEvent.click(toggle);
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(nav).getByRole('link', { name: /Playing areas/ })).toBeInTheDocument(); // collapsed: items are listed flat, without opening groups
-    expect(localStorage.getItem('kickoff_owner_side')).toBe('1');
+    expect(localStorage.getItem('playnx_owner_side')).toBe('1');
     await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
   });
 
@@ -436,7 +436,7 @@ describe('venue page layout and status', () => {
     expect(c.getByRole('button', { name: 'Edit' })).toBeDisabled();
     expect(c.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument();
     expect(c.getByRole('link', { name: 'View' })).toBeInTheDocument();
-    expect(c.getByText(/cannot be edited until KickOff reviews it/)).toBeInTheDocument();
+    expect(c.getByText(/cannot be edited until PlaynX reviews it/)).toBeInTheDocument();
   });
   it('Edit opens the venue form for that venue', async () => {
     venues('ready'); renderAt('/owner/venues');
@@ -467,7 +467,7 @@ describe('venue page layout and status', () => {
     await userEvent.click(within(card('Green Arena')).getByRole('button', { name: 'Publish' }));
     expect(await screen.findByText(/Set the prices and opening hours/)).toBeInTheDocument();
   });
-  it('a venue is not greyed out once KickOff approves it, even before the owner publishes it', async () => {
+  it('a venue is not greyed out once PlaynX approves it, even before the owner publishes it', async () => {
     routes_override['/owner/venues'] = { venues: [{ ...VENUE, id: 'v1', status: 'ready', area_count: 1 }] };
     renderAt('/owner/venues');
     expect(await screen.findByText('Approved · not published')).toBeInTheDocument();
@@ -543,16 +543,34 @@ describe('owner pages show real data and handle states', () => {
     for (const h of ['Total amount', 'You get', 'Platform fee', 'Pending', 'Status', 'Actions']) expect(screen.getByRole('columnheader', { name: h })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Price' })).toBeNull();
     expect(screen.getByText('Received ₹500')).toBeInTheDocument();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await userEvent.click(screen.getByRole('button', { name: 'Mark KO-WALK1 as paid' }));
-    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/owner/bookings/w1/payments', { amount: 1000, mode: 'offline', note: 'Paid at the venue after playing' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Payment for KO-WALK1' });
+    expect(within(dlg).getByLabelText(/Amount received/)).toHaveValue(1000); // the pending amount is filled in
+    await userEvent.selectOptions(within(dlg).getByLabelText('Paid by'), 'upi');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Mark as paid' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/owner/bookings/w1/payments', { amount: 1000, mode: 'upi', note: 'Paid at the venue after playing' }));
   });
-  it('a cancelled KickOff booking earns nothing and says why there is no action; a paid one says it was paid through KickOff', async () => {
+  it('an advance booking: the advance was paid online, the balance is pending, and Collect balance records what the customer paid', async () => {
+    routes_override['/owner/bookings'] = { bookings: [{ ...BOOKING, id: 'a1', reference: 'KO-ADV1', status: 'completed', booking_source: 'online', total: 2000, advance_amount: 600, amount_paid: 600, payment_discount: 0, owner_amount: '1800', commission_amount: '200' }], total: 1 };
+    renderAt('/owner/bookings');
+    const row = (await screen.findByText('KO-ADV1')).closest('tr')!;
+    expect(row).toHaveTextContent('Advance ₹600 paid online'); expect(row).toHaveTextContent('₹1,400'); // pending balance
+    expect(row).toHaveTextContent('₹400'); // you get so far: ₹600 received less the ₹200 fee
+    await userEvent.click(within(row).getByRole('button', { name: 'Collect balance for KO-ADV1' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Payment for KO-ADV1' });
+    await userEvent.clear(within(dlg).getByLabelText(/Amount received/)); await userEvent.type(within(dlg).getByLabelText(/Amount received/), '1500');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Mark as paid' }));
+    expect(await within(dlg).findByText('Only ₹1,400 is pending.')).toBeInTheDocument();
+    await userEvent.clear(within(dlg).getByLabelText(/Amount received/)); await userEvent.type(within(dlg).getByLabelText(/Amount received/), '1400');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Mark as paid' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/owner/bookings/a1/payments', { amount: 1400, mode: 'cash', note: 'Paid at the venue after playing' }));
+  });
+  it('a cancelled PlaynX booking earns nothing and says why there is no action; a paid one says it was paid through PlaynX', async () => {
     routes_override['/owner/bookings'] = { bookings: [{ ...BOOKING, id: 'c1', reference: 'KO-CANC1', status: 'cancelled', booking_source: 'online', total: 983, owner_amount: '884.70', commission_amount: '98.30' }, { ...BOOKING, id: 'p1', reference: 'KO-PAID1', status: 'confirmed', booking_source: 'online', total: 1000, owner_amount: '900', commission_amount: '100' }], total: 2 };
     renderAt('/owner/bookings');
     const row = (await screen.findByText('KO-CANC1')).closest('tr')!;
     expect(row).not.toHaveTextContent('884.70'); expect(row).not.toHaveTextContent('Received'); expect(row).toHaveTextContent('Cancelled, nothing to collect');
-    expect(screen.getByText('KO-PAID1').closest('tr')!).toHaveTextContent('Paid through KickOff'); expect(screen.getByText('KO-PAID1').closest('tr')!).toHaveTextContent('Fully paidReceived ₹1,000');
+    expect(screen.getByText('KO-PAID1').closest('tr')!).toHaveTextContent('Paid through PlaynX'); expect(screen.getByText('KO-PAID1').closest('tr')!).toHaveTextContent('₹0Received ₹1,000');
   });
   it('with hours set today but no price, every page except pricing and hours sends the owner to Pricing with a note', async () => {
     routes_override['/owner/pricing-gate'] = { blocked: true, areas: [{ id: 'a1', name: 'Turf A', venueId: 'v1', venueName: 'Green Arena', today: 5, tomorrow: 0 }] };
@@ -641,5 +659,136 @@ describe('owner pages show real data and handle states', () => {
     expect(await screen.findByLabelText('Search')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Pending' }));
     expect((await screen.findAllByText(/Total pending|Nothing pending/)).length).toBeGreaterThan(0);
+  });
+});
+describe('wrong account', () => {
+  it('an admin link opened while signed in as a venue owner says so and offers to switch accounts', async () => {
+    renderAt('/admin/venues');
+    expect(await screen.findByRole('heading', { name: 'This page is for an admin account' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to my venue owner portal' })).toHaveAttribute('href', '/owner');
+    await userEvent.click(screen.getByRole('button', { name: 'Log out and log in as admin' }));
+    expect(await screen.findByLabelText(/email or mobile number/i)).toBeInTheDocument(); // the admin login page
+  });
+  it('the overview cards open the page behind each number', async () => {
+    renderAt('/owner');
+    expect(await screen.findByRole('link', { name: /Total Venues/ })).toHaveAttribute('href', '/owner/venues');
+    expect(screen.getByRole('link', { name: /Today's Bookings/ })).toHaveAttribute('href', '/owner/bookings?preset=today');
+    expect(screen.getByRole('link', { name: /Completed Bookings/ })).toHaveAttribute('href', '/owner/bookings?status=completed');
+    expect(screen.getByRole('link', { name: /Open Slots Today/ })).toHaveAttribute('href', '/owner/slots');
+  });
+});
+
+describe('deleting a playing area', () => {
+  const base = VENUE.areas[0];
+  it('asks in a pop-up, sends it for approval with the reason, and a requested area is greyed out with only "Cancel delete request"', async () => {
+    window.confirm = () => { throw new Error('no browser confirm box'); };
+    vi.mocked(api.del).mockResolvedValue({ deletionStatus: 'pending', upcomingBookings: 0 } as any);
+    routes_override['/owner/areas/a1/upcoming-bookings'] = { bookings: [{ id: 'b1', customer_name: 'Ravi Kumar', reference: 'PX-ABC1234', starts_at: '2030-01-01T12:30:00Z', ends_at: '2030-01-01T13:30:00Z' }] };
+    renderAt('/owner/areas');
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Delete Turf A?' });
+    expect(within(dlg).getByText(/Closed for booking straight away/)).toBeInTheDocument();
+    expect(await within(dlg).findByText(/There is 1 upcoming booking/)).toBeInTheDocument();
+    expect(within(dlg).getByText('Ravi Kumar')).toBeInTheDocument();
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Cancel' }));
+    expect(vi.mocked(api.del)).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const dlg2 = await screen.findByRole('dialog', { name: 'Delete Turf A?' });
+    await userEvent.type(within(dlg2).getByLabelText(/Reason/), 'Making it a parking area');
+    await userEvent.click(within(dlg2).getByRole('button', { name: 'Send delete request' }));
+    await waitFor(() => expect(vi.mocked(api.del)).toHaveBeenCalledWith('/owner/areas/a1', { reason: 'Making it a parking area' }));
+    delete routes_override['/owner/areas/a1/upcoming-bookings'];
+    cleanup();
+    routes_override['/owner/venues/v1'] = { venue: { ...VENUE, areas: [{ ...base, is_active: false, deletion_status: 'pending' }] } };
+    renderAt('/owner/areas');
+    expect(await screen.findByText('Delete waiting for approval')).toBeInTheDocument();
+    expect(screen.getByText(/closed for booking while PlaynX reviews/)).toBeInTheDocument();
+    for (const b of ['Edit', 'Deactivate', 'Activate', 'Delete']) expect(screen.queryByRole('button', { name: b })).toBeNull();
+    vi.mocked(api.post).mockResolvedValue({ deletionStatus: null } as any);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel delete request' }));
+    expect(vi.mocked(api.post)).toHaveBeenCalledWith('/owner/areas/a1/cancel-deletion', {});
+  });
+  it('a deleted area stays listed, greyed out, with no actions', async () => {
+    routes_override['/owner/venues/v1'] = { venue: { ...VENUE, areas: [{ ...base, is_active: false, deletion_status: 'deleted', deleted_at: '2030-01-02T00:00:00Z' }] } };
+    renderAt('/owner/areas');
+    expect(await screen.findByText('Deleted')).toBeInTheDocument();
+    expect(screen.getByText(/booking history is kept/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel delete request' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+  });
+});
+
+describe('payment settings page', () => {
+  it('shows the current choice and lets the owner switch to full payment or change the advance percentage', async () => {
+    routes_override['/owner/payment-collection'] = { mode: 'advance', advancePercent: 50 };
+    vi.mocked(api.put).mockResolvedValue({} as any);
+    renderAt('/owner/account/payment-settings');
+    expect((await screen.findAllByRole('heading', { name: 'Payment settings' })).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Advance 50%')).toBeInTheDocument();
+    expect(screen.getByText(/₹500 for a ₹1,000 slot/)).toBeInTheDocument();
+    const nav = screen.getAllByRole('navigation')[0];
+    expect(within(nav).getAllByRole('link', { name: /Payment settings/ })[0]).toHaveAttribute('href', '/owner/account/payment-settings');
+
+    const pct = screen.getByLabelText(/Advance percentage/);
+    await userEvent.clear(pct); await userEvent.type(pct, '30');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/owner/payment-collection', { mode: 'advance', advancePercent: 30 }));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Full amount/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/owner/payment-collection', { mode: 'full' }));
+    delete routes_override['/owner/payment-collection'];
+  });
+});
+
+describe('business type change after approval', () => {
+  it('shows the current type, opens the form in a pop-up and shows a waiting request with Cancel', async () => {
+    routes_override['/owner/application/business-change'] = { request: null };
+    routes_override['/owner/application'] = { ...ACTIVE_APP, owner: { fullName: 'Arjun Mehta' }, business: { ...ACTIVE_APP.business, type: 'individual' }, personal: { done: true } };
+    renderAt('/owner/account/business');
+    expect(await screen.findByText('Business type')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Change business type' }));
+    expect(await screen.findByRole('heading', { name: 'Change business type' })).toBeInTheDocument();
+    expect(await screen.findByText(/PlaynX checks them before the change goes live/)).toBeInTheDocument();
+    cleanup();
+    routes_override['/owner/application/business-change'] = { request: { id: 'c1', status: 'pending', fromType: 'individual', toType: 'partnership_pvt_ltd' } };
+    renderAt('/owner/account/business');
+    expect(await screen.findByText(/is waiting for PlaynX approval/)).toBeInTheDocument();
+    expect(screen.getByText('Partnership / Private Limited Company')).toBeInTheDocument();
+    vi.mocked(api.del).mockResolvedValue({ cancelled: true } as any);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    expect(vi.mocked(api.del)).toHaveBeenCalledWith('/owner/application/business-change');
+    delete routes_override['/owner/application/business-change']; delete routes_override['/owner/application'];
+  });
+});
+
+describe('Google sign-up: complete the account', () => {
+  it('an owner who signed up with Google fills first name, last name, mobile and password before the portal opens', async () => {
+    routes_override['/auth/me'] = { user: { ...OWNER, fullName: 'Arjun Mehta', credentialSet: false, emailVerified: true } };
+    vi.mocked(api.post).mockResolvedValue({ user: { ...OWNER, credentialSet: true } } as any);
+    renderAt('/owner');
+    expect(await screen.findByRole('heading', { name: 'Complete your account' })).toBeInTheDocument();
+    expect((screen.getByLabelText('First Name') as HTMLInputElement).value).toBe('Arjun'); expect((screen.getByLabelText('Last Name') as HTMLInputElement).value).toBe('Mehta');
+    await userEvent.click(screen.getByRole('button', { name: /Create account/ }));
+    expect(await screen.findByText(/valid 10-digit mobile/)).toBeInTheDocument(); expect(vi.mocked(api.post)).not.toHaveBeenCalledWith('/auth/complete-signup', expect.anything());
+    await userEvent.type(screen.getByLabelText('Mobile Number'), '9876543210');
+    await userEvent.type(screen.getByLabelText(/^Password/), 'OwnerPass123'); await userEvent.type(screen.getByLabelText(/^Confirm Password/), 'OwnerPass123');
+    await userEvent.click(screen.getByRole('checkbox', { name: /Terms and Conditions/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Create account/ }));
+    await waitFor(() => expect(vi.mocked(api.post)).toHaveBeenCalledWith('/auth/complete-signup', { firstName: 'Arjun', lastName: 'Mehta', phone: '9876543210', newPassword: 'OwnerPass123', confirmPassword: 'OwnerPass123', acceptTerms: true }));
+    delete routes_override['/auth/me'];
+  });
+});
+
+describe('dashboard stat cards', () => {
+  it('show the real numbers, stagger in once, link to their pages and mark open slots with a live dot', async () => {
+    const { container } = renderAt('/owner');
+    const venues = await screen.findByRole('link', { name: /Total Venues/ });
+    expect(venues).toHaveClass('stat-card', 'stat-enter'); expect(venues).toHaveStyle({ animationDelay: '0ms' });
+    expect(screen.getByRole('link', { name: /Open Slots Today/ })).toHaveStyle({ animationDelay: '455ms' });
+    expect(within(venues).getByText('2')).toBeInTheDocument(); // from the overview response, not made up
+    expect(screen.getByLabelText('17 open of 30 slots today')).toBeInTheDocument();
+    expect(container.querySelector('.stat-ping')).not.toBeNull(); // 17 open: the availability dot pulses gently
+    expect(screen.getByRole('link', { name: /Total Revenue/ })).toHaveClass('stat-accent');
   });
 });

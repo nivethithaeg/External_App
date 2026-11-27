@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cx } from '../lib/utils';
 
-/** The KICKOFF orange, used for every active state in the filter section. */
-export const NEON = '#FF6500';
+/** The PlaynX orange, used for every active state in the filter section. */
+export const NEON = '#7200FF';
 
 /* ------------------------------------------------------------- Dropdown */
 export interface Opt { value: string; label: string }
@@ -39,9 +39,9 @@ export function FancySelect({ label, value, onChange, options, disabled, placeho
       <span id={lab} className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">{label}</span>
       <button ref={btnRef} id={btn} type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-controls={list} aria-labelledby={`${lab} ${btn}`}
         onClick={() => (open ? setOpen(false) : openList())} onKeyDown={key}
-        className={cx('field flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50', open && '!border-[#FF6500] !shadow-[0_0_0_3px_rgb(255_101_0/.18)]')}>
+        className={cx('field flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50', open && '!border-[#7200FF] !shadow-[0_0_0_3px_rgb(255_101_0/.18)]')}>
         <span className={cx('truncate', !cur && 'text-muted/70')}>{cur?.label ?? placeholder}</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={cx('shrink-0 text-muted transition-transform duration-200', open && 'rotate-180 text-[#FF6500]')}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={cx('shrink-0 text-muted transition-transform duration-200', open && 'rotate-180 text-[#7200FF]')}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
       <AnimatePresence>
         {open && (
@@ -50,7 +50,7 @@ export function FancySelect({ label, value, onChange, options, disabled, placeho
             {options.map((o, i) => (
               <motion.li key={o.value || '__all'} role="option" aria-selected={o.value === value} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 8) * 0.02, duration: 0.18 }}
                 onMouseEnter={() => setActive(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(o)}
-                className={cx('flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors', o.value === value ? 'font-semibold text-[#FF6500]' : 'text-ink', active === i && 'bg-[#FF6500]/10')}>
+                className={cx('flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors', o.value === value ? 'font-semibold text-[#7200FF]' : 'text-ink', active === i && 'bg-[#7200FF]/10')}>
                 <span className="truncate">{o.label}</span>
                 {o.value === value && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path className="draw-tick" d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               </motion.li>))}
@@ -74,7 +74,7 @@ export function PriceRange({ min, max, bound = 5000, step = 100, onCommit }: { m
         <span className="font-semibold tabular-nums text-ink" aria-live="polite">{fmt(lo)} – {fmt(hi, true)}</span></div>
       <div className="dual-range relative h-6">
         <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-line" />
-        <div className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full transition-[left,width] duration-100" style={{ left: `${pct(lo)}%`, width: `${Math.max(0, pct(hi) - pct(lo))}%`, background: NEON, boxShadow: '0 0 10px rgb(255 101 0 / .45)' }} />
+        <div className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full transition-[left,width] duration-100" style={{ left: `${pct(lo)}%`, width: `${Math.max(0, pct(hi) - pct(lo))}%`, background: NEON, boxShadow: '0 0 10px rgb(114 0 255 / .45)' }} />
         <input type="range" aria-label="Minimum price" min={0} max={bound} step={step} value={lo} onChange={(e) => setLo(Math.min(+e.target.value, hi - step))} onPointerUp={() => commit()} onKeyUp={() => commit()} onBlur={() => commit()} />
         <input type="range" aria-label="Maximum price" min={0} max={bound} step={step} value={hi} onChange={(e) => setHi(Math.max(+e.target.value, lo + step))} onPointerUp={() => commit()} onKeyUp={() => commit()} onBlur={() => commit()} />
       </div>
@@ -88,8 +88,8 @@ export function FancyCheckbox({ label, checked, onChange }: { label: string; che
   return (
     <label className="fx-check group flex cursor-pointer items-center gap-2.5 py-1 text-sm">
       <input type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="fx-box grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 border-line transition-colors duration-150 group-hover:border-[#FF6500]/70" aria-hidden="true">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#101010" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+      <span className="fx-box grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 border-line transition-colors duration-150 group-hover:border-[#7200FF]/70" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7" stroke="#0B1340" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
       <span className="transition-colors group-hover:text-ink">{label}</span>
     </label>
   );
@@ -98,7 +98,7 @@ export function FancyRadio({ name, label, checked, onChange }: { name: string; l
   return (
     <label className="fx-radio group flex cursor-pointer items-center gap-2.5 py-1 text-sm">
       <input type="radio" name={name} className="sr-only" checked={checked} onChange={onChange} />
-      <span className="fx-dot grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-line transition-colors duration-150 group-hover:border-[#FF6500]/70" aria-hidden="true"><i className="h-2.5 w-2.5 rounded-full" /></span>
+      <span className="fx-dot grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-line transition-colors duration-150 group-hover:border-[#7200FF]/70" aria-hidden="true"><i className="h-2.5 w-2.5 rounded-full" /></span>
       <span className="transition-colors group-hover:text-ink">{label}</span>
     </label>
   );
@@ -112,11 +112,11 @@ export function SportCards({ sports, value, onChange }: { sports: { id: number; 
     <div role="radiogroup" aria-label="Sport" className="grid grid-cols-2 gap-2">
       {sports.map((s) => { const on = value === s.slug; return (
         <motion.button key={s.slug} type="button" role="radio" aria-checked={on} onClick={() => onChange(on ? '' : s.slug)} whileTap={{ scale: 0.96 }}
-          className={cx('relative flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition-colors duration-200', on ? 'border-[#FF6500] bg-[#FF6500]/10 text-ink shadow-[0_0_0_1px_rgb(255_101_0/.35)]' : 'border-line text-muted hover:border-[#FF6500]/50 hover:text-ink')}>
+          className={cx('relative flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition-colors duration-200', on ? 'border-[#7200FF] bg-[#7200FF]/10 text-ink shadow-[0_0_0_1px_rgb(255_101_0/.35)]' : 'border-line text-muted hover:border-[#7200FF]/50 hover:text-ink')}>
           <span key={String(on)} className={cx('text-xl', on && 'animate-pop')} aria-hidden="true">{ICON[s.slug] ?? '🏟️'}</span>
           <span className="truncate">{s.name}</span>
           <AnimatePresence>{on && <motion.span initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }} className="absolute right-1.5 top-1.5 grid h-4 w-4 place-items-center rounded-full" style={{ background: NEON }} aria-hidden="true">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path className="draw-tick" d="M5 12.5l4.5 4.5L19 7" stroke="#101010" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg></motion.span>}</AnimatePresence>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path className="draw-tick" d="M5 12.5l4.5 4.5L19 7" stroke="#0B1340" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg></motion.span>}</AnimatePresence>
         </motion.button>); })}
     </div>
   );

@@ -10,7 +10,7 @@ import { cancelBooking, cancelSeriesFrom, createSeries, rescheduleBooking, relea
 
 export const BOOKING_SELECT = `
   SELECT b.id, b.reference, b.status, lower(b.during) AS starts_at, upper(b.during) AS ends_at, b.subtotal, b.discount, b.total, b.addons_total::float8 AS addons_total,
-         b.cancel_reason, b.cancelled_at, b.wallet_amount::float8 AS wallet_amount, b.series_id, b.series_index, b.is_split, (SELECT count(*)::int FROM bookings s WHERE s.series_id=b.series_id) AS series_count, b.reschedule_count, b.rescheduled_at, b.created_at, b.expires_at, b.sport_id, sp.name AS sport, b.source, b.payment_method,
+         b.cancel_reason, b.cancelled_at, b.wallet_amount::float8 AS wallet_amount, b.advance_amount::float8 AS advance_amount, b.amount_paid::float8 AS amount_paid, COALESCE(b.payment_discount,0)::float8 AS payment_discount, b.series_id, b.series_index, b.is_split, (SELECT count(*)::int FROM bookings s WHERE s.series_id=b.series_id) AS series_count, b.reschedule_count, b.rescheduled_at, b.created_at, b.expires_at, b.sport_id, sp.name AS sport, b.source, b.payment_method,
          v.id AS venue_id, v.name AS venue_name, v.address, v.city, v.lat, v.lng, v.timezone, v.cancellation_hours,
          a.id AS area_id, a.name AS area_name,
          (SELECT url FROM venue_images i WHERE i.venue_id=v.id AND i.area_id IS NULL AND i.kind='image' AND NOT i.is_pending ORDER BY i.is_cover DESC, i.sort_order LIMIT 1) AS cover_image,

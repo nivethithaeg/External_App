@@ -26,7 +26,7 @@ export async function openCheckout(o: { keyId: string; orderId: string; amount: 
     let failure: string | null = null;
     const rzp = new window.Razorpay!({
       key: o.keyId, order_id: o.orderId, amount: Math.round(o.amount * 100), currency: 'INR', name: o.name, description: o.description,
-      prefill: o.prefill, theme: { color: '#FF6B22' },
+      prefill: o.prefill, theme: { color: '#7200FF' },
       remember_customer: false, // no "save your card" step or OTP; the customer just pays
       handler: (r: CheckoutResult) => resolve(r),
       modal: { ondismiss: () => reject(new PaymentNotCompleted(!!failure, failure ?? 'dismissed')) },

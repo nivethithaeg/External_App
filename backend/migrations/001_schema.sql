@@ -1,4 +1,4 @@
--- KickOff Turf Booking Platform: core schema
+-- PlaynX Turf Booking Platform: core schema
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- ---------- identity ----------

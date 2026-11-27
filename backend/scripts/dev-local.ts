@@ -29,8 +29,8 @@ const db = { ...wrap(pg), tx: (fn: any) => pg.transaction((t) => fn(wrap(t))), e
 
 console.log('Migrations applied:', await migrate(db));
 if (process.env.DEMO === '1') {
-  const pw = process.env.DEMO_PASSWORD ?? 'Kickoff@12345';
-  if (await seedDemo(db, pw)) console.log(`Demo data loaded. Logins: admin@kickoff.local / owner@kickoff.local  password: ${pw}`);
+  const pw = process.env.DEMO_PASSWORD ?? 'PlaynX@12345';
+  if (await seedDemo(db, pw)) console.log(`Demo data loaded. Logins: admin@playnx.local / owner@playnx.local  password: ${pw}`);
 }
 
 const rt = { current: noopRealtime };
@@ -40,4 +40,4 @@ const ctx: Ctx = { db, cfg, google: createGoogleVerifier(cfg), mailer, sms: crea
 const server = http.createServer(createApp(ctx));
 rt.current = attachRealtime(server, cfg);
 setInterval(() => runMaintenance(ctx).catch((e) => console.error('[maintenance]', e)), 30_000);
-server.listen(cfg.PORT, () => console.log(`KickOff API (local, embedded Postgres) on http://localhost:${cfg.PORT}`));
+server.listen(cfg.PORT, () => console.log(`PlaynX API (local, embedded Postgres) on http://localhost:${cfg.PORT}`));

@@ -263,7 +263,7 @@ describe('live photos in the playing area form', () => {
   it('says new photos on a live venue wait for approval', async () => {
     const dlg = await openNew(venue({ status: 'approved' }));
     await takePhoto(dlg); await waitFor(() => expect(within(dlg).queryByAltText('New live photo 1')).not.toBeNull());
-    expect(within(dlg).getByText(/after KickOff approves them/)).toBeInTheDocument();
+    expect(within(dlg).getByText(/after PlaynX approves them/)).toBeInTheDocument();
   });
 });
 

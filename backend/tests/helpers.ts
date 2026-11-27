@@ -1,3 +1,5 @@
+import { withFileEncryption } from '../src/lib/fileCrypto.js';
+import { createJusgoFake, type JusgoFake } from './jusgoFake.js';
 import { PGlite, types } from '@electric-sql/pglite';
 import { btree_gist } from '@electric-sql/pglite/contrib/btree_gist';
 import request from 'supertest';
@@ -27,7 +29,7 @@ export async function createPgliteDb(): Promise<Db> {
 }
 
 export interface TestEnv {
-  ctx: Ctx; app: ReturnType<typeof createApp>; db: Db; clock: { offsetMs: number };
+  ctx: Ctx; app: ReturnType<typeof createApp>; db: Db; clock: { offsetMs: number }; jusgo: JusgoFake; privateFiles: Map<string, { data: Buffer; contentType: string }>;
   emails: { to: string; subject: string; html: string }[];
   sms: { to: string; message: string }[];
   gatewayCalls: { orders: any[]; refunds: any[]; failRefund: boolean };
@@ -36,7 +38,7 @@ export interface TestEnv {
 const privateFiles = new Map<string, { data: Buffer; contentType: string }>();
 export async function setup(overrides: Record<string, string> = {}): Promise<TestEnv> {
   const cfg = loadConfig({
-    NODE_ENV: 'test', REQUIRE_AREA_GEOTAG: 'false', REQUIRE_LIVE_AREA_PHOTOS: 'false', GEOCODE_URL: '', ...overrides, JWT_SECRET: 'x'.repeat(40), RAZORPAY_KEY_ID: 'rzp_test_key', RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: WEBHOOK_SECRET,
+    NODE_ENV: 'test', ADMIN_MFA: 'false', REQUIRE_AREA_GEOTAG: 'false', REQUIRE_LIVE_AREA_PHOTOS: 'false', GEOCODE_URL: '', ...overrides, JWT_SECRET: 'x'.repeat(40), RAZORPAY_KEY_ID: 'rzp_test_key', RAZORPAY_KEY_SECRET: KEY_SECRET, RAZORPAY_WEBHOOK_SECRET: WEBHOOK_SECRET,
   } as any);
   const db = await createPgliteDb();
   await migrate(db);
@@ -54,18 +56,21 @@ export async function setup(overrides: Record<string, string> = {}): Promise<Tes
   };
   const mailer = { async send(to: string, subject: string, html: string) { emails.push({ to, subject, html }); } };
   const smsLog: TestEnv['sms'] = [];
+  const jusgo = createJusgoFake();
   const sms = { async send(to: string, message: string) { smsLog.push({ to, message }); } };
   const google = { async verify(t: string) { if (t.startsWith('good:')) return { email: t.slice(5), name: 'Google User' }; throw new Error('bad'); } };
   const base = { db, cfg, google, gateway, mailer, sms, realtime: noopRealtime, now: () => new Date(Date.now() + clock.offsetMs) };
   const ctx: Ctx = {
-    ...base, storage: {
+    ...base, storage: withFileEncryption({
       async upload(folder, _n, _d, ct) { return `https://files.test/${folder}/${crypto.randomUUID()}.${ct.split('/')[1]}`; },
       async putPrivate(folder, data, ct) { const k = `${folder}/${crypto.randomUUID()}`; privateFiles.set(k, { data, contentType: ct }); return k; },
       async getPrivate(k) { const f = privateFiles.get(k); if (!f) throw new Error('missing'); return f; },
-    },
+      async deletePrivate(k) { privateFiles.delete(k); },
+    }, cfg.DATA_ENCRYPTION_KEY || cfg.JWT_SECRET),
+    jusgo,
     notifier: createNotifier(db, noopRealtime, mailer, { async send() { return []; } }),
   };
-  return { ctx, app: createApp(ctx), db, clock, emails, sms: smsLog, gatewayCalls };
+  return { ctx, app: createApp(ctx), db, clock, emails, sms: smsLog, gatewayCalls, jusgo, privateFiles };
 }
 
 let seq = 0;
@@ -147,7 +152,7 @@ export async function pay(env: TestEnv, c: { auth: any }, bookingId: string, ord
     .send({ razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: sign(orderId, paymentId) });
 }
 
-/** Approve an owner account (venue owners cannot add or manage venues until KickOff approves them). */
+/** Approve an owner account (venue owners cannot add or manage venues until PlaynX approves them). */
 export async function approveOwner(env: TestEnv, admin: { auth: any }, owner: { id: string }) {
   await request(env.app).post(`/api/admin/owners/${owner.id}/verification`).set(admin.auth).send({ status: 'verified' }).expect(200);
   // a venue cannot be created without payout bank details; tests that are about something else get a default account

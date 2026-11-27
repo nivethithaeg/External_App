@@ -12,7 +12,7 @@ const balance = async () => ((await request(env.app).get('/api/admin/payouts').s
 const settle = async () => (await request(env.app).get('/api/owner/settlements').set(fx.owner.auth).expect(200)).body.summary;
 const payout = (amount: number) => request(env.app).post('/api/admin/payouts').set(admin.auth).send({ ownerId: fx.owner.id, amount, periodStart: dateIn(-30), periodEnd: dateIn(30) });
 
-describe('customer money is held by KickOff before it reaches the owner', () => {
+describe('customer money is held by PlaynX before it reaches the owner', () => {
   beforeEach(() => { env.clock.offsetMs = 0; });
   it('releases the owner share only 48 hours after the game, and not at all while the customer has an open complaint', async () => {
     const c = await registerUser(env, 'customer'); const date = dateIn(4);
@@ -23,14 +23,14 @@ describe('customer money is held by KickOff before it reaches the owner', () => 
 
     // before the game: nothing is owed yet
     expect(await balance()).toBeUndefined();
-    // game played, but still inside the 48 hour hold: KickOff keeps the money
+    // game played, but still inside the 48 hour hold: PlaynX keeps the money
     await env.db.query(`UPDATE bookings SET status='completed' WHERE id=$1`, [id]);
     env.clock.offsetMs = end + 47 * hour - Date.now();
     expect(await balance()).toMatchObject({ payable: 0, holding: owner, disputed: 0 });
     expect(await settle()).toMatchObject({ available: 0, holding: owner, holdHours: 48 });
     const early = await payout(owner).expect(409); expect(early.body.error.code).toBe('not_released');
 
-    // the customer raises a complaint about this booking: after 48 hours the money still stays with KickOff
+    // the customer raises a complaint about this booking: after 48 hours the money still stays with PlaynX
     const t = await request(env.app).post('/api/me/tickets').set(c.auth).send({ subject: 'Turf was not as described', message: 'The ground was waterlogged.', bookingId: id }).expect(201);
     env.clock.offsetMs = end + 49 * hour - Date.now();
     expect(await balance()).toMatchObject({ payable: 0, holding: 0, disputed: owner });

@@ -52,8 +52,8 @@ export function OwnerBookingsPage() {
       <Modal open={!!cancelId} onClose={() => setCancelId(null)} title="Cancel booking"><p className="mb-3 text-sm text-muted">The customer is notified and refunded in full. Use this only when you cannot host the game.</p>
         <Textarea label="Reason (shown to customer)" value={reason} onChange={(e) => setReason(e.target.value)} /><div className="mt-4 flex justify-end gap-2"><Button variant="ghost" onClick={() => setCancelId(null)}>Back</Button><Button variant="danger" disabled={reason.trim().length < 3} loading={cancel.isPending} onClick={() => cancel.mutate()}>Cancel & refund</Button></div></Modal>
       <Modal open={scan} onClose={() => { setScan(false); setScanRes(null); setScanErr(''); }} title="Check a booking">
-        <p className="mb-3 text-sm text-muted">Type the booking reference the player shows you (for example <code>KO-AB12CD3</code>).</p>
-        <div className="flex gap-2"><input className="field uppercase" aria-label="Booking reference" placeholder="KO-XXXXXXX" value={code} onChange={(e) => setCode(e.target.value)} /><Button onClick={verify} disabled={code.trim().length < 6}>Check</Button></div>
+        <p className="mb-3 text-sm text-muted">Type the booking reference the player shows you (for example <code>PX-AB12CD3</code>).</p>
+        <div className="flex gap-2"><input className="field uppercase" aria-label="Booking reference" placeholder="PX-XXXXXXX" value={code} onChange={(e) => setCode(e.target.value)} /><Button onClick={verify} disabled={code.trim().length < 6}>Check</Button></div>
         {scanErr && <p role="alert" className="mt-3 text-sm text-danger">{scanErr}</p>}
         {scanRes && <div className={`mt-4 rounded-xl border p-4 ${scanRes.valid ? 'border-ok/50 bg-ok/10' : 'border-danger/50 bg-danger/10'}`}><p className="text-lg font-bold">{scanRes.valid ? '✓ Valid booking' : '✗ Not valid for entry'}</p>
           <p className="text-sm">{scanRes.booking.customer_name} · {scanRes.booking.area_name}</p><p className="text-xs text-muted">{fmtRange(scanRes.booking.starts_at, scanRes.booking.ends_at)} · {titleCase(scanRes.booking.status)}</p></div>}
@@ -157,7 +157,7 @@ function ProfileForm({ profile, onSaved }: { profile: any; onSaved(): void }) {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   return (
     <div className="max-w-2xl space-y-5"><PageHeader title="Business & bank details" actions={<Badge status={profile.verification_status} />} />
-      {profile.verification_note && <p className="rounded-xl border border-line p-3 text-sm"><b>Note from KickOff:</b> {profile.verification_note}</p>}
+      {profile.verification_note && <p className="rounded-xl border border-line p-3 text-sm"><b>Note from PlaynX:</b> {profile.verification_note}</p>}
       <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
         <Card className="space-y-4 p-5"><h2 className="text-2xl font-bold">Business</h2><Input label="Business name" value={f.businessName} onChange={set('businessName')} required /><div className="grid grid-cols-2 gap-3"><Input label="GSTIN" value={f.gstin} onChange={set('gstin')} /><Input label="PAN" value={f.pan} onChange={set('pan')} /></div><Input label="Registered address" value={f.address} onChange={set('address')} /></Card>
         <Card className="space-y-4 p-5"><h2 className="text-2xl font-bold">Payout account</h2><Input label="Account holder" value={f.bankAccountName} onChange={set('bankAccountName')} /><div className="grid grid-cols-2 gap-3"><Input label="Account number" inputMode="numeric" value={f.bankAccountNumber} onChange={set('bankAccountNumber')} pattern="\d{6,20}" /><Input label="IFSC" value={f.bankIfsc} onChange={(e) => setF({ ...f, bankIfsc: e.target.value.toUpperCase() })} pattern="[A-Z]{4}0[A-Z0-9]{6}" /></div><Input label="UPI ID (optional)" value={f.upiId} onChange={set('upiId')} /></Card>

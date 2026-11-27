@@ -10,7 +10,7 @@ export async function reverseGeocode(cfg: Pick<Config, 'GEOCODE_URL'>, at: Gps):
   if (!cfg.GEOCODE_URL) return null;
   try {
     const url = `${cfg.GEOCODE_URL}${cfg.GEOCODE_URL.includes('?') ? '&' : '?'}format=jsonv2&zoom=18&lat=${encodeURIComponent(at.lat)}&lon=${encodeURIComponent(at.lng)}`;
-    const res = await fetch(url, { headers: { 'user-agent': 'KickOff/1.0 turf-booking', accept: 'application/json' }, signal: AbortSignal.timeout(4000) });
+    const res = await fetch(url, { headers: { 'user-agent': 'PlaynX/1.0 turf-booking', accept: 'application/json' }, signal: AbortSignal.timeout(4000) });
     if (!res.ok) return null;
     const j: any = await res.json();
     const a = typeof j?.display_name === 'string' ? j.display_name.trim() : '';

@@ -75,6 +75,20 @@ export const businessSchema = z.discriminatedUnion('businessType', [
   z.object({ businessType: z.literal('llp'), ...base, representativeName: name, designation: z.string().trim().max(60).optional(), registrationNumber: z.string().transform(up).pipe(z.string().regex(LLPIN, 'Enter a valid LLPIN, e.g. AAB-1234')) }),
 ]);
 
+/** the business section as stored: partners keep only the last 4 Aadhaar digits */
+export function businessRecord(b: any) {
+  return { ...b, partners: (b.partners ?? []).map((x: any) => ({ name: x.name, pan: x.pan, aadhaarLast4: x.aadhaarLast4 ?? String(x.aadhaar ?? '').slice(-4), phone: x.phone })), aadhaar: undefined };
+}
+/** writes the business section onto the owner's profile (the application step and an approved business type change both use it) */
+export async function saveBusiness(q: { query: (s: string, p?: any[]) => Promise<any> }, ownerId: string, b: any, verified: boolean) {
+  const rec = businessRecord(b);
+  await q.query(
+    `UPDATE owner_profiles SET business_type=$2, business_name=$3, pan=COALESCE($4, pan), address=$5, gstin=$6, registration_number=$7, representative_name=$8, designation=$9, business_state=$10, business_city=$11, business_pincode=$12,
+       dob=COALESCE($13::date, dob), business_phone=COALESCE($14, business_phone), udyam_number=$15, other_info=$16, partners=$17::jsonb, business_verified_at=${verified ? 'now()' : 'NULL'} WHERE user_id=$1`,
+    [ownerId, rec.businessType, rec.businessName ?? rec.representativeName, rec.pan ?? null, rec.address, rec.gstin ?? rec.previousGstin ?? null, rec.registrationNumber ?? null, rec.representativeName, rec.designation ?? (rec.businessType === 'llp' ? 'Designated Partner' : null), rec.state, rec.city, rec.pincode,
+      rec.dob ?? null, rec.phone ?? null, rec.udyamNumber ?? null, rec.otherInfo ?? null, JSON.stringify(rec.partners)]);
+}
+
 export function ownerApplicationRoutes(ctx: Ctx) {
   const r = Router();
   r.use('/application', authenticate(ctx), requireRole('owner'));
@@ -159,15 +173,36 @@ export function ownerApplicationRoutes(ctx: Ctx) {
   r.put('/application/business', async (req, res) => {
     const p = await load(uid(req)); assertEditable(p);
     const b = parse(businessSchema, req.body);
-    const full = b as any;
-    await ctx.db.query(
-      `UPDATE owner_profiles SET business_type=$2, business_name=$3, pan=COALESCE($4, pan), address=$5, gstin=$6, registration_number=$7, representative_name=$8, designation=$9, business_state=$10, business_city=$11, business_pincode=$12,
-         dob=COALESCE($13::date, dob), business_phone=COALESCE($14, business_phone), udyam_number=$15, other_info=$16, partners=$17::jsonb, business_verified_at=NULL WHERE user_id=$1`,
-      [p.id, b.businessType, b.businessName ?? b.representativeName, b.pan ?? null, b.address, b.gstin ?? p.gstin ?? null, full.registrationNumber ?? null, b.representativeName, full.designation ?? (b.businessType === 'llp' ? 'Designated Partner' : null), b.state, b.city, b.pincode,
-        full.dob ?? null, full.phone ?? null, full.udyamNumber ?? null, full.otherInfo ?? null,
-        JSON.stringify((full.partners ?? []).map((x: any) => ({ name: x.name, pan: x.pan, aadhaarLast4: String(x.aadhaar).slice(-4), phone: x.phone })))]);
+    await saveBusiness(ctx.db, p.id, { ...b, previousGstin: p.gstin }, false);
     await audit(ctx.db, req, 'application.business_saved', 'user', p.id, { businessType: b.businessType });
     res.json({ saved: true });
+  });
+
+  // ---------------- an approved owner changes their business type: an admin approves it; the approved details stay live until then
+  const changeView = (c: any) => c && ({ id: c.id, status: c.status, fromType: c.from_type, toType: c.to_type, details: c.details, reason: c.reason, reviewNote: c.review_note, createdAt: c.created_at, reviewedAt: c.reviewed_at });
+  r.get('/application/business-change', async (req, res) => {
+    const c = (await ctx.db.query(`SELECT * FROM business_change_requests WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 1`, [uid(req)])).rows[0];
+    res.json({ request: changeView(c) ?? null });
+  });
+  r.post('/application/business-change', async (req, res) => {
+    const p = await load(uid(req));
+    if (p.application_status !== 'approved') throw conflict('Change the business type in your application instead: it is not approved yet.', 'not_approved');
+    const b = parse(businessSchema.and(z.object({ reason: z.string().trim().max(300).optional() })), req.body) as any;
+    if (b.businessType === p.business_type) throw badRequest('Choose a different business type. To change other business details, use Business information.', 'same_type', { field: 'businessType' });
+    if ((await ctx.db.query(`SELECT 1 FROM business_change_requests WHERE owner_id=$1 AND status='pending'`, [p.id])).rows[0]) throw conflict('You already have a business type change waiting for approval.', 'change_pending');
+    const { reason, ...details } = b;
+    const c = (await ctx.db.query(`INSERT INTO business_change_requests (owner_id, from_type, to_type, details, reason) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [p.id, p.business_type, b.businessType, JSON.stringify(businessRecord(details)), reason ?? null])).rows[0];
+    await audit(ctx.db, req, 'owner.business_type_change_requested', 'user', p.id, { from: p.business_type, to: b.businessType });
+    await ctx.notifier.notifyAdmins('users', { title: 'Business type change requested', type: 'admin_profile_change', email: true, data: { link: '/admin/business-changes' },
+      body: `${p.full_name} asked to change their business type from ${String(p.business_type ?? 'not set').replace(/_/g, ' ')} to ${b.businessType.replace(/_/g, ' ')}.${reason ? ` Reason: ${reason}` : ''}` });
+    res.status(201).json({ request: changeView(c) });
+  });
+  r.delete('/application/business-change', async (req, res) => {
+    const { rows } = await ctx.db.query(`UPDATE business_change_requests SET status='cancelled' WHERE owner_id=$1 AND status='pending' RETURNING id`, [uid(req)]);
+    if (!rows[0]) throw conflict('There is no business type change waiting.', 'no_request');
+    await audit(ctx.db, req, 'owner.business_type_change_cancelled', 'user', uid(req));
+    res.json({ cancelled: true });
   });
 
   /** Personal details (after the email is verified): who the owner is and where the turf is. The business and identity steps start from these answers. */
@@ -199,7 +234,9 @@ export function ownerApplicationRoutes(ctx: Ctx) {
   r.post('/application/documents', upload.single('file'), async (req, res) => {
     const p = await load(uid(req)); assertEditable(p);
     const { docType } = parse(z.object({ docType: z.enum(DOC_TYPES) }), req.body);
-    const f = checkedFile(req.file, ['profile_photo', 'self_verification'].includes(docType) ? ['image/jpeg', 'image/png', 'image/webp'] : ['image/jpeg', 'image/png', 'application/pdf']);
+    // profile photo: JPG or PNG up to 5 MB; the live verification photo: an image; documents: PDF, JPG or PNG up to 10 MB
+    const f = checkedFile(req.file, docType === 'profile_photo' ? ['image/jpeg', 'image/png'] : docType === 'self_verification' ? ['image/jpeg', 'image/png', 'image/webp'] : ['image/jpeg', 'image/png', 'application/pdf']);
+    if (docType === 'profile_photo' && f.buffer.length > 5 * 1024 * 1024) throw badRequest('The profile photo must be 5 MB or smaller', 'file_too_large', { field: 'profile_photo' });
     const key = await ctx.storage.putPrivate(`owner-docs/${p.id}`, f.buffer, f.type);
     const doc = await ctx.db.tx(async (q) => {
       const old = await q.query(`UPDATE owner_documents SET status='replaced' WHERE owner_id=$1 AND doc_type=$2 AND status <> 'replaced' RETURNING id`, [p.id, docType]);
@@ -243,8 +280,8 @@ export function ownerApplicationRoutes(ctx: Ctx) {
     await ctx.notifier.notifyAdmins('users', { title: resubmit ? 'Owner application resubmitted' : 'New owner application submitted', type: 'admin_application_submitted', email: true,
       body: `${p.full_name} (${p.business_name}) ${resubmit ? 'resubmitted' : 'submitted'} application ${ref}.`, data: { link: `/admin/applications?owner=${p.id}` } });
     await ctx.notifier.notify(p.id, { title: 'Application submitted', type: 'application', email: true, data: { link: '/owner/application' },
-      body: `Your KickOff venue owner application ${ref} has been submitted. Our verification team will review it and notify you about the status.` });
-    res.json({ reference: ref, status: 'submitted', message: 'Your KICKOFF Venue Owner application has been submitted successfully. Our verification team will review your information and notify you about the approval status.' });
+      body: `Your PlaynX venue owner application ${ref} has been submitted. Our verification team will review it and notify you about the status.` });
+    res.json({ reference: ref, status: 'submitted', message: 'Your PlaynX Venue Owner application has been submitted successfully. Our verification team will review your information and notify you about the approval status.' });
   });
 
   return r;

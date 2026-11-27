@@ -1,3 +1,4 @@
+import { ButtonRipple } from './components/ButtonRipple';
 import { OwnerPayoutsPage } from './pages/owner/OwnerPayouts';
 import { AreaDetailsPage } from './pages/owner/AreaDetails';
 import { Suspense, lazy, useEffect, type ComponentType } from 'react';
@@ -8,8 +9,9 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigationType } from 'r
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CustomerLayout, PortalLayout, RequireRole, adminGroups, ownerGroups } from './components/Layouts';
 import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyAccountPage, CompleteProfilePage } from './pages/auth/AuthPages';
-import { ApplicationPage, OwnerGate, OwnerRegisterPage, OwnerWelcomePage, PendingOverview, usePendingApproval } from './pages/owner/OwnerOnboarding';
+import { ApplicationPage, OwnerGate, OwnerCompleteSignupPage, OwnerRegisterPage, OwnerWelcomePage, PendingOverview, usePendingApproval } from './pages/owner/OwnerOnboarding';
 import { HomePage, VenueDetailPage, VenuesPage } from './pages/customer/Discover';
+import { LandingPage } from './pages/customer/LandingPage';
 import { ReceiptPage, MyReviewsPage, NearbyPage, OffersPage, PaymentsPage as CustomerPaymentsPage, SettingsPage, SportsPage } from './pages/customer/Portal';
 import { BookingDetailPage, BookingsPage, FavouritesPage, NotificationsPage, ProfilePage, SupportPage } from './pages/customer/Account';
 import { AboutPage, CancellationPage, ContactPage, CookiePage, HelpPage, OwnerAgreementPage, PrivacyPage, TermsPage } from './pages/customer/InfoPages';
@@ -23,7 +25,7 @@ const op = (file: 'OwnerOps' | 'OwnerSchedule' | 'OwnerMoney' | 'OwnerAccount' |
 const OverviewPage = op('OwnerOps', 'OverviewPage'), AreasPage = op('OwnerOps', 'AreasPage'), HoursPage = op('OwnerOps', 'HoursPage'), PricingPage = op('OwnerOps', 'PricingPage');
 const CalendarPage = op('OwnerSchedule', 'CalendarPage'), SlotsPage = op('OwnerSchedule', 'SlotsPage'), BlockedPage = op('OwnerSchedule', 'BlockedPage');
 const OwnerBookings = op('OwnerMoney', 'BookingsPage'), PaymentsPage = op('OwnerMoney', 'PaymentsPage'), RefundsPage = op('OwnerMoney', 'RefundsPage'), AnalyticsPage = op('OwnerMoney', 'ReportPaymentsPage');
-const BusinessPage = op('OwnerAccount', 'BusinessPage'), BankPage = op('OwnerAccount', 'BankPage'), SecurityPage = op('OwnerAccount', 'SecurityPage'), OwnerProfilePage = op('OwnerAccount', 'OwnerProfilePage');
+const BusinessPage = op('OwnerAccount', 'BusinessPage'), BankPage = op('OwnerAccount', 'BankPage'), PaymentSettingsPage = op('OwnerAccount', 'PaymentSettingsPage'), SecurityPage = op('OwnerAccount', 'SecurityPage'), OwnerProfilePage = op('OwnerAccount', 'OwnerProfilePage');
 const OwnerOffersPage = op('OwnerPages', 'OwnerOffersPage'), OwnerReviewsPage = op('OwnerPages', 'OwnerReviewsPage'), OwnerStaffPage = op('OwnerStaff', 'StaffPage'), OwnerCustomersPage = op('OwnerCustomers', 'OwnerCustomersPage'), OwnerPendingPaymentsPage = op('OwnerCustomers', 'OwnerPendingPaymentsPage'),
   OwnerActivityPage = op('OwnerExtras', 'OwnerActivityPage'), OwnerCloseAccountPage = op('OwnerExtras', 'OwnerCloseAccountPage');
 const a1 = (name: string) => lazy(() => import('./pages/admin/AdminCore').then((m) => ({ default: (m as any)[name] })));
@@ -32,7 +34,7 @@ const AdminProfileChanges = lazy(() => import('./pages/admin/AdminApplications')
 /** The owner's portal home: while the application waits for approval it is the status page; afterwards the real overview. */
 function OwnerHome() { return usePendingApproval() ? <PendingOverview /> : <OverviewPage />; }
 const aj = (name: string) => lazy(() => import('./pages/admin/AdminJusgo').then((m) => ({ default: (m as any)[name] })));
-const AdminSports = aj('AdminSports'), AdminListingChanges = aj('AdminListingChanges'), AdminAreaApprovals = aj('AdminAreaApprovals'), AdminRevenue = aj('AdminRevenue'), AdminCustomers = aj('AdminCustomers'), AdminReviews = aj('AdminReviews'), AdminWallets = aj('AdminWallets');
+const AdminSports = aj('AdminSports'), AdminListingChanges = aj('AdminListingChanges'), AdminAreaApprovals = aj('AdminAreaApprovals'), AdminBusinessChanges = aj('AdminBusinessChanges'), AdminRevenue = aj('AdminRevenue'), AdminCustomers = aj('AdminCustomers'), AdminReviews = aj('AdminReviews'), AdminWallets = aj('AdminWallets');
 const a2 = (name: string) => lazy(() => import('./pages/admin/AdminMore').then((m) => ({ default: (m as any)[name] })));
 const AdminDashboard = a1('AdminDashboard'), AdminUsers = a1('AdminUsers'), AdminOwners = a1('AdminOwners'), AdminVenues = a1('AdminVenues'), AdminBookings = a1('AdminBookings');
 const AdminPayments = a2('AdminPayments'), AdminRefunds = a2('AdminRefunds'), AdminPayouts = a2('AdminPayouts'), AdminCoupons = a2('AdminCoupons'),
@@ -53,6 +55,7 @@ export default function App() {
   }, [loc.pathname, nav, loc.hash]);
   return (
     <>
+    <ButtonRipple />
     <PaymentCelebrationHost />
     <ErrorBoundary key={loc.pathname}>
     <Suspense fallback={<Loading />}>
@@ -64,13 +67,13 @@ export default function App() {
         <Route path="/verify-account" element={<VerifyAccountPage />} />
         <Route path="/owner/login" element={<LoginPage portal="owner" />} />
         <Route path="/owner/welcome" element={<OwnerWelcomePage />} />
-        <Route path="/owner/register" element={<OwnerRegisterPage />} />
+        <Route path="/owner/register" element={<OwnerRegisterPage />} /><Route path="/owner/complete-signup" element={<OwnerCompleteSignupPage />} />
         <Route path="/owner/application" element={<RequireRole role="owner"><ApplicationPage /></RequireRole>} />
         <Route path="/admin/login" element={<LoginPage portal="admin" />} />
 
         <Route element={<CustomerLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="venues" element={<Navigate to="/#book" replace />} />
+          <Route index element={<LandingPage />} /><Route path="home" element={<HomePage />} />
+          <Route path="venues" element={<Navigate to="/home" replace />} /><Route path="book" element={<Navigate to="/home" replace />} />
           <Route path="about" element={<AboutPage />} /><Route path="contact" element={<ContactPage />} /><Route path="help" element={<HelpPage />} />
           <Route path="terms" element={<TermsPage />} /><Route path="privacy" element={<PrivacyPage />} /><Route path="cookies" element={<CookiePage />} /><Route path="owner-agreement" element={<OwnerAgreementPage />} /><Route path="cancellation-policy" element={<CancellationPage />} />
           <Route path="venues/:id" element={<VenueDetailPage />} />
@@ -96,7 +99,7 @@ export default function App() {
           <Route path="payments" element={<Navigate to="/owner/reports?tab=payments" replace />} /><Route path="settlements" element={<Navigate to="/owner/payments" replace />} /><Route path="refunds" element={<Navigate to="/owner/reports?tab=payments&status=refunds" replace />} />
           <Route path="notifications" element={<NotificationsPage subtitle="Bookings, venue changes and updates about your account." />} /><Route path="support" element={<SupportPage />} />
           <Route path="announcements" element={<NotificationsPage type="announcement" title="Announcements" emptyTitle="No announcements" />} /><Route path="reviews" element={<OwnerReviewsPage />} /><Route path="customers" element={<OwnerCustomersPage />} /><Route path="pending-payments" element={<Navigate to="/owner/reports?tab=payments&status=pending" replace />} /><Route path="activity" element={<OwnerActivityPage />} /><Route path="delete-account" element={<OwnerCloseAccountPage />} />
-          <Route path="account/payouts" element={<OwnerPayoutsPage />} /><Route path="account/profile" element={<OwnerProfilePage />} /><Route path="account/business" element={<BusinessPage />} /><Route path="account/bank" element={<BankPage />} /><Route path="account/staff" element={<OwnerStaffPage />} /><Route path="account/security" element={<SecurityPage />} /><Route path="account/documents" element={<Navigate to="/owner/account/business" replace />} />
+          <Route path="account/payouts" element={<OwnerPayoutsPage />} /><Route path="account/profile" element={<OwnerProfilePage />} /><Route path="account/business" element={<BusinessPage />} /><Route path="account/bank" element={<BankPage />} /><Route path="account/payment-settings" element={<PaymentSettingsPage />} /><Route path="account/staff" element={<OwnerStaffPage />} /><Route path="account/security" element={<SecurityPage />} /><Route path="account/documents" element={<Navigate to="/owner/account/business" replace />} />
           <Route path="earnings" element={<Navigate to="/owner/reports" replace />} /><Route path="profile" element={<Navigate to="/owner/account/business" replace />} />
         </Route>
 
@@ -107,7 +110,7 @@ export default function App() {
           <Route path="bookings" element={<AdminBookings />} /><Route path="payments" element={<AdminPayments />} /><Route path="refunds" element={<AdminRefunds />} />
           <Route path="payouts" element={<AdminPayouts />} /><Route path="coupons" element={<AdminCoupons />} />
           <Route path="notify" element={<AdminNotify />} /><Route path="notifications" element={<NotificationsPage />} /><Route path="tickets" element={<AdminTickets />} /><Route path="reports" element={<AdminReports />} />
-          <Route path="applications" element={<AdminApplications />} /><Route path="sports" element={<AdminSports />} /><Route path="listing-changes" element={<AdminListingChanges />} /><Route path="area-approvals" element={<AdminAreaApprovals />} /><Route path="revenue" element={<AdminRevenue />} /><Route path="customers" element={<AdminCustomers />} /><Route path="reviews" element={<AdminReviews />} /><Route path="wallets" element={<AdminWallets />} /><Route path="profile-changes" element={<AdminProfileChanges />} /><Route path="settings" element={<AdminSettings />} /><Route path="team" element={<AdminTeam />} /><Route path="audit" element={<AdminAudit />} />
+          <Route path="applications" element={<AdminApplications />} /><Route path="sports" element={<AdminSports />} /><Route path="listing-changes" element={<AdminListingChanges />} /><Route path="area-approvals" element={<AdminAreaApprovals />} /><Route path="business-changes" element={<AdminBusinessChanges />} /><Route path="revenue" element={<AdminRevenue />} /><Route path="customers" element={<AdminCustomers />} /><Route path="reviews" element={<AdminReviews />} /><Route path="wallets" element={<AdminWallets />} /><Route path="profile-changes" element={<AdminProfileChanges />} /><Route path="settings" element={<AdminSettings />} /><Route path="team" element={<AdminTeam />} /><Route path="audit" element={<AdminAudit />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
