@@ -15,10 +15,20 @@
     "setup:supabase": "tsx scripts/setup-supabase.ts",
     "check:razorpay": "tsx scripts/check-razorpay.ts",
     "check:smtp": "tsx scripts/check-smtp.ts",
-    "backup": "tsx scripts/backup.ts"
+    "backup": "tsx scripts/backup.ts",
+    "postinstall": "npm run build"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.17",
     "@supabase/supabase-js": "^2.119.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.6.11",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^18.0.10",
@@ -30,23 +40,14 @@
     "nodemailer": "^10.6.0",
     "pg": "^8.23.1",
     "socket.io": "^4.8.4",
+    "typescript": "^7.0.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.16",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/multer": "^2.3.0",
-    "@types/node": "^26.6.6",
-    "@types/nodemailer": "^8.0.2",
-    "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "socket.io-client": "^4.8.4",
     "supertest": "^7.3.2",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2",
     "vitest": "^3.2.4"
   },
   "main": "server.js"
