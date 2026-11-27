@@ -1,6 +1,6 @@
 // Hostinger (and any host whose entry file is "server.js") starts the app from here.
 // The real server is the compiled TypeScript in dist/. If the host skipped the install scripts,
-// build the API (and the website) here first, so the app still starts.
+// build the API here first (the website is prebuilt in web/), so the app still starts.
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,6 @@ process.on('unhandledRejection', (e) => { console.error('[start] crashed:', e); 
 
 try {
   if (!existsSync(path.join(here, 'dist', 'src', 'server.js'))) run('npm run build');
-  if (!existsSync(path.join(here, '..', 'frontend', 'dist', 'index.html'))) run('node scripts/build-frontend.mjs');
 } catch (e) {
   console.error('[start] build failed:', e?.message ?? e);
 }

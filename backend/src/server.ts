@@ -21,7 +21,6 @@ import type { Ctx } from './types.js';
 const cfg = loadConfig();
 if (!cfg.DATABASE_URL) throw new Error('DATABASE_URL is required');
 const db = createPgDb(cfg.DATABASE_URL, cfg.DATABASE_SSL === 'true');
-if (process.env.AUTO_MIGRATE !== 'false') console.log('Migrations applied:', await migrate(db));
 
 const realtime = { current: noopRealtime };
 const proxyRealtime = { toVenue: (...a: [string, string, unknown]) => realtime.current.toVenue(...a), toUser: (...a: [string, string, unknown]) => realtime.current.toUser(...a) };
@@ -40,7 +39,11 @@ realtime.current = attachRealtime(server, cfg);
 const payoutTimer = setInterval(() => runAutoPayouts(ctx).catch((e) => console.error('[auto-payouts]', e)), 60 * 60_000);
 setTimeout(() => runAutoPayouts(ctx).then((n) => n && console.log(`[auto-payouts] ${n} payout(s)${ctx.payouts?.test ? ' (TEST, no real transfer)' : ''}`)).catch((e) => console.error('[auto-payouts]', e)), 15_000); // and once soon after start
 const timer = setInterval(() => runMaintenance(ctx).catch((e) => console.error('[maintenance]', e)), 30_000);
+// listen first (hosts like Hostinger expect it within seconds), then bring the database up to date; a failed migration still stops the app
 server.listen(cfg.PORT, () => console.log(`PlaynX API listening on :${cfg.PORT} (${cfg.NODE_ENV})`));
+if (process.env.AUTO_MIGRATE !== 'false') {
+  try { console.log('Migrations applied:', await migrate(db)); } catch (e) { console.error('[migrate] failed:', e); process.exit(1); }
+}
 
 const shutdown = () => { clearInterval(timer); server.close(() => db.close().then(() => process.exit(0))); setTimeout(() => process.exit(1), 10_000).unref(); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

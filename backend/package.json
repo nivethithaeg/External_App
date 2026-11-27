@@ -16,7 +16,8 @@
     "check:razorpay": "tsx scripts/check-razorpay.ts",
     "check:smtp": "tsx scripts/check-smtp.ts",
     "backup": "tsx scripts/backup.ts",
-    "postinstall": "npm run build && node scripts/build-frontend.mjs"
+    "postinstall": "npm run build",
+    "build:web": "node scripts/build-frontend.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.17",

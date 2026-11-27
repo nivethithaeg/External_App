@@ -83,7 +83,7 @@ export function createApp(ctx: Ctx) {
     app.use('/uploads', express.static(path.resolve('uploads'), { setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff') }));
   }
   // The built website (frontend/dist) on every path that is not the API: one address for the site and the API.
-  const site = process.env.FRONTEND_DIST ? path.resolve(process.env.FRONTEND_DIST) : path.resolve('..', 'frontend', 'dist');
+  const site = process.env.FRONTEND_DIST ? path.resolve(process.env.FRONTEND_DIST) : path.resolve('web'); // built by npm run build:web
   if (ctx.cfg.NODE_ENV === 'production' && fs.existsSync(path.join(site, 'index.html'))) {
     app.use(express.static(site, { index: false, maxAge: '1h', setHeaders: (res, file) => { if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); } }));
     app.get(/^\/(?!api(\/|$)|socket\.io(\/|$)|uploads\/).*/, (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.sendFile(path.join(site, 'index.html')); });
