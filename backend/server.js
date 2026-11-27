@@ -20,4 +20,5 @@ try {
   console.error('[start] build failed:', e?.message ?? e);
 }
 console.log(`[start] PlaynX starting on port ${process.env.PORT ?? 4000} (${process.env.NODE_ENV ?? 'development'})`);
-await import('./dist/src/server.js');
+// no top-level await here: Hostinger's LiteSpeed runner loads this file with require(), which refuses that
+import('./dist/src/server.js').catch((e) => { console.error('[start] could not start:', e); process.exit(1); });
