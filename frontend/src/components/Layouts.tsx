@@ -529,7 +529,6 @@ export function PortalLayout({ items, groups, subtitle, notificationsPath, helpP
           </div>)}
         <VerifyBanner />
         <main className="mx-auto max-w-6xl p-4 sm:p-6">
-          <BackButton home={flat[0]?.to ?? '/'} />
           <nav key={loc.pathname} aria-label="Breadcrumb" className="crumbs crumb-in mb-4 flex flex-wrap items-center gap-1.5 text-xs text-muted">
             <Link className="hover:text-ink" to={flat[0]?.to ?? '/'}>{rootLabel ?? subtitle}</Link>
             {current && current.to !== flat[0]?.to && <>{current.group && <><span aria-hidden="true">›</span><span>{current.group}</span></>}<span aria-hidden="true">›</span><span aria-current="page" className="font-semibold text-ink">{current.label}</span></>}

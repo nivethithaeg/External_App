@@ -14,11 +14,11 @@ const EVENT: Record<string, string> = { submitted: 'Submitted', resubmitted: 'Re
 
 export function AdminApplications() {
   const [sp] = useSearchParams();
-  const [status, setStatus] = useState('active_review'); const [sel, setSel] = useState<string | null>(sp.get('owner'));
+  const [status, setStatus] = useState('all'); const [sel, setSel] = useState<string | null>(sp.get('owner'));
   const q = useQuery({ queryKey: ['admin-applications', status], queryFn: () => get<{ applications: any[] }>('/admin/applications', { status }) });
   return (
     <div><PageHeader title="Owner applications" subtitle="Review business details, identity documents and first venues" actions={
-      <div className="w-56"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="active_review">Needs attention</option><option value="all">All</option>{Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></div>} />
+      <div className="w-56"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All</option><option value="active_review">Needs attention</option>{Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></div>} />
       <QueryBoundary q={q} empty={(d) => d.applications.length === 0 && <Empty icon="🗂️" title="No applications here" hint="New owner applications appear when owners submit their registration." />}>
         {(d) => <Table rows={d.applications.map((a) => ({ ...a, id: a.owner_id }))} onRow={(a: any) => setSel(a.owner_id)} columns={[
           { key: 'application_ref', header: 'Reference', render: (a: any) => <b>{a.application_ref ?? '—'}</b> },
@@ -104,7 +104,7 @@ function ReviewModal({ ownerId, onClose }: { ownerId: string; onClose(): void })
 /** Changes an approved owner made to business or bank details. The old details stay live until an admin approves here. */
 export function AdminProfileChanges() {
   const { toast } = useToast(); const qc = useQueryClient();
-  const [show, setShow] = useState<'pending' | 'all'>('pending');
+  const [show, setShow] = useState<'pending' | 'all'>('all');
   const [reason, setReason] = useState<Record<string, string>>({}); const [need, setNeed] = useState<string | null>(null);
   const q = useQuery({ queryKey: ['admin-profile-changes', show], queryFn: () => get<{ changes: any[] }>('/admin/profile-changes', { status: show }) });
   const done = () => { qc.invalidateQueries({ queryKey: ['admin-profile-changes'] }); qc.invalidateQueries({ queryKey: ['notifications'] }); };
@@ -112,7 +112,7 @@ export function AdminProfileChanges() {
   const reject = useMutation({ mutationFn: (id: string) => post(`/admin/profile-changes/${id}/reject`, { note: reason[id] }), onSuccess: () => { done(); setNeed(null); toast('Rejected. The owner was told why.'); }, onError: (e) => toast(apiError(e), 'error') });
   return (
     <div><PageHeader title="Profile changes" subtitle="Business and bank detail edits from approved owners. The old details stay live until you approve." actions={
-      <div className="w-48"><Select label="Show" value={show} onChange={(e) => setShow(e.target.value as 'pending' | 'all')}><option value="pending">Waiting for approval</option><option value="all">All requests</option></Select></div>} />
+      <div className="w-48"><Select label="Show" value={show} onChange={(e) => setShow(e.target.value as 'pending' | 'all')}><option value="all">All</option><option value="pending">Waiting for approval</option></Select></div>} />
       <QueryBoundary q={q} empty={(d) => d.changes.length === 0 && <Empty icon="✏️" title="No profile changes waiting" hint="When an approved owner edits their business or bank details, the request shows up here." />}>
         {(d) => <div className="space-y-4">{d.changes.map((c) => (
           <section key={c.id} className="card space-y-3 p-5" aria-label={`Profile change from ${c.full_name}`}>

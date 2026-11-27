@@ -39,7 +39,7 @@ export function OwnerVenuesPage() {
     <div><PageHeader title="Your venues" subtitle="Create venues, set pricing and publish after approval" actions={<Link to="/owner/venues/new" className="btn-primary">+ Add venue</Link>} />
       {(q.data?.venues.length ?? 0) > 0 && <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_12rem_12rem]">
         <Input label="Search venues" placeholder="Search by name, city or PIN code" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></Select>
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option></Select>
         <Select label="Sport" value={sport} onChange={(e) => setSport(e.target.value)}><option value="">All sports</option>{sportOptions.map(([id, name]) => <option key={id} value={String(id)}>{name}</option>)}</Select></div>}
       <QueryBoundary q={q} empty={(d) => d.venues.length === 0 && <Empty title="No venues yet" hint="Add your first turf. You'll upload photos, set prices and operating hours, then submit it for review." action={<Link to="/owner/venues/new" className="btn-primary">Add your first venue</Link>} />}>
         {(d) => d.venues.filter(matches).length === 0 ? <Empty icon="🔎" title="No venues match" hint="Try a different search or clear the filters." /> : <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{d.venues.filter(matches).map((v) => {

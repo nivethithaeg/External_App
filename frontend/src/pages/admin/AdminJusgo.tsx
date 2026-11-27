@@ -56,7 +56,7 @@ export function AdminListingChanges() {
 export function AdminAreaApprovals() {
   const qc = useQueryClient();
   // the admin email for a delete request links here with ?view=deletions
-  const [status, setStatus] = useState(() => (new URLSearchParams(window.location.search).get('view') === 'deletions' ? 'del:pending' : 'pending'));
+  const [status, setStatus] = useState(() => (new URLSearchParams(window.location.search).get('view') === 'deletions' ? 'del:pending' : ''));
   const delView = status.startsWith('del:');
   const q = useQuery({ queryKey: ['admin-areas', status], queryFn: () => get<{ areas: any[] }>('/admin/areas', delView ? { deletion: status.slice(4) } : status ? { status } : undefined), placeholderData: (p) => p });
   const [delRej, setDelRej] = useState<any | null>(null); const [delOk, setDelOk] = useState<any | null>(null);
@@ -67,7 +67,7 @@ export function AdminAreaApprovals() {
     onSuccess: () => { setRej(null); setReason(''); setErr(''); qc.invalidateQueries({ queryKey: ['admin-areas'] }); }, onError: (e) => setErr(apiError(e)) });
   return (
     <div><PageHeader title="Playing area approvals" subtitle="A new playing area stays hidden from customers until you approve it." />
-      <div className="mb-4 max-w-xs"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="pending">Waiting for approval</option><option value="rejected">Rejected</option><option value="approved">Approved</option><option value="">All</option><option value="del:pending">Delete requests</option><option value="del:deleted">Deleted areas</option></Select></div>
+      <div className="mb-4 max-w-xs"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option><option value="pending">Waiting for approval</option><option value="rejected">Rejected</option><option value="approved">Approved</option><option value="del:pending">Delete requests</option><option value="del:deleted">Deleted areas</option></Select></div>
       <QueryBoundary q={q} empty={(d) => d.areas.length === 0 && <Empty icon="✅" title="Nothing to review" hint={delView ? 'Delete requests from owners appear here.' : 'New playing areas added by owners appear here.'} />}>{(d) => <div className="space-y-3">{d.areas.map((a) => delView ? (
         <Card key={a.id} className={`space-y-2 p-4 ${a.deletionStatus === 'deleted' ? 'opacity-70 grayscale' : ''}`}><div className="flex flex-wrap items-center justify-between gap-2"><div><b className="text-lg">{a.name}</b> <Badge status={a.deletionStatus === 'deleted' ? 'rejected' : 'pending'}>{a.deletionStatus === 'deleted' ? 'Deleted' : 'Delete requested'}</Badge>
           <div className="text-xs text-muted">{a.venueName}, {a.city} · {a.ownerName}</div></div>
@@ -110,14 +110,14 @@ const DETAIL_LABEL: [string, string][] = [['businessName', 'Business name'], ['r
 /** Approved owners asking to change their business type: check the new details and approve or reject. */
 export function AdminBusinessChanges() {
   const qc = useQueryClient();
-  const [status, setStatus] = useState('pending');
+  const [status, setStatus] = useState('');
   const q = useQuery({ queryKey: ['admin-business-changes', status], queryFn: () => get<{ changes: any[] }>('/admin/business-changes', status ? { status } : undefined), placeholderData: (p) => p });
   const [ok, setOk] = useState<any | null>(null); const [rej, setRej] = useState<any | null>(null); const [note, setNote] = useState(''); const [err, setErr] = useState('');
   const decide = useMutation({ mutationFn: (v: { id: string; decision: 'approve' | 'reject'; note?: string }) => post(`/admin/business-changes/${v.id}/decision`, { decision: v.decision, ...(v.note ? { note: v.note } : {}) }),
     onSuccess: () => { setOk(null); setRej(null); setNote(''); setErr(''); qc.invalidateQueries({ queryKey: ['admin-business-changes'] }); }, onError: (e) => setErr(apiError(e)) });
   return (
     <div><PageHeader title="Business type changes" subtitle="Approved owners asking to change their business type. Their current details stay live until you approve." />
-      <div className="mb-4 max-w-xs"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="">All</option></Select></div>
+      <div className="mb-4 max-w-xs"><Select label="Show" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option></Select></div>
       <QueryBoundary q={q} empty={(d) => d.changes.length === 0 && <Empty icon="🏢" title="Nothing to review" hint="Business type changes asked for by owners appear here." />}>{(d) => <div className="space-y-3">{d.changes.map((c) => (
         <Card key={c.id} className="space-y-3 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><div><b className="text-lg">{c.ownerName}</b> <Badge status={c.status === 'pending' ? 'pending' : c.status === 'approved' ? 'approved' : 'rejected'}>{titleCase(c.status)}</Badge>

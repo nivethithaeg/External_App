@@ -5,7 +5,7 @@ import { apiError, get, post } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Logo } from '../../components/Logo';
-import { BackButton, ThemeToggle } from '../../components/Layouts';
+import { ThemeToggle } from '../../components/Layouts';
 import { useLogoutConfirm } from '../../components/LogoutConfirm';
 import { Badge, Button, Card, ErrorBox, Input, Loading, PageHeader, PasswordInput, QueryBoundary, Select, Stat, Table } from '../../components/ui';
 import { DAYS, DURATIONS, durationLabel, fmtDateTime, fmtRange, fmtTime, money, titleCase } from '../../lib/utils';
@@ -43,7 +43,7 @@ export function StaffLayout() {
       <header className="border-b border-line bg-surface"><div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4"><Logo subtitle="Venue staff" />
         <div className="flex items-center gap-2"><ThemeToggle /><span className="hidden text-sm text-muted sm:block">{user?.fullName}</span><Button variant="ghost" className="!py-2" onClick={ask.ask}>Log out</Button></div></div></header>
       <StaffTabs />
-      <main className="mx-auto max-w-3xl px-4 py-6"><BackButton home="/staff" /><Outlet /></main>
+      <main className="mx-auto max-w-3xl px-4 py-6"><Outlet /></main>
       {ask.dialog}
     </div>
   );

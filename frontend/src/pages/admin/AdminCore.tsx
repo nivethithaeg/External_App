@@ -152,7 +152,7 @@ export function AdminUsers() {
 
 export function AdminOwners() {
   const { toast } = useToast(); const qc = useQueryClient();
-  const [status, setStatus] = useState('pending'); const [sel, setSel] = useState<any>(null);
+  const [status, setStatus] = useState(''); const [sel, setSel] = useState<any>(null);
   const [note, setNote] = useState(''); const [commission, setCommission] = useState('');
   const q = useQuery({ queryKey: ['admin-owners', status], queryFn: () => get<{ owners: any[] }>('/admin/owners', { status: status || undefined }) });
   const [fullRaw, setFull] = useState<{ id: string; accountNumber: string | null } | null>(null); const full = fullRaw && fullRaw.id === sel?.id ? fullRaw : null; // only for the owner it was opened for
@@ -213,7 +213,7 @@ function ApprovalChecklist({ data, onTick, busy }: { data: { checklist: Checklis
 
 export function AdminVenues() {
   const { toast } = useToast(); const qc = useQueryClient();
-  const [status, setStatus] = useState(new URLSearchParams(location.search).get('status') ?? 'pending'); const [sel, setSel] = useState<string | null>(null); const [reason, setReason] = useState('');
+  const [status, setStatus] = useState(new URLSearchParams(location.search).get('status') ?? ''); const [sel, setSel] = useState<string | null>(null); const [reason, setReason] = useState('');
   const q = useQuery({ queryKey: ['admin-venues', status], queryFn: () => get<{ venues: any[] }>('/admin/venues', { status: status || undefined }) });
   const det = useQuery({ queryKey: ['admin-venue', sel], queryFn: () => get<any>(`/admin/venues/${sel}`), enabled: !!sel });
   const ready = useQuery({ queryKey: ['admin-venue-readiness', sel], queryFn: () => get<{ checklist: Checklist; score: Score }>(`/admin/venues/${sel}/readiness`), enabled: !!sel });
@@ -230,7 +230,7 @@ export function AdminVenues() {
     <div><PageHeader title="Venue approvals" subtitle="Review details and documents. Once approved, the owner decides when to publish the venue to customers" actions={<div className="w-44"><Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option>{['pending', 'changes', 'ready', 'approved', 'rejected', 'suspended', 'draft'].map((s) => <option key={s} value={s}>{s === 'changes' ? 'Changes to review' : titleCase(s)}</option>)}</Select></div>} />
       <QueryBoundary q={q} empty={(d) => d.venues.length === 0 && <Empty title="Nothing here" icon="✅" hint="No venues with this status." />}>{(d) => <Table rows={d.venues} onRow={(v) => setSel(v.id)} columns={[
         { key: 'name', header: 'Venue', render: (v) => <div><b>{v.name}</b><div className="text-xs text-muted">{v.city}</div></div> }, { key: 'owner', header: 'Owner', render: (v) => <div>{v.business_name}<div className="text-xs text-muted">{v.owner_name} · <Badge status={v.verification_status} /></div></div> },
-        { key: 'documents', header: 'Docs', render: (v) => `${v.documents - v.pending_documents}/${v.documents} reviewed` }, { key: 'score', header: 'Score', render: (v) => { const sc = scores.data?.scores[v.id]; return sc ? <span className={cx('font-bold', sc.score >= 70 ? 'text-ok' : sc.score >= 50 ? 'text-warn' : 'text-danger')} title={sc.grade}>{sc.score}<span className="text-xs font-normal text-muted">/100</span></span> : <span className="text-muted">—</span>; } }, { key: 'status', header: 'Status', render: (v) => <span className="flex flex-wrap gap-1"><Badge status={v.status} />{v.change_pending && <Badge status="pending">Changes to review</Badge>}</span> }]} />}</QueryBoundary>
+        { key: 'documents', header: 'Docs', render: (v) => `${v.documents - v.pending_documents}/${v.documents} reviewed` }, { key: 'score', header: 'Score', render: (v) => { const sc = scores.data?.scores?.[v.id]; return sc ? <span className={cx('font-bold', sc.score >= 70 ? 'text-ok' : sc.score >= 50 ? 'text-warn' : 'text-danger')} title={sc.grade}>{sc.score}<span className="text-xs font-normal text-muted">/100</span></span> : <span className="text-muted">—</span>; } }, { key: 'status', header: 'Status', render: (v) => <span className="flex flex-wrap gap-1"><Badge status={v.status} />{v.change_pending && <Badge status="pending">Changes to review</Badge>}</span> }]} />}</QueryBoundary>
       <Modal open={!!sel} onClose={() => { setSel(null); setReason(''); }} title={det.data?.venue.name ?? 'Venue'} wide>
         {det.isLoading ? <Loading /> : det.isError ? <ErrorBox error={det.error} /> : det.data && (() => { const { venue: v, documents, images, areas, change } = det.data; const LABEL: Record<string, string> = { name: 'Venue name', description: 'Description', address: 'Address', city: 'City', state: 'State', pincode: 'PIN code', lat: 'Latitude', lng: 'Longitude', contact_phone: 'Contact phone', contact_email: 'Contact email', cancellation_hours: 'Free-cancellation window (hours)', category: 'Venue category', locality: 'Locality / area', country: 'Country' }; return (
           <div className="space-y-4 text-sm">

@@ -116,7 +116,7 @@ export function AdminNotify() {
 }
 
 export function AdminTickets() {
-  const [status, setStatus] = useState('open'); const [sel, setSel] = useState<string | null>(null);
+  const [status, setStatus] = useState(''); const [sel, setSel] = useState<string | null>(null);
   const q = useQuery({ queryKey: ['admin-tickets', status], queryFn: () => get<{ tickets: any[] }>('/admin/tickets', { status: status || undefined }) });
   return (
     <div><PageHeader title="Complaints & support" actions={<div className="w-44"><Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option>{['open', 'in_progress', 'resolved', 'closed'].map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}</Select></div>} />
