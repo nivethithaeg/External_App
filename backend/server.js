@@ -18,6 +18,8 @@ try {
 } catch (e) {
   console.error('[start] build failed:', e?.message ?? e);
 }
+// the address this server reaches other services from (needed to allow it in a database firewall); best effort, never blocks start
+fetch('https://checkip.amazonaws.com', { signal: AbortSignal.timeout(5000) }).then((r) => r.text()).then((ip) => console.log(`[start] outbound IP: ${ip.trim()}`)).catch(() => {});
 console.log(`[start] PlaynX starting on port ${process.env.PORT ?? 4000} (${process.env.NODE_ENV ?? 'development'})`);
 // no top-level await here: Hostinger's LiteSpeed runner loads this file with require(), which refuses that
 import('./dist/src/server.js').catch((e) => { console.error('[start] could not start:', e); process.exit(1); });
