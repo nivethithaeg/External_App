@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Reveal } from '../../components/Motion';
 import { FAQSection, Testimonials } from './Landing';
 import { cx } from '../../lib/utils';
@@ -35,11 +36,11 @@ const I = {
   bolt: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z',
 };
 const Icon = ({ d, size = 20, className }: { d: string; size?: number; className?: string }) => <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}><path d={d} /></svg>;
-const Grad = ({ children }: { children: ReactNode }) => <span className="bg-gradient-to-r from-[#7200FF] via-[#A100FF] to-[#FF8C00] bg-clip-text text-transparent">{children}</span>;
+const Grad = ({ children }: { children: ReactNode }) => <span className="lp-grad bg-gradient-to-r from-[#7200FF] via-[#A100FF] to-[#FF8C00] bg-clip-text text-transparent">{children}</span>;
 const Eyebrow = ({ children, className }: { children: ReactNode; className?: string }) => <p className={cx('mb-3 text-xs font-bold uppercase tracking-[.25em] text-[#7200FF] dark:text-[#C9A6FF]', className)}>{children}</p>;
 
-const btnMain = 'btn rounded-full bg-gradient-to-r from-[#7200FF] to-[#A100FF] !px-6 !py-3 text-base text-white shadow-[0_12px_28px_-10px_rgb(114_0_255/.8)] hover:-translate-y-0.5 hover:brightness-110';
-const btnOrange = 'btn rounded-full bg-gradient-to-r from-[#FFB020] to-[#FF8C00] !px-6 !py-3 text-base text-[#101B5C] shadow-[0_12px_28px_-10px_rgb(255_140_0/.7)] hover:-translate-y-0.5 hover:brightness-105';
+const btnMain = 'lp-shine btn rounded-full bg-gradient-to-r from-[#7200FF] to-[#A100FF] !px-6 !py-3 text-base text-white shadow-[0_12px_28px_-10px_rgb(114_0_255/.8)] hover:-translate-y-0.5 hover:brightness-110';
+const btnOrange = 'lp-shine btn rounded-full bg-gradient-to-r from-[#FFB020] to-[#FF8C00] !px-6 !py-3 text-base text-[#101B5C] shadow-[0_12px_28px_-10px_rgb(255_140_0/.7)] hover:-translate-y-0.5 hover:brightness-105';
 const btnOutline = 'btn rounded-full border-2 border-line !px-6 !py-3 text-base hover:border-brand/50';
 
 /* ------------------------------------------------------------------ content */
@@ -67,19 +68,25 @@ const SPORTS = ['Cricket', 'Football', 'Badminton', 'Pickleball', 'Tennis', 'Bas
 const SLOTS: [string, string | null][] = [['6:00 PM', '₹900'], ['7:00 PM', null], ['8:00 PM', '₹1,000'], ['9:00 PM', '₹1,000'], ['10:00 PM', null], ['11:00 PM', '₹800']];
 const CAL: (string | null)[][] = [['Rahul V.', null, 'Divya P.'], ['Office team', 'Sneha R.', null], ['Hari R.', 'Vikram S.', 'Kavya M.'], [null, 'Thunders', 'Arjun T.']];
 
+/** an animation delay, in seconds */
+const at = (sec: number): CSSProperties => ({ animationDelay: `${sec}s` });
+
 /* ------------------------------------------------------------------ pieces */
-function Door({ children, className }: { children: ReactNode; className: string }) {
-  return <article className={cx('group/door relative flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-[2rem] p-7 transition-[flex-grow] duration-500 ease-out sm:p-9 lg:hover:flex-[1.35]', className)}>{children}</article>;
+function Door({ children, className, from = 'left' }: { children: ReactNode; className: string; from?: 'left' | 'right' }) {
+  const reduce = useReducedMotion();
+  const cls = cx('group/door relative flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-[2rem] p-7 transition-[flex-grow] duration-500 ease-out sm:p-9 lg:hover:flex-[1.35]', className);
+  if (reduce || typeof IntersectionObserver === 'undefined') return <article className={cls}>{children}</article>;
+  return <motion.article className={cls} initial={{ opacity: 0, x: from === 'left' ? -60 : 60 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, margin: '0px 0px -10% 0px' }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>{children}</motion.article>;
 }
 
 function PhoneMock() {
   return (
-    <div className="mx-auto w-64 rounded-[2.2rem] border-[6px] border-[#101B5C] bg-white p-3 text-[#11152F] shadow-[0_30px_60px_-25px_rgb(16_27_92/.7)]">
+    <div className="lp-float mx-auto w-64 rounded-[2.2rem] border-[6px] border-[#101B5C] bg-white p-3 text-[#11152F] shadow-[0_30px_60px_-25px_rgb(16_27_92/.7)]">
       <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-[#E4DEF4]" />
       <p className="text-[10px] font-bold uppercase tracking-wider text-[#777B90]">Turf 1 · Cricket</p>
       <p className="font-display text-base font-bold">Saturday</p>
       <div className="mt-3 grid grid-cols-2 gap-2">{SLOTS.map(([t, p], i) => (
-        <span key={t} className={cx('rounded-xl border px-2 py-2 text-center text-xs', p === null ? 'border-[#E4DEF4] bg-[#F5F0FF] text-[#A0A3B5] line-through' : i === 2 ? 'border-transparent bg-gradient-to-br from-[#7200FF] to-[#A100FF] font-bold text-white' : 'border-[#E4DEF4]')}>
+        <span key={t} style={at(0.15 + i * 0.08)} className={cx('lp-pop rounded-xl border px-2 py-2 text-center text-xs', i === 2 && 'lp-pulse', p === null ? 'border-[#E4DEF4] bg-[#F5F0FF] text-[#A0A3B5] line-through' : i === 2 ? 'border-transparent bg-gradient-to-br from-[#7200FF] to-[#A100FF] font-bold text-white' : 'border-[#E4DEF4]')}>
           <b className="block">{t}</b>{p ?? 'Booked'}</span>))}</div>
       <div className="mt-3 rounded-xl bg-[#F5F0FF] p-2.5 text-xs"><div className="flex justify-between"><span>8:00 PM · 1 hour</span><b>₹1,000</b></div><div className="mt-1 flex justify-between text-[#777B90]"><span>Pay now (50%)</span><span>₹500</span></div></div>
       <span className="mt-3 block rounded-full bg-gradient-to-r from-[#7200FF] to-[#A100FF] py-2 text-center text-xs font-bold text-white">Pay ₹500 and book</span>
@@ -92,10 +99,10 @@ function DashboardMock() {
     <div className="overflow-hidden rounded-2xl border border-[#E4DEF4] bg-white text-[#11152F] shadow-[0_30px_60px_-25px_rgb(16_27_92/.6)]">
       <div className="flex items-center gap-2 bg-[#101B5C] px-4 py-2.5 text-white"><span className="h-2.5 w-2.5 rounded-full bg-white/30" /><span className="h-2.5 w-2.5 rounded-full bg-white/30" /><span className="h-2.5 w-2.5 rounded-full bg-white/30" /><span className="ml-2 text-xs text-white/70">Venue Owner Portal</span></div>
       <div className="grid grid-cols-3 gap-2 border-b border-[#E4DEF4] p-3 text-center">
-        {[['Today', '9 bookings'], ['Revenue', '₹9,800'], ['Payout', '₹8,820']].map(([l, v]) => <div key={l} className="rounded-xl bg-[#F5F0FF] p-2"><p className="text-[10px] font-bold uppercase text-[#777B90]">{l}</p><p className="font-display text-sm font-bold">{v}</p></div>)}
+        {[['Today', '9 bookings'], ['Revenue', '₹9,800'], ['Payout', '₹8,820']].map(([l, v], k) => <div key={l} style={at(k * 0.1)} className="lp-up rounded-xl bg-[#F5F0FF] p-2"><p className="text-[10px] font-bold uppercase text-[#777B90]">{l}</p><p className="font-display text-sm font-bold">{v}</p></div>)}
       </div>
       <div className="overflow-x-auto p-3"><table className="w-full min-w-[300px] border-separate border-spacing-1 text-[11px]"><thead><tr><th className="w-10" />{['Turf 1', 'Turf 2', 'Court A'].map((a) => <th key={a} className="text-left font-bold text-[#777B90]">{a}</th>)}</tr></thead>
-        <tbody>{CAL.map((row, r) => <tr key={r}><td className="text-[#777B90]">{6 + r} PM</td>{row.map((c, i) => <td key={i} className={cx('rounded-md px-1.5 py-1.5', c ? 'bg-gradient-to-br from-[#FFB020] to-[#FF8C00] font-semibold text-[#101B5C]' : 'border border-[#E4DEF4] text-[#A0A3B5]')}>{c ?? 'Open'}</td>)}</tr>)}</tbody></table></div>
+        <tbody>{CAL.map((row, r) => <tr key={r}><td className="text-[#777B90]">{6 + r} PM</td>{row.map((c, i) => <td key={i} style={at(0.1 + (r * 3 + i) * 0.06)} className={cx('lp-pop rounded-md px-1.5 py-1.5', c ? 'bg-gradient-to-br from-[#FFB020] to-[#FF8C00] font-semibold text-[#101B5C]' : 'border border-[#E4DEF4] text-[#A0A3B5]')}>{c ?? 'Open'}</td>)}</tr>)}</tbody></table></div>
     </div>
   );
 }
@@ -115,13 +122,22 @@ export function LandingPage() {
   return (
     <div className="space-y-20 sm:space-y-28">
       {/* ------------------------------------------------ hero */}
-      <section aria-labelledby="hero-h" className="-mb-6 pt-4 sm:-mb-12">
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-[#7200FF]/20 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-[.2em] text-[#7200FF] shadow-sm backdrop-blur dark:bg-white/10 dark:text-[#C9A6FF]">
+      <section aria-labelledby="hero-h" className="relative -mb-6 pt-4 sm:-mb-12">
+        <div aria-hidden="true" className="pointer-events-none absolute -inset-x-10 -inset-y-6 z-0 overflow-hidden [mask-image:radial-gradient(ellipse_at_center,black_45%,transparent_78%)]">
+          <span className="lp-orb absolute -left-10 top-0 h-56 w-56 rounded-full bg-[#A100FF]/20 blur-3xl" />
+          <span className="lp-orb absolute -right-6 top-10 h-48 w-48 rounded-full bg-[#FF8C00]/20 blur-3xl" style={{ animationDelay: '-6s' }} />
+          <span className="lp-orb absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-[#7200FF]/15 blur-3xl" style={{ animationDelay: '-11s' }} />
+        </div>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0">
+          {([[I.play, 'left-[6%] top-[18%] text-[#7200FF]', 0], [I.bolt, 'right-[8%] top-[12%] text-[#FF8C00]', -1.5], [I.calendar, 'left-[12%] bottom-[8%] text-[#A100FF]', -3], [I.shield, 'right-[12%] bottom-[14%] text-[#4B0FD6]', -2.2]] as [string, string, number][]).map(([ic, pos, dl]) => (
+            <span key={pos} className={cx('lp-bob absolute hidden opacity-60 sm:block', pos)} style={{ animationDelay: `${dl}s` }}><Icon d={ic} size={30} /></span>))}
+        </div>
+        <div className="relative z-10 mx-auto max-w-3xl text-center">
+          <p className="lp-drop mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-[#7200FF]/20 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-[.2em] text-[#7200FF] shadow-sm backdrop-blur dark:bg-white/10 dark:text-[#C9A6FF]">
             <span className="h-2 w-2 animate-pulse rounded-full bg-[#FF8C00]" aria-hidden="true" /> Play • Experience • Repeat
           </p>
-          <h1 id="hero-h" className="font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-[#101B5C] sm:text-7xl dark:text-white">One platform.<br /><Grad>Both sides</Grad> of the game.</h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg text-muted">Players find a venue and book a slot in a minute. Venue owners run their bookings and get paid. Which side are you on?</p>
+          <h1 id="hero-h" className="font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-[#101B5C] sm:text-7xl dark:text-white"><span className="lp-up inline-block" style={at(0.1)}>One platform.</span><br /><span className="lp-up inline-block" style={at(0.28)}><Grad>Both sides</Grad> of the game.</span></h1>
+          <p className="lp-up mx-auto mt-5 max-w-xl text-lg text-muted" style={at(0.45)}>Players find a venue and book a slot in a minute. Venue owners run their bookings and get paid. Which side are you on?</p>
         </div>
 
       </section>
@@ -139,7 +155,7 @@ export function LandingPage() {
         <div key={side} role="tabpanel" aria-label={side === 'player' ? 'Player' : 'Venue owner'} className="mt-10 grid animate-rise items-center gap-10 lg:grid-cols-[1.25fr_1fr]">
           <ol className="grid gap-3 sm:grid-cols-2">
             {items.map(([d, t, s], i) => (
-              <li key={t} className="group flex gap-4 rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card">
+              <li key={t} style={at(i * 0.06)} className="lp-up group flex gap-4 rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card">
                 <span className={cx('grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white transition group-hover:-rotate-6 group-hover:scale-110', side === 'player' ? 'bg-gradient-to-br from-[#7200FF] to-[#A100FF]' : 'bg-gradient-to-br from-[#FFB020] to-[#FF8C00]')}><Icon d={d} /></span>
                 <div><h3 className="font-display font-bold leading-snug">{t}</h3><p className="mt-0.5 text-sm leading-relaxed text-muted">{s}</p></div>
               </li>))}
@@ -163,15 +179,15 @@ export function LandingPage() {
             <span className="font-display text-sm font-bold text-[#7200FF] dark:text-[#C9A6FF]">01</span>
             <h2 className="mt-1 font-display text-3xl font-extrabold sm:text-4xl">I want to play</h2>
             <p className="mt-2 max-w-sm text-muted">Find a turf or court near you, see live slots and book in a minute.</p>
-            <ul className="mt-5 space-y-2 text-sm">{['Live slots with real prices', 'Pay online, or an advance where allowed', 'Instant confirmation and receipt'].map((x) => <li key={x} className="flex gap-2"><Icon d={I.check} size={18} className="shrink-0 text-[#7200FF]" />{x}</li>)}</ul>
+            <ul className="mt-5 space-y-2 text-sm">{['Live slots with real prices', 'Pay online, or an advance where allowed', 'Instant confirmation and receipt'].map((x, k) => <Reveal as="li" key={x} delay={0.3 + k * 0.12} y={12} className="flex gap-2"><Icon d={I.check} size={18} className="shrink-0 text-[#7200FF]" />{x}</Reveal>)}</ul>
             <div className="relative mt-auto flex flex-wrap gap-3 pt-7"><Link to="/home" className={btnMain}>Book a game <Icon d={I.arrow} size={18} /></Link>{!user && <Link to="/register" className={btnOutline}>Sign up</Link>}</div>
           </Door>
-          <Door className="bg-gradient-to-br from-[#101B5C] via-[#1D1A86] to-[#4B0FD6] text-white shadow-[0_30px_60px_-30px_rgb(16_27_92/.9)]">
+          <Door from="right" className="bg-gradient-to-br from-[#101B5C] via-[#1D1A86] to-[#4B0FD6] text-white shadow-[0_30px_60px_-30px_rgb(16_27_92/.9)]">
             <svg viewBox="0 0 200 200" className="pointer-events-none absolute -bottom-12 -right-6 h-60 w-60 text-white/[.06] transition duration-500 group-hover/door:scale-110" aria-hidden="true"><g fill="none" stroke="currentColor" strokeWidth="8"><rect x="20" y="40" width="160" height="120" rx="12" /><line x1="100" y1="40" x2="100" y2="160" /><circle cx="100" cy="100" r="24" /></g></svg>
             <span className="font-display text-sm font-bold text-[#FFB020]">02</span>
-            <h2 className="mt-1 font-display text-3xl font-extrabold sm:text-4xl">I run a venue</h2>
+            <h2 className="mt-1 font-display text-3xl font-extrabold !text-white sm:text-4xl">I run a venue</h2>
             <p className="mt-2 max-w-sm text-white/70">List your turf, manage every booking and price, and get paid to your bank.</p>
-            <ul className="mt-5 space-y-2 text-sm">{['All your bookings on one calendar', 'Full or advance payment, your choice', 'Automatic payouts after the game'].map((x) => <li key={x} className="flex gap-2"><Icon d={I.check} size={18} className="shrink-0 text-[#FFB020]" />{x}</li>)}</ul>
+            <ul className="mt-5 space-y-2 text-sm">{['All your bookings on one calendar', 'Full or advance payment, your choice', 'Automatic payouts after the game'].map((x, k) => <Reveal as="li" key={x} delay={0.3 + k * 0.12} y={12} className="flex gap-2"><Icon d={I.check} size={18} className="shrink-0 text-[#FFB020]" />{x}</Reveal>)}</ul>
             <div className="relative mt-auto flex flex-wrap gap-3 pt-7"><Link to="/owner/register" className={btnOrange}>Register your venue <Icon d={I.arrow} size={18} /></Link><Link to="/owner/login" className="btn rounded-full border-2 border-white/40 !px-6 !py-3 text-base text-white hover:bg-white/10">Owner login</Link></div>
           </Door>
         </div>
@@ -180,25 +196,25 @@ export function LandingPage() {
 
       {/* ------------------------------------------------ why: bento */}
       <section aria-labelledby="why-h">
-        <Eyebrow>Why PlaynX</Eyebrow>
-        <h2 id="why-h" className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">Built so nothing gets <Grad>double booked</Grad>.</h2>
+        <Reveal><Eyebrow>Why PlaynX</Eyebrow>
+        <h2 id="why-h" className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">Built so nothing gets <Grad>double booked</Grad>.</h2></Reveal>
         <div className="mt-10 grid auto-rows-[minmax(9rem,auto)] gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#7200FF] to-[#A100FF] p-7 text-white sm:col-span-2 lg:row-span-2">
             <Icon d={I.shield} size={36} />
-            <h3 className="mt-5 font-display text-3xl font-extrabold leading-tight">A slot is sold once. Never twice.</h3>
+            <h3 className="mt-5 font-display text-3xl font-extrabold leading-tight !text-white">A slot is sold once. Never twice.</h3>
             <p className="mt-3 max-w-sm text-white/80">Every booking shares one calendar. The moment a slot is booked, it is closed for everyone.</p>
-            <svg viewBox="0 0 200 120" className="absolute -bottom-6 -right-6 w-64 text-white/15" aria-hidden="true"><g fill="currentColor">{Array.from({ length: 18 }, (_, k) => <rect key={k} x={(k % 6) * 32} y={Math.floor(k / 6) * 38} width="26" height="30" rx="6" opacity={k % 4 === 0 ? 1 : 0.45} />)}</g></svg>
+            <svg viewBox="0 0 200 120" className="absolute -bottom-6 -right-6 w-64 text-white/15" aria-hidden="true"><g fill="currentColor">{Array.from({ length: 18 }, (_, k) => <rect key={k} x={(k % 6) * 32} y={Math.floor(k / 6) * 38} width="26" height="30" rx="6" opacity={k % 4 === 0 ? 1 : 0.45} className={k % 3 === 0 ? 'lp-twinkle' : undefined} style={{ animationDelay: `${(k % 5) * 0.45}s` }} />)}</g></svg>
           </div>
           {([[I.bolt, 'Instant confirmation', 'Booking reference and receipt the moment payment goes through.'], [I.lock, 'Secure payments', 'Paid through Razorpay. We never see card details.'], [I.shield, 'Verified venues', 'Every venue is checked by our team before it goes live.'], [I.bank, 'Owners get paid', 'Payouts to the bank 48 hours after the game.']] as [string, string, string][]).map(([d, t, s], i) => (
             <Reveal key={t} delay={i * 0.08} className={cx('rounded-3xl border p-6 transition hover:-translate-y-1', i === 3 ? 'border-transparent bg-[#101B5C] text-white' : 'border-line bg-surface shadow-card')}>
               <span className={cx('grid h-11 w-11 place-items-center rounded-xl', i === 3 ? 'bg-[#FF8C00] text-[#101B5C]' : 'bg-[#F5F0FF] text-[#7200FF] dark:bg-surface2')}><Icon d={d} /></span>
-              <h3 className="mt-4 font-display text-lg font-bold">{t}</h3><p className={cx('mt-1 text-sm', i === 3 ? 'text-white/70' : 'text-muted')}>{s}</p>
+              <h3 className={cx('mt-4 font-display text-lg font-bold', i === 3 && '!text-white')}>{t}</h3><p className={cx('mt-1 text-sm', i === 3 ? 'text-white/70' : 'text-muted')}>{s}</p>
             </Reveal>))}
         </div>
       </section>
 
       {/* ------------------------------------------------ sports ribbon */}
-      <section aria-label="Sports" className="relative left-1/2 w-screen -translate-x-1/2 py-6">
+      <section aria-label="Sports" className="lp-marquee relative left-1/2 w-screen -translate-x-1/2 py-6">
         <div className="-rotate-2 overflow-hidden bg-gradient-to-r from-[#101B5C] via-[#4B0FD6] to-[#7200FF] py-4 text-white shadow-[0_20px_40px_-20px_rgb(114_0_255/.8)]">
           <div className="flex w-max animate-marquee gap-6 whitespace-nowrap" aria-hidden="true">
             {[...SPORTS, ...SPORTS, ...SPORTS, ...SPORTS].map((s, i) => <span key={i} className="flex items-center gap-6 font-display text-2xl font-extrabold sm:text-3xl">{s}<Icon d={I.play} size={16} className="text-[#FF8C00]" /></span>)}
@@ -212,9 +228,9 @@ export function LandingPage() {
 
       {/* ------------------------------------------------ get started */}
       <section aria-labelledby="start-h" className="brand-panel relative overflow-hidden p-8 text-center sm:p-14">
-        <div aria-hidden="true" className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-[#A100FF]/15 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -bottom-20 -right-20 h-64 w-64 rounded-full bg-[#FF8C00]/15 blur-3xl" />
-        <div className="relative">
+        <div aria-hidden="true" className="lp-orb pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-[#A100FF]/15 blur-3xl" />
+        <div aria-hidden="true" className="lp-orb pointer-events-none absolute -bottom-20 -right-20 h-64 w-64 rounded-full bg-[#FF8C00]/15 blur-3xl" style={{ animationDelay: '-8s' }} />
+        <Reveal className="relative">
           <h2 id="start-h" className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">{user ? 'Welcome back' : <>Already with <Grad>PlaynX</Grad>?</>}</h2>
           <p className="mx-auto mt-3 max-w-lg text-muted">{user ? 'Pick up where you left off.' : 'Log in to book your next game, or sign up and start playing today.'}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -222,7 +238,7 @@ export function LandingPage() {
               : <><Link to="/login" className={btnMain}>Login <Icon d={I.arrow} size={18} /></Link><Link to="/register" className="btn rounded-full border-2 border-ink/80 !px-6 !py-3 text-base hover:bg-surface2">Sign up</Link></>}
           </div>
           <p className="mt-6 text-sm text-muted">Own a venue? <Link to="/owner/register" className="font-semibold text-[#7200FF] underline dark:text-[#C9A6FF]">Register your venue</Link></p>
-        </div>
+        </Reveal>
       </section>
     </div>
   );
