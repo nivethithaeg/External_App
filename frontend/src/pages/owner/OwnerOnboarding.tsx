@@ -443,7 +443,7 @@ function VerifyStep({ d, refresh, next, focus }: { d: AppData; refresh(): void; 
 /* ------------------------------------------------------------------ step 2: personal details */
 const COUNTRIES = ['India', 'Nepal', 'Bhutan', 'Sri Lanka', 'Bangladesh', 'United Arab Emirates', 'Other'];
 /** Who the owner is and where the turf is. The business and identity steps start from these answers, so nothing is typed twice. */
-function PersonalStep({ d, refresh, back, next, focus }: { d: AppData; refresh(): void; back(): void; next(): void; focus?: string | null }) {
+function PersonalStep({ d, refresh, back, next, focus }: { d: AppData; refresh(): Promise<unknown> | void; back(): void; next(): void; focus?: string | null }) {
   useFocusField(focus);
   const { user, refresh: refreshUser } = useAuth();
   // an account made with Google has no password of its own yet: it is chosen here, so email + password works too
@@ -459,7 +459,7 @@ function PersonalStep({ d, refresh, back, next, focus }: { d: AppData; refresh()
       if (needPassword) { await post('/auth/set-password', { newPassword: pw.password, confirmPassword: pw.confirm }); await refreshUser(); }
       return put('/owner/application/personal', { legalName: f.legalName.trim(), dob: f.dob, phone: f.phone.replace(/[\s-]/g, ''), addressLine1: f.addressLine1.trim(), ...(f.addressLine2.trim() ? { addressLine2: f.addressLine2.trim() } : {}), state: f.state, city: f.city.trim(), pincode: f.pincode.trim(), country: f.country });
     },
-    onSuccess: () => { refresh(); next(); }, onError: (e) => { const fe = fieldErrors(e); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(e)); },
+    onSuccess: async () => { await refresh(); next(); }, onError: (e) => { const fe = fieldErrors(e); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(e)); },
   });
   const go = () => {
     setError(''); const v: Record<string, string> = {};
@@ -521,7 +521,7 @@ type Partner = { name: string; pan: string; aadhaar: string; phone: string };
  * The business section of the application. Also used after approval to ask for a business type change:
  * then `submit` sends the details for review instead of saving them, and `title` / `nextLabel` change the wording.
  */
-export function BusinessStep({ d, refresh, back, next, focus, toPersonal, submit, title, nextLabel }: { d: AppData; refresh(): void; back?(): void; next(): void; focus?: string | null; toPersonal(): void; submit?(body: Record<string, unknown>): Promise<unknown>; title?: string; nextLabel?: string }) {
+export function BusinessStep({ d, refresh, back, next, focus, toPersonal, submit, title, nextLabel }: { d: AppData; refresh(): Promise<unknown> | void; back?(): void; next(): void; focus?: string | null; toPersonal(): void; submit?(body: Record<string, unknown>): Promise<unknown>; title?: string; nextLabel?: string }) {
   useFocusField(focus);
   const b = d.business; const lk = usePersonalLocks(d);
   const [type, setType] = useState<string>(b.type ?? '');
@@ -546,7 +546,7 @@ export function BusinessStep({ d, refresh, back, next, focus, toPersonal, submit
       return send({ ...common, businessName: f.businessName.trim(),
         ...(['partnership', 'opc', 'llp', 'trust_society', 'private_limited'].includes(type) && f.designation ? { designation: f.designation.trim() } : {}), ...(['private_limited', 'opc', 'llp', 'trust_society'].includes(type) ? { registrationNumber: f.registrationNumber.trim().toUpperCase() } : {}) });
     },
-    onSuccess: () => { refresh(); next(); }, onError: (e) => { const fe = fieldErrors(e); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(e)); }, // the server's reason goes next to the field it is about
+    onSuccess: async () => { await refresh(); next(); }, onError: (e) => { const fe = fieldErrors(e); if (Object.keys(fe).length) setErrs(fe); else setError(apiError(e)); }, // the server's reason goes next to the field it is about
   });
   const go = () => {
     setError(''); const v: Record<string, string> = {};
@@ -649,7 +649,7 @@ export function BusinessStep({ d, refresh, back, next, focus, toPersonal, submit
 
 /* ------------------------------------------------------------------ step 3: identity */
 /** JusGo's Documents step: the Aadhaar card number and a copy of the Aadhaar card / government ID. (The PAN is typed once, on the account type page.) */
-function IdentityStep({ d, refresh, back, next, focus }: { d: AppData; refresh(): void; back(): void; next(): void; focus?: string | null }) {
+function IdentityStep({ d, refresh, back, next, focus }: { d: AppData; refresh(): Promise<unknown> | void; back(): void; next(): void; focus?: string | null }) {
   useFocusField(focus);
   const type: string = d.business.type ?? '';
   const holder = type === 'sole_proprietorship' ? "Proprietor's" : type && type !== 'individual' ? "Authorized person's" : '';
@@ -660,7 +660,7 @@ function IdentityStep({ d, refresh, back, next, focus }: { d: AppData; refresh()
   const proof = (d.documents as any[]).find((x) => x.docType === 'identity_proof');
   const save = useMutation({
     mutationFn: () => put('/owner/application/identity', aadhaar ? { aadhaarNumber: aadhaar.replace(/\s/g, '') } : {}),
-    onSuccess: () => { refresh(); next(); }, onError: (e) => { const fe = fieldErrors(e); if (fe.aadhaarNumber) setNumErr(fe.aadhaarNumber); else setError(apiError(e)); },
+    onSuccess: async () => { await refresh(); next(); }, onError: (e) => { const fe = fieldErrors(e); if (fe.aadhaarNumber) setNumErr(fe.aadhaarNumber); else setError(apiError(e)); },
   });
   const go = () => {
     setError(''); setNumErr('');
@@ -771,7 +771,7 @@ export function ApplicationPage() {
   const q = useApplication();
   const [focus, setFocus] = useState<string | null>(null); const [seenReview, setSeenReview] = useState(false);
   const [sp] = useSearchParams(); const [step, setStep] = useState<number | null>(null); const [blocked, setBlocked] = useState<string | null>(null); const [editing, setEditing] = useState(sp.get('edit') === '1'); const [done, setDone] = useState<{ reference: string; message: string } | null>(null);
-  const refresh = () => { qc.invalidateQueries({ queryKey: ['owner-application'] }); };
+  const refresh = () => qc.invalidateQueries({ queryKey: ['owner-application'] }); // resolves once the fresh application has loaded
   const d = q.data as AppData | undefined;
   const furthest = useMemo(() => {
     if (!d) return 0; const m: any[] = d.missing;

@@ -284,6 +284,27 @@ describe('a step opens only once the earlier steps are filled in', () => {
     expect(screen.queryByLabelText('Date of Birth', { exact: false })).not.toBeInTheDocument(); // the Documents page does not ask for them again
   });
 
+  it('saving Personal details opens the business page with those answers already filled in, not blank', async () => {
+    const business = { type: null, name: 'Arjun Mehta', hasPan: false, panMasked: null, representativeName: 'Arjun Mehta', phone: '+919876543210', address: '12 Park Road', state: 'Karnataka', city: 'Bengaluru', pincode: '560038', country: 'India' };
+    app = gaps({ personal: { done: false, passwordSet: true }, business, missing: [{ type: 'field', key: 'personal', message: 'Fill in your personal details' }] });
+    vi.mocked(api.put).mockImplementation(async (url: string) => { // the saved answers come back only on the next load of the application
+      if (url === '/owner/application/personal') { // and, like on a real network, that load takes a moment
+        const saved = { ...app, personal: { done: true, passwordSet: true }, business: { ...business, dob: '1990-05-01' }, missing: [{ type: 'document', key: 'pan_card', message: 'Upload: PAN card' }] };
+        routes['/owner/application'] = new Promise((r) => setTimeout(() => r(saved), 200));
+      }
+      return {};
+    });
+    renderAt('/owner/application');
+    expect(await screen.findByRole('heading', { name: 'Personal details' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Date of Birth', { exact: false }), { target: { value: '1990-05-01' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Save & continue' }));
+    expect(await screen.findByRole('heading', { name: 'Business information' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Individual/ }));
+    expect(screen.getByLabelText('Date of Birth', { exact: false })).toHaveValue('1990-05-01');
+    expect(screen.getByLabelText('Full Legal Name', { exact: false })).toHaveValue('Arjun Mehta');
+    expect(screen.getByLabelText('PIN code', { exact: false })).toHaveValue('560038');
+  });
+
   it('the verification photo is mandatory: the step will not continue without it, and Review says Not uploaded with a Take photo button', async () => {
     app = gaps({ missing: [], business: { type: 'individual', name: 'Arjun', hasPan: true, panMasked: 'AB•••••4F', representativeName: 'Arjun Mehta' }, identity: { type: 'aadhaar_masked', aadhaarMasked: 'XXXXXXXX1234' }, documents: [{ id: 'd1', docType: 'identity_proof', label: 'Aadhaar / Government ID copy', status: 'pending' }] });
     renderAt('/owner/application');
