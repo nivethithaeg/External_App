@@ -51,6 +51,13 @@ export function ownerSyncKeyRoutes(ctx: Ctx) {
 /** The partner side, mounted at /api/playnx. */
 export function partnerSyncRoutes(ctx: Ctx) {
   const r = Router();
+  /** Whether bookings made on JusGo are reaching PlaynX: no keys or customer data, just times and the last error, for checking the setup. */
+  r.get('/status', (_req, res) => {
+    let host = ''; try { host = new URL(ctx.cfg.JUSGO_API_URL).host; } catch { /* not a URL */ }
+    const k = ctx.cfg.JUSGO_API_KEY;
+    res.json({ jusgo: { keySet: !!k, keyKind: k.startsWith('jsg_live_') ? 'live' : k.startsWith('jsg_test_') ? 'sandbox' : k ? 'other' : 'none',
+      apiHost: host, pollSeconds: Number(process.env.JUSGO_POLL_SECONDS ?? 2), ...jusgoInboundStatus } });
+  });
   r.use(async (req: any, _res, next) => {
     try {
       const raw = String(req.get('authorization') ?? '').trim().replace(/^Bearer\s+/i, '');

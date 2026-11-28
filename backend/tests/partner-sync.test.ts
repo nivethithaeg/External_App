@@ -81,3 +81,11 @@ describe('JusGo booking feed and venues (Partner API "Booking feed" and "Your ow
     await feed(a.as).expect(401);
   });
 });
+
+describe('JusGo status', () => {
+  it('says whether the JusGo key is set and when it last worked, with no secrets', async () => {
+    const r = (await request(env.app).get('/api/playnx/status').expect(200)).body.jusgo;
+    expect(r).toMatchObject({ keySet: false, keyKind: 'none', apiHost: 'api.jusgo.in' });
+    expect(JSON.stringify(r)).not.toMatch(/jsg_|whsec_/);
+  });
+});
