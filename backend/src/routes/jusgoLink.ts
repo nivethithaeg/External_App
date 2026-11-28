@@ -13,6 +13,7 @@ import { normalizePhone, phoneCandidates, INDIAN_MOBILE } from '../lib/phone.js'
 import { openSecret, sealSecret } from '../lib/totp.js';
 import { JusgoError, jusgoSignatureValid, type JusgoProfile } from '../lib/jusgo.js';
 import { publicUser } from './auth.js';
+import { applyJusgoChange, changeFromWebhook } from '../lib/jusgoBookings.js';
 import { BUSINESS_TYPES, EDITABLE } from './ownerApplication.js';
 
 /*
@@ -110,6 +111,10 @@ export async function handleJusgoWebhook(ctx: Ctx, req: Request, res: Response) 
   const delivery = req.get('x-jusgo-delivery') || body.id || '';
   const type = String(body.type ?? body.event_type ?? req.get('x-jusgo-event') ?? '');
   if (delivery && (await ctx.db.query('SELECT 1 FROM jusgo_webhook_deliveries WHERE delivery_id=$1', [delivery])).rows[0]) return void res.json({ ok: true, duplicate: true });
+  if (type.startsWith('booking.')) { // a booking on JusGo: close or free the same slot on PlaynX (deduplicated by the event id inside)
+    await applyJusgoChange(ctx, changeFromWebhook({ ...body, id: body.id ?? delivery, type }));
+    return void res.json({ ok: true });
+  }
   const d = body.data ?? {};
   const signup = d.requestId ? (await ctx.db.query('SELECT id FROM jusgo_link_signups WHERE request_id=$1', [String(d.requestId)])).rows[0] : undefined;
   if (type === 'customer.linked' && signup && d.code) await claimAndFetch(ctx, signup.id, String(d.code));

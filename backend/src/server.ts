@@ -1,5 +1,6 @@
 import { withFileEncryption } from './lib/fileCrypto.js';
 import { createJusgoClient } from './lib/jusgo.js';
+import { pollJusgoChanges } from './lib/jusgoBookings.js';
 import http from 'node:http';
 import { loadConfig } from './config.js';
 import { createPgDb } from './db.js';
@@ -39,13 +40,19 @@ realtime.current = attachRealtime(server, cfg);
 const payoutTimer = setInterval(() => runAutoPayouts(ctx).catch((e) => console.error('[auto-payouts]', e)), 60 * 60_000);
 setTimeout(() => runAutoPayouts(ctx).then((n) => n && console.log(`[auto-payouts] ${n} payout(s)${ctx.payouts?.test ? ' (TEST, no real transfer)' : ''}`)).catch((e) => console.error('[auto-payouts]', e)), 15_000); // and once soon after start
 const timer = setInterval(() => runMaintenance(ctx).catch((e) => console.error('[maintenance]', e)), 30_000);
+// JusGo -> PlaynX: bookings made on JusGo close the same slot here. Checked every JUSGO_POLL_SECONDS (2 by default; 0 switches it off).
+const jusgoEvery = Number(process.env.JUSGO_POLL_SECONDS ?? 2);
+let jusgoLastError = 0;
+const jusgoTimer = cfg.JUSGO_API_KEY && jusgoEvery > 0 ? setInterval(() => pollJusgoChanges(ctx).catch((e) => {
+  if (Date.now() - jusgoLastError > 60_000) { jusgoLastError = Date.now(); console.error('[jusgo] reading changes failed:', e?.code ?? '', e?.message ?? e); } // at most once a minute in the log
+}), jusgoEvery * 1000) : null;
 // listen first (hosts like Hostinger expect it within seconds), then bring the database up to date; a failed migration still stops the app
 server.listen(cfg.PORT, () => console.log(`PlaynX API listening on :${cfg.PORT} (${cfg.NODE_ENV})`));
 if (process.env.AUTO_MIGRATE !== 'false') {
   try { console.log('Migrations applied:', await migrate(db)); } catch (e) { console.error('[migrate] failed:', e); process.exit(1); }
 }
 
-const shutdown = () => { clearInterval(timer); server.close(() => db.close().then(() => process.exit(0))); setTimeout(() => process.exit(1), 10_000).unref(); };
+const shutdown = () => { clearInterval(timer); if (jusgoTimer) clearInterval(jusgoTimer); server.close(() => db.close().then(() => process.exit(0))); setTimeout(() => process.exit(1), 10_000).unref(); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
 
 process.on('unhandledRejection', (e) => { console.error('[unhandledRejection]', e); reportError(e, { source: 'process' }); });

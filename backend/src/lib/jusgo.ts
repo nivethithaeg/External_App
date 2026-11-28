@@ -33,6 +33,17 @@ export interface JusgoClient {
   fetchProfile(requestId: string, code: string): Promise<JusgoProfile>;
   /** downloads a signed document link (valid 15 minutes) */
   download(url: string): Promise<{ data: Buffer; contentType: string }>;
+  /** GET /v1/changes: what this app has not received yet, oldest first */
+  changes(limit?: number): Promise<{ changes: JusgoChange[]; hasMore: boolean; nextAfter?: string | null }>;
+}
+
+/** One change from JusGo, in the shape of GET /v1/changes (a webhook body is turned into this shape too). */
+export interface JusgoChange {
+  eventId: string; type: string; entityType?: string | null; entityId?: string | null;
+  venueId?: string | null; playingAreaId?: string | null; externalVenueId?: string | null; externalPlayingAreaId?: string | null;
+  createdAt?: string | null; changedFields?: string[]; previousValues?: Record<string, any>; newValues?: Record<string, any>;
+  booking?: { id: string; playing_area_id?: string; start?: string; end?: string; status?: string; channel?: string; is_yours?: boolean;
+    external_playing_area_id?: string | null } | null;
 }
 
 export function createJusgoClient(cfg: Pick<Config, 'JUSGO_API_URL' | 'JUSGO_API_KEY'>): JusgoClient {
@@ -54,6 +65,7 @@ export function createJusgoClient(cfg: Pick<Config, 'JUSGO_API_URL' | 'JUSGO_API
     requestLink: (email, ownerCode) => call('POST', '/v1/customer-link-request', ownerCode ? { email, ownerCode } : { email }),
     linkStatus: (requestId) => call('GET', `/v1/customer-link-status?requestId=${encodeURIComponent(requestId)}`),
     fetchProfile: async (requestId, code) => (await call<{ profile: JusgoProfile }>('POST', '/v1/customer-link-fetch', { requestId, code })).profile,
+    changes: (limit = 200) => call('GET', `/v1/changes?limit=${limit}`),
     async download(url) {
       // a relative link (/storage/...) is resolved against the JusGo address; up to 3 tries, the link lasts 15 minutes
       let target: URL;

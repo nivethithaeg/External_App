@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { JusgoError, type JusgoClient, type JusgoProfile } from '../src/lib/jusgo.js';
+import { JusgoError, type JusgoChange, type JusgoClient, type JusgoProfile } from '../src/lib/jusgo.js';
 
 /** An in-memory JusGo partner API that behaves like the real one for the customer-link calls. */
 export function createJusgoFake() {
@@ -7,9 +7,11 @@ export function createJusgoFake() {
   const profiles = new Map<string, JusgoProfile>(); // by email
   const files = new Map<string, { data: Buffer; contentType: string }>(); // by url
   const calls: string[] = [];
+  const pending: JusgoChange[] = []; // what GET /v1/changes hands over next
   const newCode = () => `jcl_${crypto.randomBytes(24).toString('hex')}`;
-  const fake: JusgoClient & { requests: typeof requests; profiles: typeof profiles; files: typeof files; calls: string[]; rateLimited: boolean; approve(id: string): string; deny(id: string): void; last(): string } = {
-    configured: true, requests, profiles, files, calls, rateLimited: false,
+  const fake: JusgoClient & { requests: typeof requests; profiles: typeof profiles; files: typeof files; calls: string[]; rateLimited: boolean; approve(id: string): string; deny(id: string): void; last(): string; pending: JusgoChange[] } = {
+    configured: true, requests, profiles, files, calls, rateLimited: false, pending,
+    async changes(limit = 200) { calls.push('changes'); const page = pending.splice(0, limit); return { changes: page, hasMore: pending.length > 0, nextAfter: null }; },
     async requestLink(email, ownerCode) {
       calls.push(`request:${email}`); if (ownerCode) calls.push(`ownerCode:${ownerCode}`);
       if (fake.rateLimited) throw new JusgoError(429, 'RATE_LIMITED', 'Too many');
