@@ -51,8 +51,8 @@ export function partnerSyncRoutes(ctx: Ctx) {
   r.use(async (req: any, _res, next) => {
     try {
       const raw = String(req.get('authorization') ?? '').trim().replace(/^Bearer\s+/i, '');
-      // the venues list is public (the same venues and playing areas the website shows); bookings always need a key
-      if (!raw && req.method === 'GET' && req.path === '/venues') { req.syncOwnerId = null; return next(); }
+      // without a key both lists are public: every published venue, and when its slots are taken (no booking references, no customer details)
+      if (!raw && req.method === 'GET' && (req.path === '/venues' || req.path === '/bookings')) { req.syncOwnerId = null; return next(); }
       if (!raw) throw new HttpError(401, 'Send the PlaynX API key in the Authorization header: "Bearer <key>"', 'missing_key');
       const k = (await ctx.db.query('UPDATE owner_sync_keys SET last_used_at=now() WHERE key_hash=$1 RETURNING owner_id', [hashKey(raw)])).rows[0];
       if (!k) throw new HttpError(401, 'This API key is not valid. Make a new one in the PlaynX owner portal (JusGo sync).', 'invalid_key');
@@ -89,14 +89,14 @@ export function partnerSyncRoutes(ctx: Ctx) {
       `SELECT b.id, b.reference, v.id AS venue_id, v.name AS venue_name, a.id AS court_id, a.name AS court_name, sp.name AS sport,
               lower(b.during) AS starts_at, upper(b.during) AS ends_at, b.status, b.block_kind, b.event_kind, b.deleted_at, b.cancelled_at, b.sync_updated_at
          FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN playing_areas a ON a.id=b.area_id LEFT JOIN sports sp ON sp.id=b.sport_id
-        WHERE v.owner_id=$1 AND upper(b.during) > $2::timestamptz AND lower(b.during) < $3::timestamptz
+        WHERE (CASE WHEN $1::uuid IS NULL THEN v.status = 'approved' ELSE v.owner_id = $1::uuid END) AND upper(b.during) > $2::timestamptz AND lower(b.during) < $3::timestamptz
           AND b.status IN ('confirmed','completed','no_show','blocked','cancelled')
           AND ($4::timestamptz IS NULL OR b.sync_updated_at > $4::timestamptz) AND ($5::uuid IS NULL OR v.id = $5::uuid)
         ORDER BY b.sync_updated_at LIMIT 5000`, params);
     const removed = (await ctx.db.query(
       `SELECT r.booking_id AS id, r.venue_id, v.name AS venue_name, r.area_id AS court_id, a.name AS court_name, r.starts_at, r.ends_at, r.removed_at
          FROM booking_sync_removed r JOIN venues v ON v.id=r.venue_id LEFT JOIN playing_areas a ON a.id=r.area_id
-        WHERE v.owner_id=$1 AND r.ends_at > $2::timestamptz AND r.starts_at < $3::timestamptz
+        WHERE (CASE WHEN $1::uuid IS NULL THEN v.status = 'approved' ELSE v.owner_id = $1::uuid END) AND r.ends_at > $2::timestamptz AND r.starts_at < $3::timestamptz
           AND ($4::timestamptz IS NULL OR r.removed_at > $4::timestamptz) AND ($5::uuid IS NULL OR v.id = $5::uuid)
         ORDER BY r.removed_at LIMIT 5000`, params)).rows;
     const iso = (d: any) => (d ? new Date(d).toISOString() : null);
@@ -104,7 +104,7 @@ export function partnerSyncRoutes(ctx: Ctx) {
       ...rows.map((b: any) => {
         const gone = b.status === 'cancelled' || !!b.deleted_at;
         return {
-          id: b.id, reference: b.reference, venueId: b.venue_id, venueName: b.venue_name, courtId: b.court_id, courtName: b.court_name, sport: b.sport ?? null,
+          id: b.id, reference: req.syncOwnerId ? b.reference : null, venueId: b.venue_id, venueName: b.venue_name, courtId: b.court_id, courtName: b.court_name, sport: b.sport ?? null,
           startsAt: iso(b.starts_at), endsAt: iso(b.ends_at),
           type: b.event_kind ? 'event' : b.status === 'blocked' ? 'block' : 'booking',
           status: gone ? 'cancelled' : b.status === 'blocked' ? 'blocked' : b.status === 'completed' ? 'completed' : 'confirmed',

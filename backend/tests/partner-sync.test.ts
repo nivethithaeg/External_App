@@ -14,18 +14,20 @@ async function ownerWithKey() {
 }
 
 describe('booking sync for partner apps (JusGo)', () => {
-  it('lists published venues with their playing areas without a key; bookings still need one', async () => {
+  it('without a key: published venues with their playing areas, and their taken slots with no references', async () => {
     const { f } = await ownerWithKey();
+    const bk = (await walkIn(env, f.owner.auth).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(2), '10:00'), durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876543210' }).expect(201)).body;
     const draft = (await request(env.app).post('/api/owner/venues').set(f.owner.auth).send({ name: 'Hidden Draft Arena', address: '1 Lake Road, Erode', city: 'Erode', pincode: '638001', lat: 11.34, lng: 77.71 }).expect(201)).body.venue;
     const v = (await request(env.app).get('/api/playnx/venues').expect(200)).body.venues;
     const mine = v.find((x: any) => x.id === f.venue.id);
     expect(mine.playingAreas).toEqual([expect.objectContaining({ id: f.area.id, name: 'Turf A' })]);
     expect(v.some((x: any) => x.id === draft.id)).toBe(false); // a venue that is not published stays hidden
-    await request(env.app).get('/api/playnx/bookings').expect(401);
+    const list = (await request(env.app).get('/api/playnx/bookings').expect(200)).body.bookings;
+    expect(list.find((x: any) => x.id === bk.bookingId)).toMatchObject({ venueId: f.venue.id, courtId: f.area.id, status: 'confirmed', reference: null });
+    expect(JSON.stringify(list)).not.toMatch(new RegExp(`${bk.reference}|Ravi|9876543210`));
   });
 
-  it('needs a valid key in the Authorization header', async () => {
-    await request(env.app).get('/api/playnx/bookings').expect(401);
+  it('a wrong key is refused, not treated as no key', async () => {
     await request(env.app).get('/api/playnx/bookings').set({ Authorization: 'Bearer pnx_wrong' }).expect(401);
     const { key } = await ownerWithKey();
     await request(env.app).get('/api/playnx/venues').set({ Authorization: key }).expect(200); // the key on its own works too
