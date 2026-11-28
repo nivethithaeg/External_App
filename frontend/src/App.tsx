@@ -16,6 +16,7 @@ import { ReceiptPage, MyReviewsPage, NearbyPage, OffersPage, PaymentsPage as Cus
 import { BookingDetailPage, BookingsPage, FavouritesPage, NotificationsPage, ProfilePage, SupportPage } from './pages/customer/Account';
 import { AboutPage, CancellationPage, ContactPage, CookiePage, HelpPage, OwnerAgreementPage, PrivacyPage, TermsPage } from './pages/customer/InfoPages';
 import { Loading } from './components/ui';
+import { JusgoLockedPopup } from './components/JusgoLockedPopup';
 import { useAuth } from './lib/auth';
 
 const OwnerVenuesPage = lazy(() => import('./pages/owner/VenueEditor').then((m) => ({ default: m.OwnerVenuesPage })));
@@ -58,6 +59,7 @@ export default function App() {
     <PaymentCelebrationHost />
     <ErrorBoundary key={loc.pathname}>
     <Suspense fallback={<Loading />}>
+      <JusgoLockedPopup />
       <Routes>
         <Route path="/login" element={<LoginPage portal="customer" />} />
         <Route path="/register" element={<RegisterPage portal="customer" />} />

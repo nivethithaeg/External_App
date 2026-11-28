@@ -19,6 +19,7 @@ import { ownerInsightRoutes } from './routes/ownerInsights.js';
 import { ownerApplicationRoutes } from './routes/ownerApplication.js';
 import { ownerExtraRoutes, adminExtraRoutes } from './routes/ownerExtras.js';
 import { ownerSyncKeyRoutes, partnerSyncRoutes } from './routes/partnerSync.js';
+import { jusgoLock } from './middleware/jusgoLock.js';
 import { adminApplicationRoutes } from './routes/adminApplications.js';
 import { adminRoutes } from './routes/admin.js';
 import { webhookRoutes } from './routes/webhooks.js';
@@ -68,6 +69,7 @@ export function createApp(ctx: Ctx) {
   app.use('/api', publicRoutes(ctx));
   app.use('/api/me', accountRoutes(ctx));
   app.use('/api', customerPortalRoutes(ctx));
+  app.use('/api/owner', jusgoLock(ctx, 'owner')); // venues linked with JusGo: venue, court, slot, price and block changes are made in JusGo only
   app.use('/api/owner', ownerRoutes(ctx));
   app.use('/api/owner', ownerInsightRoutes(ctx));
   app.use('/api/owner', ownerApplicationRoutes(ctx));
@@ -75,6 +77,7 @@ export function createApp(ctx: Ctx) {
   app.use('/api/owner', ownerExtraRoutes(ctx));
   app.use('/api/owner', ownerSyncKeyRoutes(ctx));
   app.use('/api/playnx', partnerSyncRoutes(ctx)); // partner apps (JusGo) read an owner's venues and bookings with that owner's key
+  app.use('/api/staff', jusgoLock(ctx, 'staff'));
   app.use('/api/staff', staffRoutes(ctx));
   app.use('/api/admin', adminApplicationRoutes(ctx));
   app.use('/api/admin', adminRoutes(ctx));

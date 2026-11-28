@@ -53,6 +53,7 @@ export const setUnauthorizedHandler = (fn: () => void) => { onUnauthorized = fn;
 api.interceptors.response.use((r) => r, (err: AxiosError<any>) => {
   const url = err.config?.url ?? '';
   if (err.response?.status === 401 && getToken() && !url.includes('/auth/login')) onUnauthorized?.();
+  if (err.response?.status === 409 && err.response.data?.error?.code === 'managed_in_jusgo') window.dispatchEvent(new Event('playnx:managed-in-jusgo')); // shown by JusgoLockedPopup
   if (err.response?.status === 403 && ['owner_not_approved', 'bank_required'].includes(err.response.data?.error?.code)) onNotApproved?.(err.response.data.error.code);
   return Promise.reject(err);
 });
