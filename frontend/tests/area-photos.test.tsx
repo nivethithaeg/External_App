@@ -57,6 +57,19 @@ const takePhoto = async (dlg: HTMLElement, keep = true) => {
   return cam;
 };
 
+
+describe('adding a playing area before the venue is approved', () => {
+  it('pressing Add area shows a pop-up saying the venue is not approved yet, and opens no form', async () => {
+    wrap(<AreasTab venue={venue({ status: 'pending' })} />);
+    await userEvent.click(await screen.findByRole('button', { name: '+ Add area' }));
+    const pop = await screen.findByRole('dialog', { name: 'Venue not approved yet' });
+    expect(pop).toHaveTextContent(/still reviewing this venue/); expect(pop).toHaveTextContent(/once PlaynX approves it/);
+    expect(screen.queryByRole('dialog', { name: 'Add playing area' })).not.toBeInTheDocument();
+    await userEvent.click(within(pop).getByRole('button', { name: 'OK' }));
+    expect(screen.queryByRole('dialog', { name: 'Venue not approved yet' })).not.toBeInTheDocument();
+  });
+});
+
 describe('live photos in the playing area form', () => {
   it('offers both an upload from the device and a live camera, and says a photo is required', async () => {
     const dlg = await openNew();
