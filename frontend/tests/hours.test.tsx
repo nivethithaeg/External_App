@@ -19,6 +19,11 @@ const tab = (d: string) => screen.getByRole('tab', { name: new RegExp(d) });
 const price = (t: string) => screen.getByLabelText(`${t} price`) as HTMLInputElement;
 const slotTimes = (day: string) => within(screen.getByRole('list', { name: `${day} slots` })).getAllByRole('listitem').map((li) => li.querySelector('span')!.textContent);
 const type = async (el: HTMLElement, v: string) => { await userEvent.clear(el); await userEvent.type(el, v); };
+/** Press Save; when only some days were changed, keep it to those days. */
+const saveSchedule = async () => {
+  await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+  const only = screen.queryByRole('button', { name: /^Save only / }); if (only) await userEvent.click(only);
+};
 
 beforeEach(() => {
   vi.clearAllMocks(); saved = [];
@@ -56,6 +61,34 @@ describe('slots follow the opening and closing hours', () => {
   });
 });
 
+describe('saving after changing only some days', () => {
+  it('says which days were left as they were, and can copy the changed day to all days before saving', async () => {
+    show(area());
+    await userEvent.click(tab('Mon'));
+    await type(price('8:00 AM'), '1500');
+    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    const ask = await screen.findByRole('alertdialog', { name: 'Only some days changed' });
+    expect(ask).toHaveTextContent(/You changed only Mon\./); expect(ask).toHaveTextContent(/Sun, Tue, Wed, Thu, Fri, Sat keep their old hours and prices/);
+    expect(saved).toHaveLength(0); // nothing is sent until the owner chooses
+    await userEvent.click(within(ask).getByRole('button', { name: 'Copy Mon to all days & save' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    for (const d of [0, 1, 2, 3, 4, 5, 6]) expect(saved[0].body.rules, `day ${d}`).toContainEqual({ sportId: null, dayType: 'all', dayOfWeek: d, startTime: '08:00', endTime: '09:00', pricePerHour: 1500 });
+  });
+
+  it('"Save only" keeps the change to that day, and "Go back" sends nothing', async () => {
+    show(area());
+    await userEvent.click(tab('Mon'));
+    await type(price('8:00 AM'), '1500');
+    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Go back' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull(); expect(saved).toHaveLength(0);
+    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Save only Mon' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].body.rules.filter((r: any) => r.pricePerHour === 1500).map((r: any) => r.dayOfWeek)).toEqual([1]);
+  });
+});
+
 describe('a price under each slot', () => {
   it('shows the saved prices under the right slots, and saves what the owner types as rules', async () => {
     const onSaved = vi.fn();
@@ -63,7 +96,7 @@ describe('a price under each slot', () => {
     await userEvent.click(tab('Mon'));
     expect(price('6:00 AM').value).toBe('500'); expect(price('7:00 AM').value).toBe('500'); expect(price('8:00 AM').value).toBe('');
     await type(price('8:00 AM'), '700');
-    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    await saveSchedule();
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].url).toBe('/owner/areas/a1/schedule');
     const mon = saved[0].body.rules.filter((r: any) => r.dayOfWeek === 1);
@@ -87,7 +120,7 @@ describe('a price under each slot', () => {
     expect(price('7:00 AM')).toHaveValue(900); // filled with the default price
     await type(price('7:00 AM'), '1100'); // the owner changes just this slot
     expect(scheduleStatus(area({ availability: days('06:00', '08:00'), pricing: [DEF] })).warn).toBe(false);
-    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    await saveSchedule();
     await waitFor(() => expect(saved[0]?.body.rules).toEqual(expect.arrayContaining([expect.objectContaining({ dayOfWeek: 1, startTime: '06:00', endTime: '07:00', pricePerHour: 1300 }), expect.objectContaining({ dayOfWeek: 1, startTime: '07:00', endTime: '08:00', pricePerHour: 1100 }), expect.objectContaining({ dayOfWeek: null, startTime: '00:00', endTime: '24:00', pricePerHour: 900 })])));
     expect(saved[0].body.rules.filter((r: any) => r.pricePerHour === 900 && r.dayOfWeek !== null)).toHaveLength(0); // the default is not copied into every slot
   });
@@ -111,7 +144,7 @@ describe('a price under each slot', () => {
     show(area());
     await userEvent.click(tab('Mon'));
     await userEvent.selectOptions(screen.getByLabelText('Monday closes hour'), '5'); // 5 AM, before the 6 AM opening
-    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    await saveSchedule();
     expect(await screen.findByText(/Monday: closing time must be after opening time/)).toBeInTheDocument(); expect(saved).toEqual([]);
   });
   it('keeps each sport\'s own prices; an empty sport slot shows the all-sports price as a hint', async () => {
@@ -120,7 +153,7 @@ describe('a price under each slot', () => {
     await userEvent.selectOptions(screen.getByLabelText('Prices for'), '2');
     expect(price('6:00 AM').value).toBe(''); expect(price('6:00 AM').placeholder).toBe('500');
     await type(price('7:00 AM'), '900');
-    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    await saveSchedule();
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].body.rules.filter((r: any) => r.sportId === 2)).toEqual([{ sportId: 2, dayType: 'all', dayOfWeek: 1, startTime: '07:00', endTime: '08:00', pricePerHour: 900 }]);
     expect(saved[0].body.rules.some((r: any) => r.sportId === null && r.dayOfWeek === 1 && r.pricePerHour === 500)).toBe(true); // the all-sports price is unchanged
@@ -146,7 +179,7 @@ describe('copying a price', () => {
     show(area({ availability: days('06:00', '09:00') }));
     await userEvent.click(tab('Mon')); await type(price('6:00 AM'), '450');
     await userEvent.click(screen.getByRole('button', { name: 'Copy 6:00 AM price' })); await userEvent.click(screen.getByRole('button', { name: 'Paste on 7:00 AM' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Save hours & prices' }));
+    await saveSchedule();
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].body.rules.filter((r: any) => r.dayOfWeek === 1)).toEqual([{ sportId: null, dayType: 'all', dayOfWeek: 1, startTime: '06:00', endTime: '08:00', pricePerHour: 450 }]);
   });

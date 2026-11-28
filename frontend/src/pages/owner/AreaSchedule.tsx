@@ -40,19 +40,22 @@ export function ScheduleModal({ area, sports, onClose, onSaved }: { area: any; s
   const [fill, setFill] = useState({ value: '', every: false });
   const [err, setErr] = useState('');
   const [blank, setBlank] = useState<Set<string>>(new Set()); // boxes the owner emptied while typing: shown empty (they still cost the default)
+  const [touched, setTouched] = useState<Set<number>>(new Set()); // the days changed in this window
+  const touch = (...ds: number[]) => setTouched((t) => (ds.every((d) => t.has(d)) ? t : new Set([...t, ...ds])));
+  const [onlySome, setOnlySome] = useState(false); // the "you changed only some days" question before saving
 
   const day = days[dow]; const slots = slotStarts(day, step);
   const key = String(scope);
   const priceOf = (sc: Scope, d: number, m: number) => prices[String(sc)]?.[d]?.[m];
-  const setPrice = (sc: Scope, d: number, m: number, v: number | undefined) => setPrices((p) => {
+  const setPrice = (sc: Scope, d: number, m: number, v: number | undefined) => { touch(d); setPrices((p) => {
     const row = { ...(p[String(sc)]?.[d] ?? {}) }; if (v === undefined) delete row[m]; else row[m] = v;
     return { ...p, [String(sc)]: { ...(p[String(sc)] ?? {}), [d]: row } };
-  });
-  const setMany = (sc: Scope, d: number, ms: number[], v: number | undefined) => setPrices((p) => {
+  }); };
+  const setMany = (sc: Scope, d: number, ms: number[], v: number | undefined) => { touch(d); setPrices((p) => {
     const row = { ...(p[String(sc)]?.[d] ?? {}) }; for (const m of ms) { if (v === undefined) delete row[m]; else row[m] = v; }
     return { ...p, [String(sc)]: { ...(p[String(sc)] ?? {}), [d]: row } };
-  });
-  const patchDay = (d: number, patch: Partial<Day>) => setDays((all) => all.map((x) => (x.dayOfWeek === d ? { ...x, ...patch } : x)));
+  }); };
+  const patchDay = (d: number, patch: Partial<Day>) => { touch(d); setDays((all) => all.map((x) => (x.dayOfWeek === d ? { ...x, ...patch } : x))); };
 
   const unpriced = unpricedCount(prices, days, step, !!def);
   const pricedToday = slots.filter((m) => priceOf('all', dow, m) !== undefined && (defSlot === undefined || priceOf('all', dow, m) !== defSlot)).length;
@@ -73,18 +76,33 @@ export function ScheduleModal({ area, sports, onClose, onSaved }: { area: any; s
   const pasteOnDay = (d: number) => { if (copy && copiedPrice !== undefined && slotStarts(days[d], step).includes(copy.m)) setMany(copy.scope, d, [copy.m], copiedPrice); };
   const applyDayCopy = () => {
     if (!dayCopy) return;
+    touch(dow, ...dayCopy);
     setDays((all) => all.map((x) => (dayCopy.includes(x.dayOfWeek) ? { ...x, openTime: day.openTime, closeTime: day.closeTime, isClosed: day.isClosed } : x)));
     setPrices((p) => { const out: Prices = {}; for (const [k, byDay] of Object.entries(p)) { const next = { ...byDay }; for (const t of dayCopy) next[t] = { ...(byDay[dow] ?? {}) }; out[k] = next; } return out; });
     toast(`${DAYS[dow]}'s hours and prices copied to ${dayCopy.length} day${dayCopy.length === 1 ? '' : 's'}. Press Save to keep them.`, 'info'); setDayCopy(null);
   };
 
+  const changed = [...touched].sort(); const untouched = days.filter((d) => !touched.has(d.dayOfWeek) && !d.isClosed).map((d) => d.dayOfWeek);
+  const names = (ds: number[]) => ds.map((d) => DAYS[d].slice(0, 3)).join(', ');
+  const trySave = () => {
+    setErr(''); const bad = days.find((d) => !d.isClosed && toMin(d.closeTime) <= toMin(d.openTime));
+    if (bad) return setErr(`${DAYS[bad.dayOfWeek]}: closing time must be after opening time`);
+    if (changed.length > 0 && untouched.length > 0) return setOnlySome(true); save.mutate(undefined); };
+  /** Copy one changed day to every other day, then save. */
+  const copyToAllAndSave = () => {
+    const src = changed[0]; const from = days[src]; const all = days.map((d) => d.dayOfWeek).filter((d) => d !== src);
+    const nextDays = days.map((x) => (x.dayOfWeek === src ? x : { ...x, openTime: from.openTime, closeTime: from.closeTime, isClosed: from.isClosed }));
+    const nextPrices: Prices = {}; for (const [k, byDay] of Object.entries(prices)) { const n = { ...byDay }; for (const t of all) n[t] = { ...(byDay[src] ?? {}) }; nextPrices[k] = n; }
+    setDays(nextDays); setPrices(nextPrices); setOnlySome(false); save.mutate({ days: nextDays, prices: nextPrices });
+  };
   const save = useMutation({
-    mutationFn: () => {
-      const bad = days.find((d) => !d.isClosed && toMin(d.closeTime) <= toMin(d.openTime));
+    mutationFn: (over?: { days: Day[]; prices: Prices }) => {
+      const days_ = over?.days ?? days; const prices_ = over?.prices ?? prices;
+      const bad = days_.find((d) => !d.isClosed && toMin(d.closeTime) <= toMin(d.openTime));
       if (bad) throw new Error(`${DAYS[bad.dayOfWeek]}: closing time must be after opening time`);
       // a slot at the default price is not saved as a price of its own: it keeps following the default
-      const own: Prices = defSlot === undefined ? prices : { ...prices, all: Object.fromEntries(Object.entries(prices.all ?? {}).map(([d, row]) => [d, Object.fromEntries(Object.entries(row).filter(([, v]) => v !== defSlot))])) };
-      return put(`/owner/areas/${area.id}/schedule`, { days, rules: [...toRules(own, days, step), ...(def ? [{ sportId: null, dayType: 'all' as const, dayOfWeek: null, startTime: '00:00', endTime: '24:00', pricePerHour: Number(def.pricePerHour) }] : [])] }); // the default price is kept
+      const own: Prices = defSlot === undefined ? prices_ : { ...prices_, all: Object.fromEntries(Object.entries(prices_.all ?? {}).map(([d, row]) => [d, Object.fromEntries(Object.entries(row).filter(([, v]) => v !== defSlot))])) };
+      return put(`/owner/areas/${area.id}/schedule`, { days: days_, rules: [...toRules(own, days_, step), ...(def ? [{ sportId: null, dayType: 'all' as const, dayOfWeek: null, startTime: '00:00', endTime: '24:00', pricePerHour: Number(def.pricePerHour) }] : [])] }); // the default price is kept
     },
     onSuccess: () => { onSaved(); onClose(); toast('Hours and prices saved'); }, onError: (e) => setErr(apiError(e)),
   });
@@ -171,7 +189,14 @@ export function ScheduleModal({ area, sports, onClose, onSaved }: { area: any; s
 
       {unpriced > 0 && <p role="status" className="mt-3 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"><b>{unpriced} open slot{unpriced === 1 ? ' has' : 's have'} no price</b>, so customers can't book {unpriced === 1 ? 'it' : 'them'}. They are outlined in orange. Use "Set every slot to" or the copy button to fill them in quickly.</p>}
       <div className="mt-4 flex flex-wrap items-center justify-end gap-2">{err && <span role="alert" className="mr-auto text-sm text-danger">{err}</span>}
-        <Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={save.isPending} onClick={() => { setErr(''); save.mutate(); }}>Save hours & prices</Button></div>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={save.isPending} onClick={trySave}>Save hours & prices</Button></div>
+      {onlySome && (
+        <div role="alertdialog" aria-label="Only some days changed" className="mt-3 space-y-3 rounded-xl border border-warn/50 bg-warn/10 p-4 text-sm">
+          <p><b>You changed only {names(changed)}.</b> {names(untouched)} {untouched.length === 1 ? 'keeps its' : 'keep their'} old hours and prices, so customers will see those on {untouched.length === 1 ? 'that day' : 'those days'}.</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => setOnlySome(false)}>Go back</Button>
+            <Button variant="ghost" onClick={() => { setOnlySome(false); save.mutate(undefined); }}>Save only {names(changed)}</Button>
+            {changed.length === 1 && <Button onClick={copyToAllAndSave}>Copy {DAYS[changed[0]].slice(0, 3)} to all days & save</Button>}</div></div>)}
     </Modal>
   );
 }
