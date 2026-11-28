@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import { animate, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 
 /** Fades and lifts its children into view the first time they scroll on screen. Plain (no animation) when the visitor prefers reduced motion. */
@@ -7,6 +7,28 @@ export function Reveal({ children, delay = 0, y = 24, className, as = 'div' }: {
   const Tag = as === 'section' ? motion.section : as === 'li' ? motion.li : motion.div;
   if (reduce || typeof IntersectionObserver === 'undefined') { const Plain = as; return <Plain className={className}>{children}</Plain>; }
   return <Tag className={className} initial={{ opacity: 0, y }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '0px 0px -8% 0px' }} transition={{ duration: 0.55, delay, ease: 'easeOut' }}>{children}</Tag>;
+}
+
+/**
+ * Headline words that rise one after another out of an invisible mask, with a slight tilt that settles, on first load.
+ * `lines` is the headline split into lines of words; a word may carry its own classes (for example gradient text).
+ * Plain text with reduced motion. Put the full sentence in the heading's aria-label so it is read as one phrase.
+ */
+export function WordsIn({ lines, delay = 0, stagger = 0.08 }: { lines: { text: string; className?: string }[][]; delay?: number; stagger?: number }) {
+  const reduce = useReducedMotion();
+  let n = 0;
+  return <>{lines.map((line, l) => (
+    <Fragment key={l}>{l > 0 && <br />}{line.map((w, k) => {
+      const i = n++;
+      return (
+        <Fragment key={k}>{k > 0 && ' '}
+          <span aria-hidden="true" className="-mb-[0.14em] inline-block overflow-hidden pb-[0.14em] align-bottom">
+            <motion.span className={`inline-block ${w.className ?? ''}`} style={{ transformOrigin: '0% 100%' }}
+              initial={reduce ? false : { y: '110%', rotate: 7, opacity: 0 }} animate={{ y: '0%', rotate: 0, opacity: 1 }}
+              transition={{ duration: 0.9, delay: delay + i * stagger, ease: [0.22, 1, 0.36, 1] }}>{w.text}</motion.span>
+          </span>
+        </Fragment>);
+    })}</Fragment>))}</>;
 }
 
 /** A soft entrance for a whole page whenever the route changes. Opacity and transform only, so nothing jumps. */

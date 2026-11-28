@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../../lib/auth';
-import { Reveal } from '../../components/Motion';
+import { CountUp, Reveal, WordsIn } from '../../components/Motion';
 import { FAQSection, Testimonials } from './Landing';
 import { cx } from '../../lib/utils';
 
@@ -36,7 +37,10 @@ const I = {
 };
 const Icon = ({ d, size = 20, className }: { d: string; size?: number; className?: string }) => <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}><path d={d} /></svg>;
 const Grad = ({ children }: { children: ReactNode }) => <span className="bg-gradient-to-r from-[#7200FF] via-[#A100FF] to-[#FF8C00] bg-clip-text text-transparent">{children}</span>;
-const Eyebrow = ({ children, className }: { children: ReactNode; className?: string }) => <p className={cx('mb-3 text-xs font-bold uppercase tracking-[.25em] text-[#7200FF] dark:text-[#C9A6FF]', className)}>{children}</p>;
+// "Both sides" animates word by word, so each word carries its half of the purple -> orange gradient
+const GRAD_A = 'bg-gradient-to-r from-[#7200FF] to-[#A100FF] bg-clip-text text-transparent';
+const GRAD_B = 'bg-gradient-to-r from-[#A100FF] to-[#FF8C00] bg-clip-text text-transparent';
+const Eyebrow =({ children, className }: { children: ReactNode; className?: string }) => <p className={cx('mb-3 text-xs font-bold uppercase tracking-[.25em] text-[#7200FF] dark:text-[#C9A6FF]', className)}>{children}</p>;
 
 const btnMain = 'btn rounded-full bg-gradient-to-r from-[#7200FF] to-[#A100FF] !px-6 !py-3 text-base text-white shadow-[0_12px_28px_-10px_rgb(114_0_255/.8)] hover:-translate-y-0.5 hover:brightness-110';
 const btnOrange = 'btn rounded-full bg-gradient-to-r from-[#FFB020] to-[#FF8C00] !px-6 !py-3 text-base text-[#101B5C] shadow-[0_12px_28px_-10px_rgb(255_140_0/.7)] hover:-translate-y-0.5 hover:brightness-105';
@@ -72,30 +76,107 @@ function Door({ children, className }: { children: ReactNode; className: string 
   return <article className={cx('group/door relative flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-[2rem] p-7 transition-[flex-grow] duration-500 ease-out sm:p-9 lg:hover:flex-[1.35]', className)}>{children}</article>;
 }
 
+/** True when entrance animations should run: motion allowed and the browser can tell when things scroll into view. */
+function useAnim() {
+  const reduce = useReducedMotion();
+  return !reduce && typeof IntersectionObserver !== 'undefined';
+}
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+/** A finger-tap ripple, played once each time it mounts. */
+const Tap = ({ className }: { className?: string }) => (
+  <motion.span aria-hidden="true" className={cx('pointer-events-none absolute left-1/2 top-1/2 -ml-4 -mt-4 h-8 w-8 rounded-full', className)}
+    initial={{ scale: 0.2, opacity: 0.9 }} animate={{ scale: 2.6, opacity: 0 }} transition={{ duration: 0.75, ease: 'easeOut' }} />
+);
+
+/*
+ * The player phone plays a booking on a loop while it is on screen:
+ * 0 nothing picked -> 1 tap 8 PM -> 2 price summary -> 3 tap Pay -> 4 booking confirmed -> back to 0.
+ * With reduced motion it stays on step 2 (slot picked, summary shown).
+ */
+const STEP_MS = [1000, 1100, 1300, 900, 2600];
 function PhoneMock() {
+  const anim = useAnim();
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  // only play the loop while the phone is on screen
+  useEffect(() => {
+    if (!anim || !ref.current) return;
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '-15% 0px' });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [anim]);
+  const [step, setStep] = useState(anim ? 0 : 2);
+  useEffect(() => {
+    if (!anim || !inView) return;
+    const t = setTimeout(() => setStep((s) => (s + 1) % STEP_MS.length), STEP_MS[step]);
+    return () => clearTimeout(t);
+  }, [step, inView, anim]);
+
   return (
-    <div className="mx-auto w-64 rounded-[2.2rem] border-[6px] border-[#101B5C] bg-white p-3 text-[#11152F] shadow-[0_30px_60px_-25px_rgb(16_27_92/.7)]">
+    <div ref={ref} className="relative mx-auto w-64 rounded-[2.2rem] border-[6px] border-[#101B5C] bg-white p-3 text-[#11152F] shadow-[0_30px_60px_-25px_rgb(16_27_92/.7)]">
       <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-[#E4DEF4]" />
       <p className="text-[10px] font-bold uppercase tracking-wider text-[#777B90]">Turf 1 · Cricket</p>
       <p className="font-display text-base font-bold">Saturday</p>
-      <div className="mt-3 grid grid-cols-2 gap-2">{SLOTS.map(([t, p], i) => (
-        <span key={t} className={cx('rounded-xl border px-2 py-2 text-center text-xs', p === null ? 'border-[#E4DEF4] bg-[#F5F0FF] text-[#A0A3B5] line-through' : i === 2 ? 'border-transparent bg-gradient-to-br from-[#7200FF] to-[#A100FF] font-bold text-white' : 'border-[#E4DEF4]')}>
-          <b className="block">{t}</b>{p ?? 'Booked'}</span>))}</div>
-      <div className="mt-3 rounded-xl bg-[#F5F0FF] p-2.5 text-xs"><div className="flex justify-between"><span>8:00 PM · 1 hour</span><b>₹1,000</b></div><div className="mt-1 flex justify-between text-[#777B90]"><span>Pay now (50%)</span><span>₹500</span></div></div>
-      <span className="mt-3 block rounded-full bg-gradient-to-r from-[#7200FF] to-[#A100FF] py-2 text-center text-xs font-bold text-white">Pay ₹500 and book</span>
+      <div className="mt-3 grid grid-cols-2 gap-2">{SLOTS.map(([t, p], i) => {
+        const picked = i === 2 && step >= 1;
+        return (
+          <motion.span key={t} animate={anim && i === 2 && step === 1 ? { scale: [1, 0.9, 1.05, 1] } : { scale: 1 }} transition={{ duration: 0.45 }}
+            className={cx('relative overflow-hidden rounded-xl border px-2 py-2 text-center text-xs transition-colors duration-300', p === null ? 'border-[#E4DEF4] bg-[#F5F0FF] text-[#A0A3B5] line-through' : picked ? 'border-transparent bg-[#7200FF] bg-gradient-to-br from-[#7200FF] to-[#A100FF] font-bold text-white' : 'border-[#E4DEF4]')}>
+            <b className="block">{t}</b>{p ?? 'Booked'}
+            {anim && i === 2 && step === 1 && <Tap className="bg-white/60" />}
+          </motion.span>);
+      })}</div>
+      <div className="mt-3 h-14 overflow-hidden rounded-xl bg-[#F5F0FF] p-2.5 text-xs">
+        <AnimatePresence mode="wait" initial={false}>
+          {step >= 2
+            ? <motion.div key="sum" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3, ease: EASE }}>
+                <div className="flex justify-between"><span>8:00 PM · 1 hour</span><b>₹1,000</b></div><div className="mt-1 flex justify-between text-[#777B90]"><span>Pay now (50%)</span><span>₹500</span></div></motion.div>
+            : <motion.p key="hint" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3, ease: EASE }} className="pt-2 text-center text-[#777B90]">Tap a free slot</motion.p>}
+        </AnimatePresence>
+      </div>
+      <motion.span animate={{ opacity: step >= 2 ? 1 : 0.45, scale: anim && step === 3 ? [1, 0.93, 1] : 1 }} transition={{ duration: 0.35 }}
+        className="relative mt-3 block overflow-hidden rounded-full bg-gradient-to-r from-[#7200FF] to-[#A100FF] py-2 text-center text-xs font-bold text-white">
+        Pay ₹500 and book{anim && step === 3 && <Tap className="bg-white/50" />}
+      </motion.span>
+      <AnimatePresence>
+        {step === 4 && (
+          <motion.div key="done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
+            className="absolute inset-0 grid place-items-center rounded-[1.8rem] bg-white/95 text-center backdrop-blur-sm">
+            <div>
+              <motion.span initial={{ scale: 0.3, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 380, damping: 14 }}
+                className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-[#43C85A] to-[#2BA84A] shadow-[0_12px_28px_-10px_rgb(67_200_90/.8)]">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <motion.path d={I.check} initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4, delay: 0.2, ease: 'easeOut' }} /></svg>
+              </motion.span>
+              <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.35 }} className="mt-4 font-display text-lg font-bold">Booking confirmed</motion.p>
+              <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45, duration: 0.35 }} className="mt-1 text-xs text-[#777B90]">Ref PNX-24816 · Sat 8:00 PM</motion.p>
+            </div>
+          </motion.div>)}
+      </AnimatePresence>
     </div>
   );
 }
 
+const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 function DashboardMock() {
+  const anim = useAnim();
+  let k = 0; // order in which the booked cells pop in
   return (
     <div className="overflow-hidden rounded-2xl border border-[#E4DEF4] bg-white text-[#11152F] shadow-[0_30px_60px_-25px_rgb(16_27_92/.6)]">
       <div className="flex items-center gap-2 bg-[#101B5C] px-4 py-2.5 text-white"><span className="h-2.5 w-2.5 rounded-full bg-white/30" /><span className="h-2.5 w-2.5 rounded-full bg-white/30" /><span className="h-2.5 w-2.5 rounded-full bg-white/30" /><span className="ml-2 text-xs text-white/70">Venue Owner Portal</span></div>
       <div className="grid grid-cols-3 gap-2 border-b border-[#E4DEF4] p-3 text-center">
-        {[['Today', '9 bookings'], ['Revenue', '₹9,800'], ['Payout', '₹8,820']].map(([l, v]) => <div key={l} className="rounded-xl bg-[#F5F0FF] p-2"><p className="text-[10px] font-bold uppercase text-[#777B90]">{l}</p><p className="font-display text-sm font-bold">{v}</p></div>)}
+        {([['Today', 9, (n: number) => `${Math.round(n)} bookings`], ['Revenue', 9800, inr], ['Payout', 8820, inr]] as [string, number, (n: number) => string][]).map(([l, v, f]) =>
+          <div key={l} className="rounded-xl bg-[#F5F0FF] p-2"><p className="text-[10px] font-bold uppercase text-[#777B90]">{l}</p><p className="font-display text-sm font-bold tabular-nums"><CountUp value={v} format={f} duration={1.4} /></p></div>)}
       </div>
       <div className="overflow-x-auto p-3"><table className="w-full min-w-[300px] border-separate border-spacing-1 text-[11px]"><thead><tr><th className="w-10" />{['Turf 1', 'Turf 2', 'Court A'].map((a) => <th key={a} className="text-left font-bold text-[#777B90]">{a}</th>)}</tr></thead>
-        <tbody>{CAL.map((row, r) => <tr key={r}><td className="text-[#777B90]">{6 + r} PM</td>{row.map((c, i) => <td key={i} className={cx('rounded-md px-1.5 py-1.5', c ? 'bg-gradient-to-br from-[#FFB020] to-[#FF8C00] font-semibold text-[#101B5C]' : 'border border-[#E4DEF4] text-[#A0A3B5]')}>{c ?? 'Open'}</td>)}</tr>)}</tbody></table></div>
+        <tbody>{CAL.map((row, r) => <tr key={r}><td className="text-[#777B90]">{6 + r} PM</td>{row.map((c, i) => {
+          if (!c) return <td key={i} className="rounded-md border border-[#E4DEF4] px-1.5 py-1.5 text-[#A0A3B5]">Open</td>;
+          const order = k++;
+          return <td key={i} className="p-0"><motion.div initial={anim ? { opacity: 0, scale: 0.6 } : false} whileInView={anim ? { opacity: 1, scale: 1 } : undefined} viewport={{ once: true }}
+            transition={{ type: 'spring', stiffness: 360, damping: 18, delay: 0.3 + order * 0.08 }}
+            className="rounded-md bg-gradient-to-br from-[#FFB020] to-[#FF8C00] px-1.5 py-1.5 font-semibold text-[#101B5C]">{c}</motion.div></td>;
+        })}</tr>)}</tbody></table></div>
     </div>
   );
 }
@@ -111,17 +192,23 @@ export function LandingPage() {
     if (hash) setTimeout(() => document.getElementById(hash === '#owners' || hash === '#players' ? 'sides' : hash.slice(1))?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 80);
   }, [hash]);
   const items = side === 'player' ? PLAYER : OWNER;
+  const anim = useAnim();
 
   return (
     <div className="space-y-20 sm:space-y-28">
       {/* ------------------------------------------------ hero */}
       <section aria-labelledby="hero-h" className="-mb-6 pt-4 sm:-mb-12">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-[#7200FF]/20 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-[.2em] text-[#7200FF] shadow-sm backdrop-blur dark:bg-white/10 dark:text-[#C9A6FF]">
+          <p style={{ animationDuration: '.6s' }} className="mx-auto mb-5 inline-flex animate-rise items-center gap-2 rounded-full border border-[#7200FF]/20 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-[.2em] text-[#7200FF] shadow-sm backdrop-blur dark:bg-white/10 dark:text-[#C9A6FF]">
             <span className="h-2 w-2 animate-pulse rounded-full bg-[#FF8C00]" aria-hidden="true" /> Play • Experience • Repeat
           </p>
-          <h1 id="hero-h" className="font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-[#101B5C] sm:text-7xl dark:text-white">One platform.<br /><Grad>Both sides</Grad> of the game.</h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg text-muted">Players find a venue and book a slot in a minute. Venue owners run their bookings and get paid. Which side are you on?</p>
+          <h1 id="hero-h" className="font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-[#101B5C] sm:text-7xl dark:text-white" aria-label="One platform. Both sides of the game.">
+            <WordsIn delay={0.15} lines={[
+              [{ text: 'One' }, { text: 'platform.' }],
+              [{ text: 'Both', className: GRAD_A }, { text: 'sides', className: GRAD_B }, { text: 'of' }, { text: 'the' }, { text: 'game.' }],
+            ]} />
+          </h1>
+          <p style={{ animationDelay: '.75s', animationDuration: '.7s' }} className="mx-auto mt-5 max-w-xl animate-rise text-lg text-muted">Players find a venue and book a slot in a minute. Venue owners run their bookings and get paid. Which side are you on?</p>
         </div>
 
       </section>
@@ -139,13 +226,21 @@ export function LandingPage() {
         <div key={side} role="tabpanel" aria-label={side === 'player' ? 'Player' : 'Venue owner'} className="mt-10 grid animate-rise items-center gap-10 lg:grid-cols-[1.25fr_1fr]">
           <ol className="grid gap-3 sm:grid-cols-2">
             {items.map(([d, t, s], i) => (
-              <li key={t} className="group flex gap-4 rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card">
-                <span className={cx('grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white transition group-hover:-rotate-6 group-hover:scale-110', side === 'player' ? 'bg-gradient-to-br from-[#7200FF] to-[#A100FF]' : 'bg-gradient-to-br from-[#FFB020] to-[#FF8C00]')}><Icon d={d} /></span>
-                <div><h3 className="font-display font-bold leading-snug">{t}</h3><p className="mt-0.5 text-sm leading-relaxed text-muted">{s}</p></div>
-              </li>))}
+              // the outer item only animates the entrance; hover lift lives on the inner card so the two transforms never fight
+              <motion.li key={t} initial={anim ? { opacity: 0, y: 22 } : false} whileInView={anim ? { opacity: 1, y: 0 } : undefined} viewport={{ once: true, margin: '0px 0px -6% 0px' }}
+                transition={{ duration: 0.55, delay: i * 0.06, ease: EASE }}>
+                <div className="group flex h-full gap-4 rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card">
+                  <motion.span className="shrink-0 self-start" initial={anim ? { scale: 0.3, rotate: -35 } : false} whileInView={anim ? { scale: 1, rotate: 0 } : undefined} viewport={{ once: true }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 13, delay: 0.15 + i * 0.06 }}>
+                    <span className={cx('grid h-11 w-11 place-items-center rounded-xl text-white transition group-hover:-rotate-6 group-hover:scale-110', side === 'player' ? 'bg-gradient-to-br from-[#7200FF] to-[#A100FF]' : 'bg-gradient-to-br from-[#FFB020] to-[#FF8C00]')}><Icon d={d} /></span>
+                  </motion.span>
+                  <div><h3 className="font-display font-bold leading-snug">{t}</h3><p className="mt-0.5 text-sm leading-relaxed text-muted">{s}</p></div>
+                </div>
+              </motion.li>))}
           </ol>
           <figure className="relative">
-            <div aria-hidden="true" className={cx('absolute inset-6 -z-10 rounded-full blur-3xl', side === 'player' ? 'bg-[#A100FF]/25' : 'bg-[#FF8C00]/25')} />
+            <motion.div aria-hidden="true" className={cx('absolute inset-6 -z-10 rounded-full blur-3xl', side === 'player' ? 'bg-[#A100FF]/25' : 'bg-[#FF8C00]/25')}
+              animate={anim ? { scale: [1, 1.12, 1], opacity: [0.75, 1, 0.75] } : undefined} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }} />
             {side === 'player' ? <PhoneMock /> : <DashboardMock />}
             <figcaption className="mt-4 text-center text-xs font-bold uppercase tracking-[.2em] text-muted">An example, with made-up bookings</figcaption>
           </figure>

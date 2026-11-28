@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../lib/api';
@@ -199,20 +200,64 @@ export const FAQS: [string, ReactNode][] = [
   ['How can I cancel a booking?', <>Open the booking from “My bookings” and choose Cancel. Each venue sets a cancellation window: cancelling before it gets a full refund, and cancelling inside it is not refundable. If the venue cancels, you are always refunded in full. See the <Link className="underline" to="/cancellation-policy">Cancellation Policy</Link>.</>],
   ['How can I register as a turf owner?', <>Go to <Link className="underline" to="/owner/register">Register your turf</Link>, create an owner account, add your venue details, photos, pricing, hours and documents, and submit for approval. Venues go live after our team verifies them.</>],
 ];
+// React 18 has no typed `inert` prop: this keeps the hidden face of a card out of clicks, focus and screen readers
+const inert = (hidden: boolean) => (hidden ? { inert: '' } : {}) as object;
+const FLIP = 'M4 4v6h6M20 20v-6h-6M5.5 15A7 7 0 0 0 18 17M18.5 9A7 7 0 0 0 6 7';
+
+/**
+ * FAQ as a grid of flip cards: the question on the front, the answer on the back. One card is turned at a time
+ * (the first starts turned, as a hint). Both faces share one grid cell, so a card is as tall as its longer face.
+ * Keyboard: the front is a button; turning a card moves focus to its "flip back" button and back again.
+ */
+function FlipCard({ i, q, a, open, onToggle, autoFocus }: { i: number; q: string; a: ReactNode; open: boolean; onToggle(): void; autoFocus: boolean }) {
+  const reduce = useReducedMotion();
+  const front = useRef<HTMLButtonElement>(null);
+  const back = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (autoFocus) (open ? back : front).current?.focus({ preventScroll: true }); }, [open, autoFocus]);
+  const face = 'col-start-1 row-start-1 flex flex-col rounded-3xl p-5 [backface-visibility:hidden] [-webkit-backface-visibility:hidden]';
+  return (
+    <div className="h-full [perspective:1200px]">
+      <motion.div className="grid h-full [transform-style:preserve-3d]" initial={false} animate={{ rotateY: open ? 180 : 0 }}
+        whileHover={reduce ? undefined : { rotateY: open ? 172 : -8 }}
+        transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 220, damping: 22 }}>
+        {/* front: the question */}
+        <h3 className={cx(face, 'card relative overflow-hidden !p-0 shadow-card')} {...inert(open)}>
+          <button ref={front} type="button" id={`faq-b-${i}`} aria-expanded={open} aria-controls={`faq-${i}`} onClick={onToggle}
+            className="flex h-full w-full flex-col p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+            <span aria-hidden="true" className="font-display text-4xl font-extrabold text-[#7200FF]/15 dark:text-[#C9A6FF]/20">{String(i + 1).padStart(2, '0')}</span>
+            <span className="mt-2 font-display text-lg font-bold leading-snug">{q}</span>
+            <span aria-hidden="true" className="mt-auto flex items-center gap-1.5 pt-6 text-xs font-bold uppercase tracking-wider text-[#7200FF] dark:text-[#C9A6FF]">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d={FLIP} /></svg>Tap to flip</span>
+          </button>
+        </h3>
+        {/* back: the answer */}
+        <div id={`faq-${i}`} role="region" aria-labelledby={`faq-b-${i}`} aria-hidden={!open} {...inert(!open)}
+          className={cx(face, '[transform:rotateY(180deg)] bg-gradient-to-br from-[#7200FF] to-[#A100FF] text-white shadow-[0_20px_40px_-20px_rgb(114_0_255/.8)]')}>
+          <p className="text-xs font-bold uppercase tracking-wider text-white/70">{q}</p>
+          <div className="mt-2 text-sm leading-relaxed">{a}</div>
+          <button ref={back} type="button" aria-label="Flip back" onClick={onToggle}
+            className="mt-auto flex items-center gap-1.5 self-start pt-5 text-xs font-bold uppercase tracking-wider text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={FLIP} /></svg>Flip back</button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export function FAQSection() {
   const [open, setOpen] = useState<number | null>(0);
+  const [last, setLast] = useState<number | null>(null); // the card the visitor last turned: only it moves focus
   return (
-    <section aria-labelledby="faq-h" className="mx-auto w-full max-w-3xl">
+    <section aria-labelledby="faq-h" className="mx-auto w-full">
       <Heading eyebrow="FAQ" title="Got questions? We have answers." center />
       <h2 id="faq-h" className="sr-only">Frequently asked questions</h2>
-      <div className="space-y-3">
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {FAQS.map(([q, a], i) => (
-          <div key={q} className={cx('card overflow-hidden transition', open === i && 'border-brand/50')}>
-            <h3><button className="flex w-full items-center justify-between gap-4 p-4 text-left text-lg font-bold" aria-expanded={open === i} aria-controls={`faq-${i}`} id={`faq-b-${i}`} onClick={() => setOpen(open === i ? null : i)}>
-              {q}<span className={cx('grid h-7 w-7 shrink-0 place-items-center rounded-full bg-surface2 text-lg transition-transform', open === i && 'rotate-45 bg-brand text-brand-ink')} aria-hidden="true">+</span></button></h3>
-            <div className={cx('grid transition-[grid-template-rows] duration-300 ease-out', open === i ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}><div id={`faq-${i}`} role="region" aria-labelledby={`faq-b-${i}`} aria-hidden={open !== i} className="overflow-hidden"><div className="px-4 pb-4 text-sm leading-relaxed text-muted">{a}</div></div></div>
-          </div>))}
-      </div>
+          <Reveal as="li" key={q} delay={(i % 4) * 0.08 + Math.floor(i / 4) * 0.12} y={30}>
+            <FlipCard i={i} q={q} a={a} open={open === i} autoFocus={last === i}
+              onToggle={() => { setLast(i); setOpen(open === i ? null : i); }} />
+          </Reveal>))}
+      </ul>
     </section>
   );
 }
