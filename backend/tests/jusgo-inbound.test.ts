@@ -124,4 +124,21 @@ describe('JusGo -> PlaynX: a booking on JusGo closes the slot here', () => {
     expect(prices).toEqual([{ day_of_week: null, p: 1200 }, { day_of_week: 5, p: 1500 }, { day_of_week: 6, p: 1500 }]);
     env.jusgo.catalog.venues = [];
   });
+
+  it('a playing area added on JusGo appears on PlaynX in the same venue, once, and its bookings close its slots', async () => {
+    const admin = await createAdmin(env); const f: any = await createApprovedVenue(env, admin); const day = dayAhead(9);
+    env.jusgo.catalog.venues = [{ id: 'v-n', externalId: f.venue.id, name: 'Green Arena', playingAreas: [
+      { id: 'pa-old', externalId: f.area.id, name: 'Turf A' },
+      { id: 'pa-new', externalId: null, name: 'Court 2', sportTypes: ['football'], status: 'ACTIVE', pricing: { pricePerHour: 900, separatePrice: false, rules: [] } }] }];
+    await reconcileJusgoAvailability(env.ctx); await reconcileJusgoAvailability(env.ctx); // twice: still one new area
+    const made = (await env.db.query(`SELECT a.id, a.is_active, a.approval_status FROM playing_areas a WHERE a.venue_id=$1 AND a.name='Court 2'`, [f.venue.id])).rows;
+    expect(made).toEqual([{ id: expect.any(String), is_active: true, approval_status: 'approved' }]);
+    expect((await env.db.query('SELECT price_per_hour::float8 AS p FROM pricing_rules WHERE area_id=$1', [made[0].id])).rows).toEqual([{ p: 900 }]);
+    // it is offered in the PlaynX venues feed, so JusGo can pair it; a booking on it closes the slot even before that
+    env.jusgo.pending.push({ ...change('booking.confirmed', f, { id: 'bk-n', playing_area_id: 'pa-new', start: ist(day, '18:00'), end: ist(day, '19:00'), status: 'CONFIRMED', is_yours: false }), playingAreaId: 'pa-new', externalPlayingAreaId: null });
+    await pollJusgoChanges(env.ctx);
+    const slots = (await request(env.app).get(`/api/areas/${made[0].id}/slots`).query({ date: day, sportId: f.football.id })).body.slots as any[];
+    expect(at(slots, day, '18:00')).toMatchObject({ available: false, reason: 'blocked' });
+    env.jusgo.catalog.venues = [];
+  });
 });

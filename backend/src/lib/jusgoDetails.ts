@@ -16,6 +16,30 @@ const hhmm = (t: unknown) => (typeof t === 'string' && /^\d{2}:\d{2}/.test(t) ? 
 const lower = (v: unknown, allowed: string[]) => { const x = typeof v === 'string' ? v.toLowerCase() : ''; return allowed.includes(x) ? x : undefined; };
 const ENVIRONMENT: Record<string, string> = { TURF: 'indoor', OPEN_GROUND: 'outdoor' };
 
+/** The PlaynX playing area for a JusGo court: our id once JusGo paired it, else the one PlaynX created for it. */
+export async function resolveArea(q: Queryable, externalId: unknown, jusgoCourtId: unknown): Promise<string | null> {
+  if (isUuid(externalId)) return externalId;
+  if (!jusgoCourtId) return null;
+  return (await q.query('SELECT area_id FROM jusgo_area_links WHERE jusgo_court_id=$1', [String(jusgoCourtId)])).rows[0]?.area_id ?? null;
+}
+
+/** A court created on JusGo in a venue paired with PlaynX: a PlaynX playing area of the same name (an existing one if the name matches). */
+async function createAreaFor(q: Queryable, venueId: string, court: any): Promise<string | null> {
+  const name = str(court?.name, 100);
+  if (!name || !court?.id) return null;
+  const same = (await q.query('SELECT id FROM playing_areas WHERE venue_id=$1 AND lower(name)=lower($2) AND id NOT IN (SELECT area_id FROM jusgo_area_links) LIMIT 1', [venueId, name])).rows[0];
+  const id = same?.id ?? (await q.query(
+    `INSERT INTO playing_areas (venue_id, name, slot_minutes, min_duration_minutes, max_duration_minutes, is_active, approval_status) VALUES ($1,$2,60,60,180,true,'approved') RETURNING id`,
+    [venueId, name])).rows[0].id;
+  await q.query('INSERT INTO jusgo_area_links (jusgo_court_id, area_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [String(court.id), id]);
+  if (!same) { // start from the venue's other playing area's hours until JusGo sends this court's own
+    await q.query(`INSERT INTO playing_area_hours (playing_area_id, day_of_week, open_time, close_time, is_closed)
+      SELECT $1, h.day_of_week, h.open_time, h.close_time, h.is_closed FROM playing_area_hours h
+       WHERE h.playing_area_id = (SELECT a.id FROM playing_areas a WHERE a.venue_id=$2 AND a.id<>$1 ORDER BY a.name LIMIT 1)`, [id, venueId]);
+  }
+  return id;
+}
+
 /** UPDATE only the columns given (undefined ones are skipped) and only when something differs. */
 async function patchRow(q: Queryable, table: 'venues' | 'playing_areas', id: string, patch: Record<string, unknown>) {
   const cols = Object.keys(patch).filter((k) => patch[k] !== undefined);
@@ -125,8 +149,8 @@ export async function applyJusgoDetailChange(ctx: Ctx, c: JusgoChange): Promise<
     await ctx.db.tx((q) => applyVenue(q, c.externalVenueId!, nv));
     return true;
   }
-  if (!isUuid(c.externalPlayingAreaId)) return false;
-  const areaId = c.externalPlayingAreaId;
+  const areaId = await resolveArea(ctx.db, c.externalPlayingAreaId, c.playingAreaId);
+  if (!areaId) return false;
   if (c.type.startsWith('playing_area.')) {
     if (c.type === 'playing_area.deleted') nv.is_active = false;
     await ctx.db.tx((q) => applyCourt(q, areaId, nv));
@@ -155,6 +179,10 @@ export async function applyJusgoDetailChange(ctx: Ctx, c: JusgoChange): Promise<
 export async function applyJusgoCatalog(ctx: Ctx, venues: any[]) {
   for (const v of venues ?? []) {
     if (isUuid(v.externalId)) await ctx.db.tx((q) => applyVenue(q, v.externalId, v));
-    for (const pa of v.playingAreas ?? []) if (isUuid(pa.externalId)) await ctx.db.tx((q) => applyCourt(q, pa.externalId, pa));
+    for (const pa of v.playingAreas ?? []) await ctx.db.tx(async (q) => {
+      // a court JusGo has not paired with ours: if its venue is ours, it was added on JusGo, so add it here too
+      const areaId = (await resolveArea(q, pa.externalId, pa.id)) ?? (isUuid(v.externalId) ? await createAreaFor(q, v.externalId, pa) : null);
+      if (areaId) await applyCourt(q, areaId, pa);
+    });
   }
 }

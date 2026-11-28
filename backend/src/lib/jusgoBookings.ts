@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Ctx } from '../types.js';
 import type { JusgoChange } from './jusgo.js';
-import { applyJusgoCatalog, applyJusgoDetailChange } from './jusgoDetails.js';
+import { applyJusgoCatalog, applyJusgoDetailChange, resolveArea } from './jusgoDetails.js';
 
 /*
  * JusGo -> PlaynX: a booking made anywhere else on JusGo (walk-in, phone, another app) closes the same slot on PlaynX, so it is never sold twice.
@@ -75,7 +75,7 @@ async function apply(ctx: Ctx, c: JusgoChange): Promise<ApplyResult> {
   if (c.type === 'booking.completed' || c.type === 'booking.no_show') return 'ignored'; // played: the slot is in the past
 
   // the PlaynX playing area: JusGo sends our own id once the court is paired with ours (Venues -> Your own IDs, or our catalog)
-  const areaId = c.externalPlayingAreaId ?? b?.external_playing_area_id ?? null;
+  const areaId = await resolveArea(ctx.db, c.externalPlayingAreaId ?? b?.external_playing_area_id, c.playingAreaId ?? b?.playing_area_id);
   if (!isUuid(areaId)) return 'unmapped';
   const current = (await ctx.db.query(
     `SELECT lower(b.during) AS s, upper(b.during) AS e FROM jusgo_slot_blocks j JOIN bookings b ON b.id=j.booking_id WHERE j.jusgo_booking_id=$1`, [jusgoId])).rows[0];
@@ -139,8 +139,8 @@ export async function reconcileJusgoAvailability(ctx: Ctx, days = 30): Promise<n
     const { venues } = await ctx.jusgo.venues();
     try { await applyJusgoCatalog(ctx, venues ?? []); } catch (e) { console.error('[jusgo] details update failed', e); } // details first, so a court switched on/off is right
     for (const v of venues ?? []) for (const court of v.playingAreas ?? []) {
-      if (!isUuid(court.externalId)) continue; // not paired with a PlaynX playing area
-      const areaId = court.externalId;
+      const areaId = await resolveArea(ctx.db, court.externalId, court.id);
+      if (!isUuid(areaId)) continue; // not paired with a PlaynX playing area
       const { busy } = await ctx.jusgo.availability(court.id, from, to);
       const want = new Map((busy ?? []).map((b) => [`${AVAIL}${court.id}:${new Date(b.start).toISOString()}:${new Date(b.end).toISOString()}`, b]));
       // what this safety net blocked before on this court and JusGo no longer shows: free it
