@@ -140,7 +140,7 @@ export function OwnerSyncPage() {
             <div className="flex flex-wrap items-center gap-2"><code className="break-all rounded bg-surface px-2 py-1 font-mono">{fresh}</code><Button className="!py-1.5" onClick={() => copy(fresh)}>Copy key</Button></div></div>)
             : key ? <p className="text-sm">A key is set up (starts with <code className="rounded bg-surface2 px-1">{key.prefix}…</code>), made {fmtDateTime(key.createdAt)}. {key.lastUsedAt ? <>JusGo last read your bookings {fmtDateTime(key.lastUsedAt)}.</> : 'JusGo has not used it yet.'}</p>
             : <p className="text-sm text-muted">No key yet. Make one and paste it into JusGo.</p>}
-          <p className="text-xs text-muted">JusGo can only read your own venues and bookings with it, never change them, and it never sees your customers' phone numbers or emails.</p>
+          <p className="text-xs text-muted">JusGo can only read your own venues and bookings with it, never change them. Each booking's customer name, mobile and price go to your JusGo calendar so you see them there; emails are never sent. Blocked times are not sent: block them in JusGo too.</p>
           {confirmNew ? (<div className="flex flex-wrap items-center gap-2 rounded-xl bg-warn/10 p-3 text-sm"><span>The old key stops working at once. You must paste the new one into JusGo.</span>
             <Button loading={make.isPending} onClick={() => make.mutate()}>Make a new key</Button><Button variant="ghost" onClick={() => setConfirmNew(false)}>Cancel</Button></div>)
             : <div className="flex flex-wrap gap-2"><Button loading={make.isPending} onClick={() => (key ? setConfirmNew(true) : make.mutate())}>{key ? 'Make a new key' : 'Make API key'}</Button>

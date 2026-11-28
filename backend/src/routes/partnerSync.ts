@@ -61,62 +61,65 @@ export function partnerSyncRoutes(ctx: Ctx) {
     } catch (e) { next(e); }
   });
 
+  /** JusGo's catalog shape (Partner API, "Your own ids"): JusGo pairs these ids with its venues and courts. */
   r.get('/venues', async (req: any, res) => {
     const { rows } = await ctx.db.query(
       `SELECT v.id, v.name, v.address, v.city, v.state, v.pincode, v.timezone, v.lat::float8 AS lat, v.lng::float8 AS lng,
               COALESCE((SELECT json_agg(json_build_object('id', a.id, 'name', a.name, 'slotMinutes', a.slot_minutes, 'isActive', a.is_active,
-                  'sports', (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id))
-                  ORDER BY a.name) FROM playing_areas a WHERE a.venue_id=v.id), '[]') AS courts
+                  'sportTypes', (SELECT COALESCE(json_agg(sp.name ORDER BY sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id))
+                  ORDER BY a.name) FROM playing_areas a WHERE a.venue_id=v.id), '[]') AS areas
          FROM venues v
         WHERE CASE WHEN $1::uuid IS NULL THEN v.status = 'approved'                          -- no key: every published venue
                    ELSE v.owner_id = $1::uuid AND v.status IN ('ready','approved') END        -- a key: that owner's approved venues
         ORDER BY v.name`, [req.syncOwnerId]);
-    // a venue's playing areas, under both names: "courts" as partner apps call them, "playingAreas" as PlaynX does
-    res.json({ venues: rows.map((v: any) => ({ ...v, playingAreas: v.courts })) });
+    res.json({ venues: rows.map((v: any) => ({
+      id: v.id, name: v.name, city: v.city, postalCode: v.pincode, state: v.state, address: v.address, latitude: v.lat, longitude: v.lng, timezone: v.timezone,
+      playingAreas: v.areas, courts: v.areas, // "courts" kept for anyone already reading it
+    })) });
   });
 
+  /**
+   * JusGo's booking feed (Partner API, "To JusGo: Webhook or feed"): JusGo calls this every few minutes with ?since=<the newest updatedAt it has seen>
+   * and gets { bookings: [{ id, playingAreaId, venueId, start, end, status, updatedAt, ... }], hasMore }, oldest change first, at most 500.
+   * Customer bookings and the owner's paid events are sent; plain blocked times are not (JusGo takes blocked times only from the owner in JusGo).
+   */
   r.get('/bookings', async (req: any, res) => {
     const q = parse(z.object({
-      since: z.iso.datetime({ offset: true }).optional(), // only what changed after this time
+      since: z.iso.datetime({ offset: true }).optional(),
       from: z.iso.datetime({ offset: true }).optional(), to: z.iso.datetime({ offset: true }).optional(), // the period of play; default: yesterday to 90 days ahead
       venueId: z.uuid().optional(),
     }), req.query);
     const now = ctx.now();
     const from = q.from ?? new Date(now.getTime() - 86400000).toISOString();
     const to = q.to ?? new Date(now.getTime() + 90 * 86400000).toISOString();
+    const keyed = !!req.syncOwnerId;
     const params: unknown[] = [req.syncOwnerId, from, to, q.since ?? null, q.venueId ?? null];
+    const scope = `(CASE WHEN $1::uuid IS NULL THEN v.status = 'approved' ELSE v.owner_id = $1::uuid END) AND ($5::uuid IS NULL OR v.id = $5::uuid)`;
     const { rows } = await ctx.db.query(
-      `SELECT b.id, b.reference, v.id AS venue_id, v.name AS venue_name, a.id AS court_id, a.name AS court_name, sp.name AS sport,
-              lower(b.during) AS starts_at, upper(b.during) AS ends_at, b.status, b.block_kind, b.event_kind, b.deleted_at, b.cancelled_at, b.sync_updated_at
-         FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN playing_areas a ON a.id=b.area_id LEFT JOIN sports sp ON sp.id=b.sport_id
-        WHERE (CASE WHEN $1::uuid IS NULL THEN v.status = 'approved' ELSE v.owner_id = $1::uuid END) AND upper(b.during) > $2::timestamptz AND lower(b.during) < $3::timestamptz
-          AND b.status IN ('confirmed','completed','no_show','blocked','cancelled')
-          AND ($4::timestamptz IS NULL OR b.sync_updated_at > $4::timestamptz) AND ($5::uuid IS NULL OR v.id = $5::uuid)
-        ORDER BY b.sync_updated_at LIMIT 5000`, params);
+      `SELECT b.id, v.id AS venue_id, a.id AS area_id, lower(b.during) AS starts_at, upper(b.during) AS ends_at, b.status, b.event_kind, b.deleted_at, b.sync_updated_at,
+              COALESCE(u.full_name, b.walkin_name) AS customer_name, COALESCE(u.phone, b.walkin_phone) AS customer_mobile, b.total::float8 AS total
+         FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN playing_areas a ON a.id=b.area_id LEFT JOIN users u ON u.id=b.customer_id
+        WHERE ${scope} AND upper(b.during) > $2::timestamptz AND lower(b.during) < $3::timestamptz
+          AND (b.status IN ('confirmed','completed','no_show','cancelled') OR (b.status = 'blocked' AND b.event_kind IS NOT NULL))
+          AND ($4::timestamptz IS NULL OR b.sync_updated_at >= $4::timestamptz)
+        ORDER BY b.sync_updated_at LIMIT 501`, params);
     const removed = (await ctx.db.query(
-      `SELECT r.booking_id AS id, r.venue_id, v.name AS venue_name, r.area_id AS court_id, a.name AS court_name, r.starts_at, r.ends_at, r.removed_at
-         FROM booking_sync_removed r JOIN venues v ON v.id=r.venue_id LEFT JOIN playing_areas a ON a.id=r.area_id
-        WHERE (CASE WHEN $1::uuid IS NULL THEN v.status = 'approved' ELSE v.owner_id = $1::uuid END) AND r.ends_at > $2::timestamptz AND r.starts_at < $3::timestamptz
-          AND ($4::timestamptz IS NULL OR r.removed_at > $4::timestamptz) AND ($5::uuid IS NULL OR v.id = $5::uuid)
-        ORDER BY r.removed_at LIMIT 5000`, params)).rows;
-    const iso = (d: any) => (d ? new Date(d).toISOString() : null);
-    const bookings = [
-      ...rows.map((b: any) => {
-        const gone = b.status === 'cancelled' || !!b.deleted_at;
-        return {
-          id: b.id, reference: req.syncOwnerId ? b.reference : null, venueId: b.venue_id, venueName: b.venue_name, courtId: b.court_id, courtName: b.court_name, sport: b.sport ?? null,
-          startsAt: iso(b.starts_at), endsAt: iso(b.ends_at),
-          type: b.event_kind ? 'event' : b.status === 'blocked' ? 'block' : 'booking',
-          status: gone ? 'cancelled' : b.status === 'blocked' ? 'blocked' : b.status === 'completed' ? 'completed' : 'confirmed',
-          cancelledAt: gone ? iso(b.deleted_at ?? b.cancelled_at ?? b.sync_updated_at) : null, updatedAt: iso(b.sync_updated_at),
-        };
-      }),
-      ...removed.map((x: any) => ({
-        id: x.id, reference: null, venueId: x.venue_id, venueName: x.venue_name, courtId: x.court_id, courtName: x.court_name, sport: null,
-        startsAt: iso(x.starts_at), endsAt: iso(x.ends_at), type: 'block', status: 'cancelled', cancelledAt: iso(x.removed_at), updatedAt: iso(x.removed_at),
+      `SELECT r.booking_id AS id, r.venue_id, r.area_id, r.starts_at, r.ends_at, r.removed_at
+         FROM booking_sync_removed r JOIN venues v ON v.id=r.venue_id
+        WHERE ${scope} AND r.ends_at > $2::timestamptz AND r.starts_at < $3::timestamptz AND ($4::timestamptz IS NULL OR r.removed_at >= $4::timestamptz)
+        ORDER BY r.removed_at LIMIT 501`, params)).rows;
+    const iso = (d: any) => new Date(d).toISOString();
+    const STATUS: Record<string, string> = { confirmed: 'CONFIRMED', blocked: 'CONFIRMED', completed: 'COMPLETED', no_show: 'NO_SHOW', cancelled: 'CANCELLED' };
+    const all = [
+      ...rows.map((b: any) => ({
+        id: b.id, playingAreaId: b.area_id, venueId: b.venue_id, start: iso(b.starts_at), end: iso(b.ends_at),
+        status: b.deleted_at ? 'CANCELLED' : STATUS[b.status], updatedAt: iso(b.sync_updated_at),
+        // the owner's own customers, sent only with the owner's key: JusGo shows them to that same venue owner
+        ...(keyed ? { customerName: b.customer_name ?? undefined, customerMobile: b.customer_mobile ?? undefined, totalPrice: b.total, currency: 'INR' } : {}),
       })),
-    ].sort((a, b) => String(a.updatedAt).localeCompare(String(b.updatedAt)));
-    res.json({ serverTime: now.toISOString(), bookings });
+      ...removed.map((x: any) => ({ id: x.id, playingAreaId: x.area_id, venueId: x.venue_id, start: iso(x.starts_at), end: iso(x.ends_at), status: 'CANCELLED', updatedAt: iso(x.removed_at) })),
+    ].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    res.json({ bookings: all.slice(0, 500), hasMore: all.length > 500 });
   });
   return r;
 }
