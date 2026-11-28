@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { apiError, get, post } from '../../lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiError, del, get, post } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useToast } from '../../lib/toast';
 import { Badge, Button, Card, Empty, Input, Modal, PageHeader, PasswordInput, QueryBoundary, Select, Table, Textarea } from '../../components/ui';
 import { fmtDateTime, fmtRange, money, titleCase } from '../../lib/utils';
 
@@ -38,7 +39,7 @@ export function describeActivity(a: any): string {
     'owner.business_type_change_requested': `${who} asked to change the business type.`, 'owner.business_type_change_cancelled': `${who} cancelled the request to change the business type.`,
     'owner_profile.change_requested': `${who} asked to change profile details.`, 'owner_profile.change_withdrawn': `${who} withdrew a profile change request.`,
     'owner_profile.change_approved': 'PlaynX approved a profile change.', 'owner_profile.change_rejected': 'PlaynX turned down a profile change.',
-    'owner_document.view': `${who} opened an uploaded document.`, 'document.view': `${who} opened an uploaded document.`, 'jusgo.linked_existing': `${who} linked the JusGo account.`,
+    'owner_document.view': `${who} opened an uploaded document.`, 'document.view': `${who} opened an uploaded document.`, 'jusgo.linked_existing': `${who} linked the JusGo account.`, 'sync_key.created': `${who} made a new API key for JusGo booking sync.`, 'sync_key.revoked': `${who} removed the JusGo booking sync key.`,
   };
   return S[a.action] ?? `${who}: ${titleCase(String(a.action).replace(/[._]/g, ' '))}.`;
 }
@@ -107,6 +108,44 @@ export function OwnerCloseAccountPage() {
         <Input label="Type DELETE to confirm" autoComplete="off" autoCapitalize="characters" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} />
         {error && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
         <Button variant="danger" onClick={go} loading={close.isPending} disabled={confirmWord.trim().toUpperCase() !== 'DELETE'}>Delete my account</Button>
+      </Card>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- JusGo booking sync */
+/** The values the owner types into JusGo → Booking sync, and the API key that lets JusGo read this owner's venues and bookings. */
+export function OwnerSyncPage() {
+  const { toast } = useToast(); const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['owner-sync-key'], queryFn: () => get<{ key: { prefix: string; createdAt: string; lastUsedAt: string | null } | null }>('/owner/sync-key') });
+  const [fresh, setFresh] = useState<string | null>(null); const [confirmNew, setConfirmNew] = useState(false);
+  const make = useMutation({ mutationFn: () => post<{ key: string }>('/owner/sync-key'), onSuccess: (r) => { setFresh(r.key); setConfirmNew(false); qc.invalidateQueries({ queryKey: ['owner-sync-key'] }); }, onError: (e) => toast(apiError(e), 'error') });
+  const remove = useMutation({ mutationFn: () => del('/owner/sync-key'), onSuccess: () => { setFresh(null); toast('Key removed. JusGo can no longer read your bookings.'); qc.invalidateQueries({ queryKey: ['owner-sync-key'] }); }, onError: (e) => toast(apiError(e), 'error') });
+  const copy = async (v: string) => { try { await navigator.clipboard.writeText(v); toast('Copied'); } catch { toast('Copy did not work. Select the text and copy it.', 'error'); } };
+  const ROWS: [string, string][] = [['API base URL', `${window.location.origin}/api`], ['Bookings path', '/playnx/bookings'], ['Venues path', '/playnx/venues'], ['Auth header', 'Authorization'], ['Header value', 'Bearer <API key>'], ['Check for changes', 'Every 5 minutes']];
+  const key = q.data?.key;
+  return (
+    <div className="max-w-3xl space-y-5">
+      <PageHeader title="JusGo sync" subtitle="Let JusGo read your PlaynX bookings, so a slot booked here is closed on JusGo too." />
+      <Card className="space-y-3 p-5"><h2 className="text-xl font-bold">1. Fill these in on JusGo</h2>
+        <p className="text-sm text-muted">In JusGo, open <b>Booking sync</b> and enter these values.</p>
+        <dl className="divide-y divide-line rounded-xl border border-line">{ROWS.map(([k, v]) => (
+          <div key={k} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"><dt className="text-muted">{k}</dt>
+            <dd className="flex items-center gap-2"><code className="rounded bg-surface2 px-2 py-0.5">{v}</code>{!v.startsWith('Every') && <Button variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => copy(v)} aria-label={`Copy ${k}`}>Copy</Button>}</dd></div>))}</dl>
+      </Card>
+      <Card className="space-y-3 p-5"><h2 className="text-xl font-bold">2. API key for JusGo</h2>
+        <QueryBoundary q={q}>{() => (<>
+          {fresh ? (<div role="status" className="space-y-2 rounded-xl border border-ok/40 bg-ok/10 p-3 text-sm">
+            <p><b>Your new key.</b> Copy it now and paste it into JusGo's <b>API key for JusGo</b> box. It is shown only this once.</p>
+            <div className="flex flex-wrap items-center gap-2"><code className="break-all rounded bg-surface px-2 py-1 font-mono">{fresh}</code><Button className="!py-1.5" onClick={() => copy(fresh)}>Copy key</Button></div></div>)
+            : key ? <p className="text-sm">A key is set up (starts with <code className="rounded bg-surface2 px-1">{key.prefix}…</code>), made {fmtDateTime(key.createdAt)}. {key.lastUsedAt ? <>JusGo last read your bookings {fmtDateTime(key.lastUsedAt)}.</> : 'JusGo has not used it yet.'}</p>
+            : <p className="text-sm text-muted">No key yet. Make one and paste it into JusGo.</p>}
+          <p className="text-xs text-muted">JusGo can only read your own venues and bookings with it, never change them, and it never sees your customers' phone numbers or emails.</p>
+          {confirmNew ? (<div className="flex flex-wrap items-center gap-2 rounded-xl bg-warn/10 p-3 text-sm"><span>The old key stops working at once. You must paste the new one into JusGo.</span>
+            <Button loading={make.isPending} onClick={() => make.mutate()}>Make a new key</Button><Button variant="ghost" onClick={() => setConfirmNew(false)}>Cancel</Button></div>)
+            : <div className="flex flex-wrap gap-2"><Button loading={make.isPending} onClick={() => (key ? setConfirmNew(true) : make.mutate())}>{key ? 'Make a new key' : 'Make API key'}</Button>
+              {key && <Button variant="ghost" loading={remove.isPending} onClick={() => window.confirm('Remove the key? JusGo will stop seeing your PlaynX bookings.') && remove.mutate()}>Remove key</Button>}</div>}
+        </>)}</QueryBoundary>
       </Card>
     </div>
   );

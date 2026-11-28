@@ -68,7 +68,7 @@ const PAGES: [string, RegExp][] = [
   ['/owner/bookings/history', /Booking history/], ['/owner/bookings/cancelled', /Cancelled bookings/], ['/owner/pricing', /Pricing & rates/], ['/owner/offers', /^Offers$/], ['/owner/reports', /^Report & Payments$/],
   ['/owner/payments', /^Report & Payments$/], ['/owner/refunds', /^Report & Payments$/], ['/owner/notifications', /^Notifications$/], ['/owner/support', /^Admin Support$/],
   ['/owner/announcements', /^Announcements$/], ['/owner/reviews', /^Reviews$/], ['/owner/account/staff', /^Staff$/], ['/owner/account/profile', /^Profile$/], ['/owner/account/payouts', /^Payouts$/], ['/owner/account/business', /Business information/], ['/owner/account/bank', /Bank account details/], ['/owner/account/payment-settings', /^Payment settings$/],
-  ['/owner/account/security', /^Settings$/], ['/owner/customers', /^Customers$/], ['/owner/pending-payments', /^Report & Payments$/], ['/owner/activity', /^Activity Log$/], ['/owner/delete-account', /^Delete account$/],
+  ['/owner/account/security', /^Settings$/], ['/owner/customers', /^Customers$/], ['/owner/pending-payments', /^Report & Payments$/], ['/owner/activity', /^Activity Log$/], ['/owner/jusgo-sync', /^JusGo sync$/], ['/owner/delete-account', /^Delete account$/],
 ];
 
 describe('availability calendar', () => {
@@ -523,6 +523,20 @@ describe('venue category dropdown', () => {
     renderAt('/owner/venues/v1?tab=edit');
     const cat = await screen.findByLabelText('Venue category');
     expect(cat).toHaveValue('Futsal arena'); expect(within(cat).getAllByRole('option').map((x) => x.textContent)).toContain('Futsal arena');
+  });
+});
+
+describe('JusGo sync', () => {
+  it('shows the values to type into JusGo, makes a key once, and the menu links to it', async () => {
+    routes_override['/owner/sync-key'] = { key: null };
+    vi.mocked(api.post).mockImplementation((async (url: string) => (url === '/owner/sync-key' ? { key: 'pnx_abcdefghijklmnop', prefix: 'pnx_abcdef' } : {})) as any);
+    renderAt('/owner/jusgo-sync');
+    expect(await screen.findByRole('heading', { level: 1, name: 'JusGo sync' })).toBeInTheDocument();
+    for (const v of ['/playnx/bookings', '/playnx/venues', 'Authorization', 'Bearer <API key>']) expect(screen.getByText(v)).toBeInTheDocument();
+    expect(screen.getByText(/\/api$/)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Make API key' }));
+    expect(await screen.findByText('pnx_abcdefghijklmnop')).toBeInTheDocument(); expect(screen.getByText(/shown only this once/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /JusGo sync/ })).toHaveAttribute('href', '/owner/jusgo-sync');
   });
 });
 

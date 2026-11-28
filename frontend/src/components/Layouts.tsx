@@ -556,7 +556,7 @@ export const ownerGroups: NavGroup[] = [
   { label: 'Communication', items: [
     { to: '/owner/notifications', label: 'Notifications', icon: '🔔' }, { to: '/owner/announcements', label: 'Announcements', icon: '📣' }, { to: '/owner/reviews', label: 'Reviews', icon: '⭐' }, { to: '/owner/support', label: 'Admin support', icon: '🎧' }] },
   { label: 'Account', items: [
-    { to: '/owner/account/staff', label: 'Staff logins', icon: '🧑‍💼' }, { to: '/owner/activity', label: 'Activity log', icon: '🧾' },
+    { to: '/owner/account/staff', label: 'Staff logins', icon: '🧑‍💼' }, { to: '/owner/activity', label: 'Activity log', icon: '🧾' }, { to: '/owner/jusgo-sync', label: 'JusGo sync', icon: '🔗' },
     { to: '/owner/account/profile', label: 'My profile', icon: '👤' }, { to: '/owner/account/business', label: 'Business information', icon: '🏢' },
     { to: '/owner/account/payouts', label: 'Payouts', icon: '🏦' }, { to: '/owner/account/bank', label: 'Bank account details', icon: '🏧' }, { to: '/owner/account/payment-settings', label: 'Payment settings', icon: '💳' }, { to: '/owner/account/security', label: 'Security settings', icon: '🔐' },
     { to: '/owner/delete-account', label: 'Delete account', icon: '🗑️' }] },
