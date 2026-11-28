@@ -51,14 +51,13 @@ export function BookPage() {
 export function HomeBooking() {
   // the filters live here on home: narrow the venues by city and sport, then choose one
   // the customer fills the filters (draft) and presses Filter; any one field on its own is enough
-  const [draft, setDraft] = useState({ city: '', sport: '', date: '', from: '', to: '' });
-  const [flt, setFlt] = useState({ city: '', sport: '', date: '', from: '', to: '' });
+  const [draft, setDraft] = useState({ state: '', city: '', sport: '', date: '', from: '', to: '' });
+  const [flt, setFlt] = useState({ state: '', city: '', sport: '', date: '', from: '', to: '' });
   const [fErr, setFErr] = useState('');
   const t12 = (t: string) => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
   const applyFilters = () => { setFErr(''); if (draft.from && draft.to && draft.to <= draft.from) return setFErr('To time must be after From time.'); setFlt(draft); setVenueId(''); setAreaId(undefined); };
   const sportsQ = useSports();
-  const citiesQ = useQuery({ queryKey: ['cities'], queryFn: () => get<{ cities: { city: string; venues: number }[] }>('/cities'), staleTime: 300000 });
-  const list = useQuery({ queryKey: ['venues', 'home-book', flt], queryFn: () => get<{ venues: VenueSummary[] }>('/venues', { limit: 50, ...(flt.city ? { city: flt.city } : {}), ...(flt.sport ? { sport: flt.sport } : {}), ...(flt.date ? { date: flt.date } : {}), ...(flt.from ? { from: flt.from } : {}), ...(flt.to ? { to: flt.to } : {}) }), enabled: !flt.from || !flt.to || flt.to > flt.from });
+  const list = useQuery({ queryKey: ['venues', 'home-book', flt], queryFn: () => get<{ venues: VenueSummary[] }>('/venues', { limit: 50, ...(flt.state ? { state: flt.state } : {}), ...(flt.city ? { city: flt.city } : {}), ...(flt.sport ? { sport: flt.sport } : {}), ...(flt.date ? { date: flt.date } : {}), ...(flt.from ? { from: flt.from } : {}), ...(flt.to ? { to: flt.to } : {}) }), enabled: !flt.from || !flt.to || flt.to > flt.from });
   const [venueId, setVenueId] = useState('');
   const [areaId, setAreaId] = useState<string | undefined>(undefined);
   const det = useQuery({ queryKey: ['venue', venueId], enabled: !!venueId, queryFn: () => get<{ venue: any }>(`/venues/${venueId}`) });
@@ -73,14 +72,15 @@ export function HomeBooking() {
   return (
     <section id="book" aria-label="Book a turf" className="brand-panel scroll-mt-24 space-y-5 p-5 sm:p-8">
       <div><p className="mb-1 text-xs font-bold uppercase tracking-[.25em] text-[rgb(var(--brand-text))]">Book your game</p><h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Find Your Perfect <span className="bg-gradient-to-r from-[#7200FF] to-[#A100FF] bg-clip-text text-transparent">Playing Spot</span></h2><p className="text-sm text-muted">Filter by any detail you like, then choose a turf, its playing area and your slot.</p></div>
-      <form className="grid grid-cols-2 items-end gap-3 sm:grid-cols-3 xl:grid-cols-[repeat(3,minmax(9rem,1fr))_auto_auto_auto] [&_[role=group]]:flex-nowrap" role="group" aria-label="Filters" noValidate onSubmit={(e) => { e.preventDefault(); applyFilters(); }}>
-        <Select label="City" value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })}><option value="">All cities</option>{(citiesQ.data?.cities ?? []).map((c) => <option key={c.city} value={c.city}>{c.city}</option>)}</Select>
+      <form className="grid grid-cols-2 items-end gap-3 sm:grid-cols-3 xl:grid-cols-[repeat(4,minmax(9rem,1fr))_auto_auto_auto] [&_[role=group]]:flex-nowrap" role="group" aria-label="Filters" noValidate onSubmit={(e) => { e.preventDefault(); applyFilters(); }}>
+        <Select label="State" value={draft.state} onChange={(e) => setDraft({ ...draft, state: e.target.value, city: '' })}><option value="">All states</option>{STATES.map((st) => <option key={st} value={st}>{st}</option>)}</Select>
+        <Select label="City" value={draft.city} disabled={!draft.state} onChange={(e) => setDraft({ ...draft, city: e.target.value })}><option value="">{draft.state ? 'All cities' : 'Select a state first'}</option>{citiesOf(draft.state).map((c) => <option key={c} value={c}>{c}</option>)}</Select>
         <Select label="Sport" value={draft.sport} onChange={(e) => setDraft({ ...draft, sport: e.target.value })}><option value="">All sports</option>{(sportsQ.data?.sports ?? []).map((x) => <option key={x.id} value={x.slug}>{x.name}</option>)}</Select>
         <Input label="Date" type="date" min={todayISO()} value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
         <div className="col-span-2 sm:col-span-1 xl:col-span-1"><TimeInput label="From time" value={draft.from} onChange={(v) => setDraft({ ...draft, from: v })} /></div>
         <div className="col-span-2 sm:col-span-1 xl:col-span-1"><TimeInput label="To time" value={draft.to} onChange={(v) => setDraft({ ...draft, to: v })} /></div>
         <div className="col-span-2 flex flex-wrap items-center gap-3 sm:col-span-1"><Button type="submit" className="!py-2.5">Filter</Button>
-          {(draft.city || draft.sport || draft.date || draft.from || draft.to || flt.city || flt.sport || flt.date || flt.from || flt.to) && <button type="button" className="text-sm font-semibold text-[rgb(var(--brand-text))] underline" onClick={() => { setDraft({ city: '', sport: '', date: '', from: '', to: '' }); setFlt({ city: '', sport: '', date: '', from: '', to: '' }); setFErr(''); setVenueId(''); setAreaId(undefined); }}>Clear</button>}</div>
+          {(draft.state || draft.city || draft.sport || draft.date || draft.from || draft.to || flt.state || flt.city || flt.sport || flt.date || flt.from || flt.to) && <button type="button" className="text-sm font-semibold text-[rgb(var(--brand-text))] underline" onClick={() => { setDraft({ state: '', city: '', sport: '', date: '', from: '', to: '' }); setFlt({ state: '', city: '', sport: '', date: '', from: '', to: '' }); setFErr(''); setVenueId(''); setAreaId(undefined); }}>Clear</button>}</div>
         {fErr && <p role="alert" className="col-span-full text-sm text-danger">{fErr}</p>}
       </form>
       <section aria-label="Turfs" className="space-y-2">{list.isLoading ? <Loading /> : list.isError ? <ErrorBox error={list.error} retry={() => list.refetch()} /> : (list.data?.venues.length ?? 0) === 0
