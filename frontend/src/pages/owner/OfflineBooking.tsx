@@ -31,7 +31,9 @@ export function OfflineBookingPage() {
   const tz: string = detail.data?.venue.timezone ?? 'Asia/Kolkata';
 
   const [sportId, setSportId] = useState(0); const [date, setDate] = useState(todayISO()); const [duration, setDuration] = useState(0);
-  const [slot, setSlot] = useState<Slot | null>(null);
+  // the slots picked: one, or several neighbouring free slots booked together (up to the area's longest booking), as for customers
+  const [picked, setPicked] = useState<Slot[]>([]);
+  const setSlot = (s: Slot | null) => setPicked(s ? [s] : []);
   const [f, setF] = useState(EMPTY);
   const [errs, setErrs] = useState<Record<string, string>>({}); const [error, setError] = useState('');
   const [done, setDone] = useState<any | null>(null);
@@ -42,6 +44,21 @@ export function OfflineBookingPage() {
   const dur = durations.includes(duration) ? duration : durations[0] ?? 0;
 
   useEffect(() => { setSlot(null); }, [area?.id, sid, date, dur]);
+  const slot = useMemo<Slot | null>(() => picked.length === 0 ? null : picked.length === 1 ? picked[0]
+    : { ...picked[0], endsAt: picked[picked.length - 1].endsAt, price: picked.some((x) => x.price == null) ? null : Math.round(picked.reduce((n, x) => n + (x.price ?? 0), 0) * 100) / 100 }, [picked]);
+  const bookMinutes = slot ? Math.round((new Date(slot.endsAt).getTime() - new Date(slot.startsAt).getTime()) / 60000) : 0;
+  const multi = !!area && dur === area.slot_minutes; // slots that do not overlap can be joined
+  const maxMin: number = area?.max_duration_minutes ?? dur;
+  const pick = (s: Slot) => setPicked((cur) => {
+    if (!area || !cur.length) return [s];
+    const first = cur[0], last = cur[cur.length - 1]; const i = cur.findIndex((x) => x.startsAt === s.startsAt);
+    if (i >= 0) return cur.length === 1 ? [] : i === 0 ? cur.slice(1) : i === cur.length - 1 ? cur.slice(0, -1) : [s];
+    const span = (a: Slot, b: Slot) => (new Date(b.endsAt).getTime() - new Date(a.startsAt).getTime()) / 60000;
+    if (multi && s.startsAt === last.endsAt && span(first, s) <= maxMin) return [...cur, s];
+    if (multi && s.endsAt === first.startsAt && span(s, last) <= maxMin) return [s, ...cur];
+    return [s];
+  });
+  const isPicked = (s: Slot) => picked.some((x) => x.startsAt === s.startsAt);
   const people = useKnownPeople();
   const openGround = area?.environment === 'outdoor'; // JusGo asks for the two opponents on an open ground
   const total = slot?.price ?? null; const paidNow = f.status === 'paid' ? total ?? 0 : f.status === 'partial' ? Number(f.initial) || 0 : 0;
@@ -52,7 +69,7 @@ export function OfflineBookingPage() {
 
   const book = useMutation({
     mutationFn: () => post<any>('/owner/bookings/offline', {
-      areaId: area.id, sportId: sid, startsAt: slot!.startsAt, durationMinutes: dur, customerName: f.name.trim(), customerPhone: f.phone.replace(/[\s-]/g, ''), customerCity: f.city.trim(),
+      areaId: area.id, sportId: sid, startsAt: slot!.startsAt, durationMinutes: bookMinutes, customerName: f.name.trim(), customerPhone: f.phone.replace(/[\s-]/g, ''), customerCity: f.city.trim(),
       paymentMethod: f.status === 'unpaid' ? 'unpaid' : f.mode, ...(f.status === 'partial' ? { amountPaid: Number(f.initial) } : {}),
       ...(openGround ? { opponent1Name: f.o1Name.trim(), opponent1Phone: f.o1Phone.replace(/[\s-]/g, ''), opponent1City: f.o1City.trim(), opponentName: f.o2Name.trim(), opponentPhone: f.o2Phone.replace(/[\s-]/g, ''), opponentCity: f.o2City.trim() } : {}) }),
     onSuccess: (r) => { setDone({ ...r, customer: f.name.trim(), phone: f.phone, method: f.status === 'unpaid' ? 'unpaid' : f.mode, status: f.status, area: area.name, sport: sports.find((s) => s.id === sid)?.name }); ['owner-bookings', 'owner-overview', 'owner-calendar', 'offline-slots'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); },
@@ -115,9 +132,10 @@ export function OfflineBookingPage() {
               {slotsQ.isError ? <ErrorBox error={slotsQ.error} retry={() => slotsQ.refetch()} /> : slotsQ.isLoading ? <Loading /> : slots.length === 0
                 ? <p className="rounded-xl bg-surface2 p-4 text-center text-sm text-muted">No slots on this day. The area may be closed, or every slot has passed. Try another date.</p>
                 : <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-4" role="listbox" aria-label="Time slots">{slots.map((s) => (
-                  <button key={s.startsAt} type="button" role="option" aria-selected={slot?.startsAt === s.startsAt} disabled={!s.available} onClick={() => { setSlot(s); setErrs((x) => ({ ...x, slot: '' })); }}
-                    className={cx('rounded-xl border px-2 py-2 text-left text-sm transition', slot?.startsAt === s.startsAt ? 'border-brand bg-brand text-brand-ink' : s.available ? 'border-line hover:border-brand' : 'cursor-not-allowed border-line/50 bg-surface2/40 text-muted line-through opacity-60')}>
+                  <button key={s.startsAt} type="button" role="option" aria-selected={isPicked(s)} disabled={!s.available} onClick={() => { pick(s); setErrs((x) => ({ ...x, slot: '' })); }}
+                    className={cx('rounded-xl border px-2 py-2 text-left text-sm transition', isPicked(s) ? 'border-brand bg-brand text-brand-ink' : s.available ? 'border-line hover:border-brand' : 'cursor-not-allowed border-line/50 bg-surface2/40 text-muted line-through opacity-60')}>
                     <div className="font-semibold">{fmtTime(s.startsAt, tz)}</div><div className="text-xs">{s.available ? money(s.price) : <span className="no-underline">{REASON[s.reason ?? ''] ?? 'Taken'}</span>}</div></button>))}</div>}
+              {multi && maxMin > dur && slots.length > 0 && <p className="text-xs text-muted" role="status">{picked.length > 1 ? `${picked.length} slots picked · ${durationLabel(bookMinutes)}. ` : ''}To book more than one slot, tap the free slots next to it (up to {durationLabel(maxMin)}).</p>}
               {errs.slot && <p role="alert" className="text-xs text-danger">{errs.slot}</p>}
             </div>)}
         </Card>
@@ -142,7 +160,7 @@ export function OfflineBookingPage() {
           </div>
         </Card>
 
-        {slot && area && <p role="status" className="rounded-xl border border-line bg-surface2/50 p-3 text-sm"><b>{area.name}</b> · {fmtRange(slot.startsAt, slot.endsAt, tz)} · {durationLabel(dur)}{total != null && <> · <b>{money(total)}</b></>}</p>}
+        {slot && area && <p role="status" className="rounded-xl border border-line bg-surface2/50 p-3 text-sm"><b>{area.name}</b> · {fmtRange(slot.startsAt, slot.endsAt, tz)} · {durationLabel(bookMinutes)}{total != null && <> · <b>{money(total)}</b></>}</p>}
         {error && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
         <div className="flex flex-wrap justify-end gap-2"><Link to="/owner" className="btn-ghost">Cancel</Link><Button type="submit" loading={book.isPending}>Confirm booking</Button></div>
       </form>

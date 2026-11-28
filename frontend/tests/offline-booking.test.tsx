@@ -128,6 +128,19 @@ describe('Add offline booking page', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Add offline booking' })).toBeInTheDocument(); expect(screen.getByLabelText(/Customer name/)).toHaveValue('');
   });
 
+  it('several neighbouring free slots can be picked and are booked as one longer booking', async () => {
+    open('/owner/bookings/new');
+    await screen.findByRole('listbox', { name: 'Time slots' });
+    await userEvent.click(screen.getByRole('option', { name: /₹800/ }));
+    await userEvent.click(screen.getByRole('option', { name: /₹1,200/ })); // the slot right after it
+    expect(screen.getByRole('option', { name: /₹800/ })).toHaveAttribute('aria-selected', 'true'); expect(screen.getByRole('option', { name: /₹1,200/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText(/2 slots picked · 2 hr/)).toBeInTheDocument();
+    await fillCustomer();
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0].body).toMatchObject({ startsAt: slot(4).startsAt, durationMinutes: 120 });
+  });
+
   it('checks the details before sending anything', async () => {
     open('/owner/bookings/new');
     await screen.findByRole('listbox', { name: 'Time slots' });
