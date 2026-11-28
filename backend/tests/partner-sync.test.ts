@@ -42,6 +42,7 @@ describe('booking sync for partner apps (JusGo)', () => {
     expect(v).toHaveLength(1);
     expect(v[0]).toMatchObject({ id: f.venue.id, name: 'Green Arena', timezone: 'Asia/Kolkata' });
     expect(v[0].courts).toEqual([expect.objectContaining({ id: f.area.id, name: 'Turf A', slotMinutes: 60, isActive: true, sports: expect.arrayContaining([expect.objectContaining({ name: 'Football' })]) })]);
+    expect(v[0].playingAreas).toEqual(v[0].courts); // the same list under the PlaynX name
   });
 
   it('lists bookings, blocks and cancellations, with no customer contact details', async () => {

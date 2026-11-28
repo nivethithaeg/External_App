@@ -66,7 +66,8 @@ export function partnerSyncRoutes(ctx: Ctx) {
                   'sports', (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id))
                   ORDER BY a.name) FROM playing_areas a WHERE a.venue_id=v.id), '[]') AS courts
          FROM venues v WHERE v.owner_id=$1 AND v.status IN ('ready','approved') ORDER BY v.name`, [req.syncOwnerId]);
-    res.json({ venues: rows });
+    // a venue's playing areas, under both names: "courts" as partner apps call them, "playingAreas" as PlaynX does
+    res.json({ venues: rows.map((v: any) => ({ ...v, playingAreas: v.courts })) });
   });
 
   r.get('/bookings', async (req: any, res) => {
