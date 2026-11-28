@@ -98,7 +98,7 @@ export function AdminDashboard() {
                         <motion.li key={b.id} initial={reduce ? false : { opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: i * 0.05 }}>
                           <Link to={`/admin/bookings?q=${encodeURIComponent(b.reference)}`} className="flex items-center gap-3 py-3 transition hover:bg-surface2/60">
                             <span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface2 font-display text-lg font-bold text-[#A100FF] ring-1 ring-[#7200FF]/30">{(b.customer_name ?? '?').trim().charAt(0).toUpperCase()}</span>
-                            <span className="min-w-0 flex-1"><b className="block truncate">{b.customer_name ?? 'Walk-in'}</b><span className="block truncate text-xs text-muted">{b.venue_name} · {b.area_name} · {fmtDateTime(b.starts_at)}</span></span>
+                            <span className="min-w-0 flex-1"><b className="block truncate">{b.customer_name ?? '—'}</b><span className="block truncate text-xs text-muted">{b.venue_name} · {b.area_name} · {fmtDateTime(b.starts_at)}</span></span>
                             <span className="text-right"><b className="block">{money(b.total)}</b><Badge status={b.status} /></span></Link></motion.li>))}</ul>)}
                   </Card>)}
               </motion.div>

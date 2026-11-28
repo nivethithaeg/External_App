@@ -56,7 +56,7 @@ const PLAYER: [string, string, string][] = [
 const OWNER: [string, string, string][] = [
   [I.venue, 'List your venue', 'Add your venue, photos, facilities and each playing area with its sports.'],
   [I.rupee, 'Your hours, your prices', 'Set hours and a default price, then change it for any slot, weekday or special date.'],
-  [I.calendar, 'Walk-in and phone bookings', 'Online, phone and walk-in bookings on one calendar. Block slots for maintenance or events.'],
+  [I.calendar, 'One booking calendar', 'Every booking on one calendar. Block slots for maintenance or events.'],
   [I.wallet, 'Full or advance payment', 'Choose how players pay online and collect the balance at the venue.'],
   [I.bank, 'Automatic payouts', 'Your share is paid to your bank 48 hours after the game when there is no complaint.'],
   [I.chart, 'Reports and revenue', 'Bookings, revenue, platform fees and pending payments, ready to download.'],
@@ -65,7 +65,7 @@ const OWNER: [string, string, string][] = [
 ];
 const SPORTS = ['Cricket', 'Football', 'Badminton', 'Pickleball', 'Tennis', 'Basketball', 'Volleyball'];
 const SLOTS: [string, string | null][] = [['6:00 PM', '₹900'], ['7:00 PM', null], ['8:00 PM', '₹1,000'], ['9:00 PM', '₹1,000'], ['10:00 PM', null], ['11:00 PM', '₹800']];
-const CAL: (string | null)[][] = [['Rahul V.', null, 'Divya P.'], ['Office team', 'Walk-in', null], ['Hari R.', 'Phone call', 'Kavya M.'], [null, 'Thunders', 'Arjun T.']];
+const CAL: (string | null)[][] = [['Rahul V.', null, 'Divya P.'], ['Office team', 'Sneha R.', null], ['Hari R.', 'Vikram S.', 'Kavya M.'], [null, 'Thunders', 'Arjun T.']];
 
 /* ------------------------------------------------------------------ pieces */
 function Door({ children, className }: { children: ReactNode; className: string }) {
@@ -171,7 +171,7 @@ export function LandingPage() {
             <span className="font-display text-sm font-bold text-[#FFB020]">02</span>
             <h2 className="mt-1 font-display text-3xl font-extrabold sm:text-4xl">I run a venue</h2>
             <p className="mt-2 max-w-sm text-white/70">List your turf, manage every booking and price, and get paid to your bank.</p>
-            <ul className="mt-5 space-y-2 text-sm">{['Online, phone and walk-in bookings on one calendar', 'Full or advance payment, your choice', 'Automatic payouts after the game'].map((x) => <li key={x} className="flex gap-2"><Icon d={I.check} size={18} className="shrink-0 text-[#FFB020]" />{x}</li>)}</ul>
+            <ul className="mt-5 space-y-2 text-sm">{['All your bookings on one calendar', 'Full or advance payment, your choice', 'Automatic payouts after the game'].map((x) => <li key={x} className="flex gap-2"><Icon d={I.check} size={18} className="shrink-0 text-[#FFB020]" />{x}</li>)}</ul>
             <div className="relative mt-auto flex flex-wrap gap-3 pt-7"><Link to="/owner/register" className={btnOrange}>Register your venue <Icon d={I.arrow} size={18} /></Link><Link to="/owner/login" className="btn rounded-full border-2 border-white/40 !px-6 !py-3 text-base text-white hover:bg-white/10">Owner login</Link></div>
           </Door>
         </div>
@@ -186,7 +186,7 @@ export function LandingPage() {
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#7200FF] to-[#A100FF] p-7 text-white sm:col-span-2 lg:row-span-2">
             <Icon d={I.shield} size={36} />
             <h3 className="mt-5 font-display text-3xl font-extrabold leading-tight">A slot is sold once. Never twice.</h3>
-            <p className="mt-3 max-w-sm text-white/80">Online, phone and walk-in bookings share one calendar. The moment one is booked, it is closed for everyone.</p>
+            <p className="mt-3 max-w-sm text-white/80">Every booking shares one calendar. The moment a slot is booked, it is closed for everyone.</p>
             <svg viewBox="0 0 200 120" className="absolute -bottom-6 -right-6 w-64 text-white/15" aria-hidden="true"><g fill="currentColor">{Array.from({ length: 18 }, (_, k) => <rect key={k} x={(k % 6) * 32} y={Math.floor(k / 6) * 38} width="26" height="30" rx="6" opacity={k % 4 === 0 ? 1 : 0.45} />)}</g></svg>
           </div>
           {([[I.bolt, 'Instant confirmation', 'Booking reference and receipt the moment payment goes through.'], [I.lock, 'Secure payments', 'Paid through Razorpay. We never see card details.'], [I.shield, 'Verified venues', 'Every venue is checked by our team before it goes live.'], [I.bank, 'Owners get paid', 'Payouts to the bank 48 hours after the game.']] as [string, string, string][]).map(([d, t, s], i) => (

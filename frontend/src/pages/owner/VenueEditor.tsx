@@ -226,7 +226,7 @@ export function AreasTab({ venue }: { venue: any }) {
           <div className="flex items-start gap-3 rounded-2xl bg-danger/10 p-4">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-danger/15 text-lg text-danger" aria-hidden="true">🗑</span>
             <ul className="space-y-1.5">
-              <li><b>Closed for booking straight away.</b> Customers can't see or book it, and no walk-in bookings can be added.</li>
+              <li><b>Closed for booking straight away.</b> Customers can't see or book it.</li>
               <li><b>PlaynX approves the deletion.</b> Until then you can cancel the request and it comes back as it was.</li>
               <li><b>Its bookings are kept.</b> The booking history stays in your records.</li>
             </ul>

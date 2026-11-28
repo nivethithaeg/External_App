@@ -16,7 +16,7 @@ export function downloadCsv(name: string, header: string[], rows: unknown[][]) {
   const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Everyone who booked with this owner (app customers and walk-ins), one row each, as on JusGo's Customers page. */
+/** Everyone who booked with this owner, one row each, as on JusGo's Customers page. */
 export function OwnerCustomersPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState<{ id?: string; name: string; mobile: string; city: string; note: string } | null>(null); const [formErr, setFormErr] = useState('');
@@ -93,7 +93,7 @@ export function OwnerCustomersPage() {
   );
 }
 
-/* ------------------------------------------------------------- Pending payments (walk-in bookings paid in parts) */
+/* ------------------------------------------------------------- Pending payments (venue events paid in parts) */
 
 export function OwnerPendingPaymentsPage() {
   const qc = useQueryClient();
@@ -110,7 +110,7 @@ export function OwnerPendingPaymentsPage() {
   const go = () => { setError(''); const n = Number(amount || 0); const d = Number(discount || 0); if (!(n > 0 || d > 0)) return setError('Enter the amount received or a discount'); if (n > 0 && !mode) return setError('Please select the mode of payment.'); if (n + d > rec.pending + 0.001) return setError(`Only ${money(rec.pending)} is pending`); save.mutate(); };
   return (
     <div>
-      <PageHeader title="Pending payments" subtitle="Walk-in bookings that are not fully paid. Record the money as it comes in, bills oldest first."
+      <PageHeader title="Pending payments" subtitle="Venue events that are not fully paid. Record the money as it comes in, bills oldest first."
         actions={<Button variant="ghost" onClick={csv} disabled={!q.data?.customers.length}>⬇ Download Excel</Button>} />
       <div className="mb-5 max-w-md"><Input label="Search" placeholder="Name or mobile" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
       <QueryBoundary q={q}>{(d) => {
