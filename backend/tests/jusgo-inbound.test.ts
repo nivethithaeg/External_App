@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createAdmin, createApprovedVenue, ist, setup, type TestEnv } from './helpers.js';
-import { pollJusgoChanges } from '../src/lib/jusgoBookings.js';
+import { pollJusgoChanges, reconcileJusgoAvailability } from '../src/lib/jusgoBookings.js';
 
 const dayAhead = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 let env: TestEnv; let n = 0;
@@ -73,5 +73,18 @@ describe('JusGo -> PlaynX: a booking on JusGo closes the slot here', () => {
     const sig = 'v1=' + crypto.createHmac('sha256', 'whsec_test').update(`${ts}.${body}`).digest('hex');
     await request(env.app).post('/api/webhooks/jusgo').set({ 'Content-Type': 'application/json', 'X-JusGo-Timestamp': ts, 'X-JusGo-Signature': sig }).send(body).expect(200);
     expect(at(await slotsOf(f, day), day, '20:00')).toMatchObject({ available: false, reason: 'blocked' });
+  });
+
+  it('the minute check closes a slot that is busy on JusGo even when its change never arrived, and opens it when it is free again', async () => {
+    const admin = await createAdmin(env); const f: any = await createApprovedVenue(env, admin); const day = dayAhead(8);
+    env.jusgo.catalog.venues = [{ id: 'v-9', externalId: f.venue.id, name: 'Green Arena', playingAreas: [{ id: 'pa-9', externalId: f.area.id, name: 'Turf A' }, { id: 'pa-x', externalId: null, name: 'Unpaired' }] }];
+    env.jusgo.busy.set('pa-9', [{ start: ist(day, '18:00'), end: ist(day, '19:00') }]);
+    expect(await reconcileJusgoAvailability(env.ctx)).toBe(1);
+    expect(await reconcileJusgoAvailability(env.ctx)).toBe(0); // nothing new the second time
+    expect(at(await slotsOf(f, day), day, '18:00')).toMatchObject({ available: false, reason: 'blocked' });
+    env.jusgo.busy.set('pa-9', []);
+    await reconcileJusgoAvailability(env.ctx);
+    expect(at(await slotsOf(f, day), day, '18:00').available).toBe(true);
+    env.jusgo.catalog.venues = [];
   });
 });

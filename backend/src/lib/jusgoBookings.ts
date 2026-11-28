@@ -96,6 +96,10 @@ export function changeFromWebhook(event: any): JusgoChange {
   };
 }
 
+/** What the owner's JusGo sync page shows: is the JusGo -> PlaynX side running, and when did it last work. */
+export const jusgoInboundStatus = { lastPollAt: null as string | null, lastChanges: 0, lastReconcileAt: null as string | null, lastError: null as string | null, lastErrorAt: null as string | null };
+const failed = (e: any) => { jusgoInboundStatus.lastError = `${e?.code ?? ''} ${e?.message ?? e}`.trim(); jusgoInboundStatus.lastErrorAt = new Date().toISOString(); };
+
 /** Read every change JusGo has for us and apply it. Returns how many changes came. Safe to call often: one run at a time. */
 let running = false;
 export async function pollJusgoChanges(ctx: Ctx): Promise<number> {
@@ -111,6 +115,45 @@ export async function pollJusgoChanges(ctx: Ctx): Promise<number> {
       }
       if (!res.hasMore) break;
     }
-  } finally { running = false; }
+    jusgoInboundStatus.lastPollAt = new Date().toISOString(); jusgoInboundStatus.lastChanges = n;
+  } catch (e) { failed(e); throw e; } finally { running = false; }
   return n;
+}
+
+/*
+ * The safety net: changes are handed over once, so one that went missing (read by another server with the same key, or made before this
+ * was set up) would never arrive. So every minute the busy times of each paired court are read from JusGo's availability, and PlaynX keeps
+ * one block for each busy time it does not already cover (a booking or block of its own, or a block from a change). Those blocks go when
+ * the time is no longer busy on JusGo.
+ */
+const AVAIL = 'avail:';
+let reconciling = false;
+export async function reconcileJusgoAvailability(ctx: Ctx, days = 30): Promise<number> {
+  if (reconciling || !ctx.jusgo?.configured) return 0;
+  reconciling = true;
+  let added = 0;
+  try {
+    const now = ctx.now(); const from = new Date(now.getTime() - 3600_000).toISOString(); const to = new Date(now.getTime() + days * 86400_000).toISOString();
+    const { venues } = await ctx.jusgo.venues();
+    for (const v of venues ?? []) for (const court of v.playingAreas ?? []) {
+      if (!isUuid(court.externalId)) continue; // not paired with a PlaynX playing area
+      const areaId = court.externalId;
+      const { busy } = await ctx.jusgo.availability(court.id, from, to);
+      const want = new Map((busy ?? []).map((b) => [`${AVAIL}${court.id}:${new Date(b.start).toISOString()}:${new Date(b.end).toISOString()}`, b]));
+      // what this safety net blocked before on this court and JusGo no longer shows: free it
+      const mine = (await ctx.db.query(`SELECT j.jusgo_booking_id AS id FROM jusgo_slot_blocks j JOIN bookings b ON b.id=j.booking_id
+          WHERE j.jusgo_booking_id LIKE $1 AND b.area_id=$2 AND upper(b.during) > $3::timestamptz`, [`${AVAIL}${court.id}:%`, areaId, from])).rows.map((r: any) => r.id as string);
+      for (const id of mine) if (!want.has(id)) await removeBlock(ctx, id);
+      for (const [id, b] of want) {
+        if (mine.includes(id)) continue;
+        // already closed on PlaynX (its own booking, a block, or a block from a change): nothing to add
+        const taken = (await ctx.db.query(`SELECT 1 FROM bookings WHERE area_id=$1 AND status IN ('pending','confirmed','completed','blocked')
+            AND during && tstzrange($2::timestamptz,$3::timestamptz,'[)') LIMIT 1`, [areaId, b.start, b.end])).rows[0];
+        if (taken) continue;
+        if ((await holdSlot(ctx, id, areaId, b.start, b.end, undefined)) === 'blocked') added++;
+      }
+    }
+    jusgoInboundStatus.lastReconcileAt = new Date().toISOString();
+  } catch (e) { failed(e); throw e; } finally { reconciling = false; }
+  return added;
 }

@@ -36,10 +36,12 @@ describe('JusGo booking feed and venues (Partner API "Booking feed" and "Your ow
   });
 
   it('plain blocked times are not sent; a paid venue event is, as a confirmed booking', async () => {
-    const { f, as } = await ownerWithKey();
+    const { f } = await ownerWithKey();
+    await request(env.app).delete('/api/owner/sync-key').set(f.owner.auth).expect(204); // blocks and events are made before linking JusGo (afterwards they are made in JusGo)
     const day = dayAhead(4);
     const block = (await request(env.app).post(`/api/owner/areas/${f.area.id}/blocks`).set(f.owner.auth).send({ startsAt: ist(day, '12:00'), endsAt: ist(day, '13:00'), reason: 'Maintenance' }).expect(201)).body.block;
     await request(env.app).post('/api/owner/blocks/bulk').set(f.owner.auth).send({ areaIds: [f.area.id], startsAt: ist(day, '15:00'), endsAt: ist(day, '16:00'), reason: 'Cup final', customerName: 'Erode FC', customerPhone: '9876500011', amount: 2000, paymentMethod: 'cash' }).expect(201);
+    const as = { Authorization: `Bearer ${(await request(env.app).post('/api/owner/sync-key').set(f.owner.auth).expect(201)).body.key}` };
     const list = (await feed(as).expect(200)).body.bookings;
     expect(list.some((x: any) => x.id === block.id)).toBe(false);
     expect(list).toEqual([expect.objectContaining({ status: 'CONFIRMED', start: new Date(ist(day, '15:00')).toISOString(), customerName: 'Erode FC' })]);

@@ -6,6 +6,7 @@ import { authenticate, requireRole } from '../middleware/auth.js';
 import { HttpError, notFound } from '../errors.js';
 import { parse } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
+import { jusgoInboundStatus } from '../lib/jusgoBookings.js';
 
 /*
  * Booking sync for partner apps such as JusGo. A venue owner makes an API key in the owner portal and gives it to the partner,
@@ -24,7 +25,9 @@ export function ownerSyncKeyRoutes(ctx: Ctx) {
   r.use('/sync-key', authenticate(ctx), requireRole('owner'));
   r.get('/sync-key', async (req, res) => {
     const k = (await ctx.db.query('SELECT key_prefix, created_at, last_used_at FROM owner_sync_keys WHERE owner_id=$1', [req.user!.id])).rows[0];
-    res.json({ key: k ? { prefix: k.key_prefix, createdAt: k.created_at, lastUsedAt: k.last_used_at } : null });
+    // and whether bookings made on JusGo are reaching PlaynX (shown on the same page)
+    res.json({ key: k ? { prefix: k.key_prefix, createdAt: k.created_at, lastUsedAt: k.last_used_at } : null,
+      inbound: { configured: !!ctx.jusgo?.configured, ...jusgoInboundStatus } });
   });
   /** Makes a new key, replacing any old one (which stops working at once). The key is returned this one time only. */
   r.post('/sync-key', async (req, res) => {

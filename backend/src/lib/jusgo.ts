@@ -35,6 +35,10 @@ export interface JusgoClient {
   download(url: string): Promise<{ data: Buffer; contentType: string }>;
   /** GET /v1/changes: what this app has not received yet, oldest first */
   changes(limit?: number): Promise<{ changes: JusgoChange[]; hasMore: boolean; nextAfter?: string | null }>;
+  /** GET /v1/venues: the linked venues and courts; a court's externalId is our playing area id once paired */
+  venues(): Promise<{ venues: { id: string; externalId?: string | null; name: string; playingAreas: { id: string; externalId?: string | null; name: string; status?: string }[] }[] }>;
+  /** GET /v1/playing-areas/{id}/availability: busy times on one court from every channel (at most 31 days) */
+  availability(courtId: string, from: string, to: string): Promise<{ busy: { start: string; end: string }[] }>;
 }
 
 /** One change from JusGo, in the shape of GET /v1/changes (a webhook body is turned into this shape too). */
@@ -66,6 +70,8 @@ export function createJusgoClient(cfg: Pick<Config, 'JUSGO_API_URL' | 'JUSGO_API
     linkStatus: (requestId) => call('GET', `/v1/customer-link-status?requestId=${encodeURIComponent(requestId)}`),
     fetchProfile: async (requestId, code) => (await call<{ profile: JusgoProfile }>('POST', '/v1/customer-link-fetch', { requestId, code })).profile,
     changes: (limit = 200) => call('GET', `/v1/changes?limit=${limit}`),
+    venues: () => call('GET', '/v1/venues'),
+    availability: (courtId, from, to) => call('GET', `/v1/playing-areas/${encodeURIComponent(courtId)}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
     async download(url) {
       // a relative link (/storage/...) is resolved against the JusGo address; up to 3 tries, the link lasts 15 minutes
       let target: URL;

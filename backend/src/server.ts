@@ -1,6 +1,6 @@
 import { withFileEncryption } from './lib/fileCrypto.js';
 import { createJusgoClient } from './lib/jusgo.js';
-import { pollJusgoChanges } from './lib/jusgoBookings.js';
+import { pollJusgoChanges, reconcileJusgoAvailability } from './lib/jusgoBookings.js';
 import http from 'node:http';
 import { loadConfig } from './config.js';
 import { createPgDb } from './db.js';
@@ -46,13 +46,17 @@ let jusgoLastError = 0;
 const jusgoTimer = cfg.JUSGO_API_KEY && jusgoEvery > 0 ? setInterval(() => pollJusgoChanges(ctx).catch((e) => {
   if (Date.now() - jusgoLastError > 60_000) { jusgoLastError = Date.now(); console.error('[jusgo] reading changes failed:', e?.code ?? '', e?.message ?? e); } // at most once a minute in the log
 }), jusgoEvery * 1000) : null;
+// and every minute the safety net: JusGo's busy times per paired court, so a change that never reached us still closes the slot
+const jusgoCheck = () => reconcileJusgoAvailability(ctx).then((n) => n && console.log(`[jusgo] closed ${n} slot(s) busy on JusGo`)).catch((e) => console.error('[jusgo] availability check failed:', e?.code ?? '', e?.message ?? e));
+const jusgoRecon = cfg.JUSGO_API_KEY && jusgoEvery > 0 ? setInterval(jusgoCheck, 60_000) : null;
+if (jusgoRecon) setTimeout(jusgoCheck, 10_000);
 // listen first (hosts like Hostinger expect it within seconds), then bring the database up to date; a failed migration still stops the app
 server.listen(cfg.PORT, () => console.log(`PlaynX API listening on :${cfg.PORT} (${cfg.NODE_ENV})`));
 if (process.env.AUTO_MIGRATE !== 'false') {
   try { console.log('Migrations applied:', await migrate(db)); } catch (e) { console.error('[migrate] failed:', e); process.exit(1); }
 }
 
-const shutdown = () => { clearInterval(timer); if (jusgoTimer) clearInterval(jusgoTimer); server.close(() => db.close().then(() => process.exit(0))); setTimeout(() => process.exit(1), 10_000).unref(); };
+const shutdown = () => { clearInterval(timer); if (jusgoTimer) clearInterval(jusgoTimer); if (jusgoRecon) clearInterval(jusgoRecon); server.close(() => db.close().then(() => process.exit(0))); setTimeout(() => process.exit(1), 10_000).unref(); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
 
 process.on('unhandledRejection', (e) => { console.error('[unhandledRejection]', e); reportError(e, { source: 'process' }); });

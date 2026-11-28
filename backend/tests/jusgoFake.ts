@@ -8,9 +8,12 @@ export function createJusgoFake() {
   const files = new Map<string, { data: Buffer; contentType: string }>(); // by url
   const calls: string[] = [];
   const pending: JusgoChange[] = []; // what GET /v1/changes hands over next
+  const catalog: { venues: any[] } = { venues: [] }; const busy = new Map<string, { start: string; end: string }[]>(); // GET /v1/venues, availability by JusGo court id
   const newCode = () => `jcl_${crypto.randomBytes(24).toString('hex')}`;
-  const fake: JusgoClient & { requests: typeof requests; profiles: typeof profiles; files: typeof files; calls: string[]; rateLimited: boolean; approve(id: string): string; deny(id: string): void; last(): string; pending: JusgoChange[] } = {
-    configured: true, requests, profiles, files, calls, rateLimited: false, pending,
+  const fake: JusgoClient & { requests: typeof requests; profiles: typeof profiles; files: typeof files; calls: string[]; rateLimited: boolean; approve(id: string): string; deny(id: string): void; last(): string; pending: JusgoChange[]; catalog: typeof catalog; busy: typeof busy } = {
+    configured: true, requests, profiles, files, calls, rateLimited: false, pending, catalog, busy,
+    async venues() { calls.push('venues'); return catalog; },
+    async availability(id) { calls.push(`availability:${id}`); return { busy: busy.get(id) ?? [] }; },
     async changes(limit = 200) { calls.push('changes'); const page = pending.splice(0, limit); return { changes: page, hasMore: pending.length > 0, nextAfter: null }; },
     async requestLink(email, ownerCode) {
       calls.push(`request:${email}`); if (ownerCode) calls.push(`ownerCode:${ownerCode}`);

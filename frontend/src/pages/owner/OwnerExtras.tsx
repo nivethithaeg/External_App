@@ -5,7 +5,7 @@ import { apiError, del, get, post } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Badge, Button, Card, Empty, Input, Modal, PageHeader, PasswordInput, QueryBoundary, Select, Table, Textarea } from '../../components/ui';
-import { fmtDateTime, fmtRange, money, titleCase } from '../../lib/utils';
+import { cx, fmtDateTime, fmtRange, money, titleCase } from '../../lib/utils';
 
 /* ------------------------------------------------------------- Activity log */
 /** One plain sentence for an activity row: who did what, to what. Unknown actions fall back to their name. */
@@ -117,7 +117,7 @@ export function OwnerCloseAccountPage() {
 /** The values the owner types into JusGo → Booking sync, and the API key that lets JusGo read this owner's venues and bookings. */
 export function OwnerSyncPage() {
   const { toast } = useToast(); const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['owner-sync-key'], queryFn: () => get<{ key: { prefix: string; createdAt: string; lastUsedAt: string | null } | null }>('/owner/sync-key') });
+  const q = useQuery({ queryKey: ['owner-sync-key'], queryFn: () => get<{ key: { prefix: string; createdAt: string; lastUsedAt: string | null } | null; inbound?: { configured: boolean; lastPollAt: string | null; lastChanges: number; lastReconcileAt: string | null; lastError: string | null; lastErrorAt: string | null } }>('/owner/sync-key'), refetchInterval: 15_000 });
   const [fresh, setFresh] = useState<string | null>(null); const [confirmNew, setConfirmNew] = useState(false);
   const make = useMutation({ mutationFn: () => post<{ key: string }>('/owner/sync-key'), onSuccess: (r) => { setFresh(r.key); setConfirmNew(false); qc.invalidateQueries({ queryKey: ['owner-sync-key'] }); }, onError: (e) => toast(apiError(e), 'error') });
   const remove = useMutation({ mutationFn: () => del('/owner/sync-key'), onSuccess: () => { setFresh(null); toast('Key removed. JusGo can no longer read your bookings.'); qc.invalidateQueries({ queryKey: ['owner-sync-key'] }); }, onError: (e) => toast(apiError(e), 'error') });
@@ -147,6 +147,14 @@ export function OwnerSyncPage() {
               {key && <Button variant="ghost" loading={remove.isPending} onClick={() => window.confirm('Remove the key? JusGo will stop seeing your PlaynX bookings.') && remove.mutate()}>Remove key</Button>}</div>}
         </>)}</QueryBoundary>
       </Card>
+      {q.data?.inbound && (() => { const s = q.data.inbound!; const ok = s.configured && !!s.lastPollAt && (!s.lastErrorAt || s.lastErrorAt < s.lastPollAt);
+        return (<Card className="space-y-2 p-5"><h2 className="text-xl font-bold">3. Bookings made on JusGo</h2>
+          <p className="text-sm text-muted">A slot booked on JusGo (walk-in, phone or another app) is closed here as <b>Booked on JusGo</b>. PlaynX checks JusGo every few seconds, and every minute compares all busy times.</p>
+          <p role="status" className={cx('rounded-xl px-3 py-2 text-sm', !s.configured ? 'bg-warn/10' : ok ? 'bg-ok/10' : 'bg-danger/10')}>
+            {!s.configured ? <>Not running: the JusGo API key is not set on the PlaynX server (<code>JUSGO_API_KEY</code>). Ask your PlaynX admin.</>
+              : ok ? <>Working. Last checked {fmtDateTime(s.lastPollAt!)}{s.lastReconcileAt ? <>; busy times compared {fmtDateTime(s.lastReconcileAt)}</> : null}.</>
+              : <>Not working{s.lastError ? <>: <code>{s.lastError}</code></> : ' yet'}{s.lastErrorAt ? <> ({fmtDateTime(s.lastErrorAt)})</> : null}.</>}</p>
+        </Card>); })()}
     </div>
   );
 }
