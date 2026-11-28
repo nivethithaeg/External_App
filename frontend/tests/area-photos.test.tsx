@@ -18,7 +18,7 @@ const calls: { method: string; url: string; body?: any }[] = [];
 const liveChecks: Record<string, any>[] = []; let liveReply: any;
 let position: { latitude: number; longitude: number; accuracy: number } | null; let geoError: { code: number } | null; let stopped: number; let cameraError: Error | null;
 const wrap = (ui: React.ReactNode) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ToastProvider><MemoryRouter><AuthProvider>{ui}</AuthProvider></MemoryRouter></ToastProvider></QueryClientProvider>);
-const venue = (over: any = {}) => ({ id: 'v1', name: 'Turf 1', status: 'draft', images: [], areas: [], ...over });
+const venue = (over: any = {}) => ({ id: 'v1', name: 'Turf 1', status: 'ready', images: [], areas: [], ...over });
 const refusal = (code: string, message: string) => Object.assign(new Error(code), { response: { data: { error: { code, message } } } });
 
 beforeEach(() => {

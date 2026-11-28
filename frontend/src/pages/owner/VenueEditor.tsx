@@ -166,6 +166,7 @@ export function VenueSummary({ venue, compact = false }: { venue: any; compact?:
 }
 
 export function AreasTab({ venue }: { venue: any }) {
+  const approved = ['ready', 'approved'].includes(venue.status); // playing areas can be added only after PlaynX approves the venue
   const [edit, setEdit] = useState<any | 'new' | null>(null);
   const [manage, setManage] = useState<{ area: any; what: 'schedule' | 'blocks' } | null>(null);
   const qc = useQueryClient(); const { toast } = useToast();
@@ -190,7 +191,8 @@ export function AreasTab({ venue }: { venue: any }) {
   return (
     <div className="space-y-4">
 
-      <div className="flex justify-between"><p className="text-sm text-muted">Each playing area (e.g. "Turf A", "Court 1") is booked independently.</p><Button onClick={() => setEdit('new')}>+ Add area</Button></div>
+      <div className="flex justify-between"><p className="text-sm text-muted">Each playing area (e.g. "Turf A", "Court 1") is booked independently.</p><Button disabled={!approved} onClick={() => setEdit('new')}>+ Add area</Button></div>
+      {!approved && <p role="note" className="rounded-xl bg-warn/10 px-3 py-2 text-sm text-warn">You can add playing areas once PlaynX approves this venue.</p>}
       {venue.areas.length === 0 ? <Empty title="No playing areas" hint="Add an area, choose its sports, then set pricing and hours." /> : <div className="grid gap-4 xl:grid-cols-2">{venue.areas.map((a: any) => {
         const photos = ((venue.images ?? []) as any[]).filter((i) => i.area_id === a.id && i.kind === 'image' && !i.delete_requested);
         const gone: 'pending' | 'deleted' | null = a.deletion_status ?? null; // a delete request (or an approved deletion): greyed out, closed for booking

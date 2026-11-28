@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { distanceMeters } from '../src/lib/geo.js';
-import { MP4, approveOwner, createAdmin, registerUser, setup, type TestEnv } from './helpers.js';
+import { approveOwner, createAdmin, registerUser, setup, type TestEnv } from './helpers.js';
 
 const HERE = { lat: 12.9716, lng: 77.5946 };
 const jpeg = (n = 1) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, n)]); // a different byte pattern per photo
@@ -20,6 +20,7 @@ beforeAll(async () => { env = await setup(); strict = await setup({ REQUIRE_LIVE
 async function draft(e: TestEnv = strict) {
   const admin = await createAdmin(e); const o = await registerUser(e, 'owner'); await approveOwner(e, admin, o);
   const v = (await request(e.app).post('/api/owner/venues').set(o.auth).send({ name: 'Live Arena', address: '12 Park Road, Indiranagar', city: 'Bengaluru', pincode: '560038', ...HERE }).expect(201)).body.venue;
+  await e.db.query(`UPDATE venues SET status='ready' WHERE id=$1`, [v.id]); // approved by PlaynX: playing areas can be added now
   const sport = (await request(e.app).get('/api/sports')).body.sports[0];
   const area = (await request(e.app).post(`/api/owner/venues/${v.id}/areas`).set(o.auth).send({ name: 'Turf A', sportIds: [sport.id] }).expect(201)).body.area;
   return { o, v, area };
@@ -101,20 +102,6 @@ describe('saving a live photo', () => {
   it('is switched off in the plain test setup, so older flows keep working', async () => {
     const { o, v, area } = await draft(env);
     await save(o, v.id, area.id, PNG, undefined, env).expect(201);
-  });
-});
-
-describe('a venue cannot be sent for approval until every playing area has a live photo with a location', () => {
-  it('names the missing photo, then lets the venue through once it is added', async () => {
-    const { o, v, area } = await draft();
-    await request(strict.app).post(`/api/owner/venues/${v.id}/media`).set(o.auth).attach('file', PNG, { filename: 'v.png', contentType: 'image/png' }).expect(201);
-    await request(strict.app).post(`/api/owner/venues/${v.id}/documents`).set(o.auth).field('docType', 'Electricity bill').attach('file', PNG, { filename: 'bill.png', contentType: 'image/png' }).expect(201);
-    await request(strict.app).post(`/api/owner/venues/${v.id}/documents`).set(o.auth).field('docType', 'Land proof').attach('file', PNG, { filename: 'land.png', contentType: 'image/png' }).expect(201);
-    await request(strict.app).post(`/api/owner/venues/${v.id}/media/geo-video`).set(o.auth).field('lat', '12.9716').field('lng', '77.5946').field('accuracy', '20').attach('file', MP4, { filename: 'tour.mp4', contentType: 'video/mp4' }).expect(201);
-    expect((await request(strict.app).post(`/api/owner/venues/${v.id}/send-for-approval`).set(o.auth).expect(400)).body.error.message).toMatch(/geo-tagged photo for a playing area/);
-    const photo = jpeg(8); const proof = (await check(o, v.id, photo).expect(200)).body.proof;
-    await save(o, v.id, area.id, photo, proof).expect(201);
-    await request(strict.app).post(`/api/owner/venues/${v.id}/send-for-approval`).set(o.auth).expect(200);
   });
 });
 

@@ -14,15 +14,16 @@ const upload = (areaId?: string, who = fx.owner, venueId = fx.venue.id, file: Bu
 const ownerVenue = async () => (await request(env.app).get(`/api/owner/venues/${fx.venue.id}`).set(fx.owner.auth).expect(200)).body.venue;
 
 describe('playing area photos', () => {
-  it('stores a photo against the area and never makes it the cover; the first venue photo still does', async () => {
+  it('stores a photo against the area and never makes it the cover; the venue photo stays the cover', async () => {
     const o = await registerUser(env, 'owner'); await approveOwner(env, admin, o);
     const draft = (await request(env.app).post('/api/owner/venues').set(o.auth).send({ name: 'Draft Arena', address: '12 Park Road, Indiranagar', city: 'Bengaluru', pincode: '560038', lat: 12.97, lng: 77.59 }).expect(201)).body.venue;
+    const v = await upload(undefined, o, draft.id).expect(201); // the venue's own photo, added while it is a draft
+    expect(v.body.media).toMatchObject({ area_id: null, is_cover: true });
+    await env.db.query(`UPDATE venues SET status='ready' WHERE id=$1`, [draft.id]); // approved by PlaynX, not yet published: areas can be added
     const sport = (await request(env.app).get('/api/sports')).body.sports[0];
     const area = (await request(env.app).post(`/api/owner/venues/${draft.id}/areas`).set(o.auth).send({ name: 'Turf A', sportIds: [sport.id] }).expect(201)).body.area;
     const a = await upload(area.id, o, draft.id).expect(201);
-    expect(a.body.media).toMatchObject({ area_id: area.id, is_cover: false, kind: 'image' });
-    const v = await upload(undefined, o, draft.id).expect(201); // uploaded after the area photo, yet it becomes the cover
-    expect(v.body.media).toMatchObject({ area_id: null, is_cover: true });
+    expect(a.body.media).toMatchObject({ area_id: area.id, is_cover: false, kind: 'image' }); // an area photo never takes the cover
     const detail = (await request(env.app).get(`/api/owner/venues/${draft.id}`).set(o.auth).expect(200)).body.venue;
     expect(detail.images.find((i: any) => i.id === a.body.media.id).area_id).toBe(area.id);
   });

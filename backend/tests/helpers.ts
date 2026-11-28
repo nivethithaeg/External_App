@@ -112,15 +112,7 @@ export async function createApprovedVenue(env: TestEnv, admin: { auth: any }, ow
   }).expect(201)).body.venue;
   const sports = (await request(env.app).get('/api/sports')).body.sports as { id: number; slug: string }[];
   const football = sports.find((s) => s.slug === 'football')!, cricket = sports.find((s) => s.slug === 'cricket')!;
-  const area = (await request(env.app).post(`/api/owner/venues/${v.id}/areas`).set(o.auth).send({
-    name: 'Turf A', slotMinutes: 60, minDurationMinutes: 60, maxDurationMinutes: 180, sportIds: [football.id, cricket.id], capacity: 14,
-  }).expect(201)).body.area;
-  await env.db.query(`UPDATE playing_areas SET approval_status='approved' WHERE id=$1`, [area.id]); // the admin has approved the area
-  await request(env.app).put(`/api/owner/areas/${area.id}/pricing`).set(o.auth).send({ rules: [
-    { startTime: '06:00', endTime: '18:00', pricePerHour: 800 }, { startTime: '18:00', endTime: '23:00', pricePerHour: 1200 },
-  ] }).expect(204);
-  await request(env.app).put(`/api/owner/areas/${area.id}/availability`).set(o.auth).send({
-    days: [0, 1, 2, 3, 4, 5, 6].map((d) => ({ dayOfWeek: d, openTime: '06:00', closeTime: '23:00' })) }).expect(204);
+  await request(env.app).put(`/api/owner/venues/${v.id}/sports`).set(o.auth).send({ sportIds: [football.id, cricket.id] }).expect(200);
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]);
   await request(env.app).post(`/api/owner/venues/${v.id}/media`).set(o.auth).attach('file', png, { filename: 'a.png', contentType: 'image/png' }).expect(201);
   const doc = (await request(env.app).post(`/api/owner/venues/${v.id}/documents`).set(o.auth).field('docType', 'Electricity bill')
@@ -131,6 +123,16 @@ export async function createApprovedVenue(env: TestEnv, admin: { auth: any }, ow
   await request(env.app).patch(`/api/admin/documents/${doc.id}`).set(admin.auth).send({ status: 'approved' }).expect(200);
   await request(env.app).patch(`/api/admin/documents/${land.id}`).set(admin.auth).send({ status: 'approved' }).expect(200);
   await request(env.app).post(`/api/admin/venues/${v.id}/decision`).set(admin.auth).send({ decision: 'approve' }).expect(200);
+  // playing areas can be added once PlaynX has approved the venue, before the owner publishes it
+  const area = (await request(env.app).post(`/api/owner/venues/${v.id}/areas`).set(o.auth).send({
+    name: 'Turf A', slotMinutes: 60, minDurationMinutes: 60, maxDurationMinutes: 180, sportIds: [football.id, cricket.id], capacity: 14,
+  }).expect(201)).body.area;
+  await env.db.query(`UPDATE playing_areas SET approval_status='approved' WHERE id=$1`, [area.id]); // the admin has approved the area
+  await request(env.app).put(`/api/owner/areas/${area.id}/pricing`).set(o.auth).send({ rules: [
+    { startTime: '06:00', endTime: '18:00', pricePerHour: 800 }, { startTime: '18:00', endTime: '23:00', pricePerHour: 1200 },
+  ] }).expect(204);
+  await request(env.app).put(`/api/owner/areas/${area.id}/availability`).set(o.auth).send({
+    days: [0, 1, 2, 3, 4, 5, 6].map((d) => ({ dayOfWeek: d, openTime: '06:00', closeTime: '23:00' })) }).expect(204);
   await request(env.app).post(`/api/owner/venues/${v.id}/publish`).set(o.auth).expect(200); // the owner chooses to show it to customers
   return { owner: o, venue: v, area, football, cricket };
 }

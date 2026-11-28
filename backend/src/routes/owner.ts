@@ -529,6 +529,7 @@ export function ownerRoutes(ctx: Ctx) {
   r.post('/venues/:id/areas', async (req, res) => {
     const v = await ownVenue(parse(z.uuid(), req.params.id), uid(req));
     unlocked(v);
+    if (!isLiveVenue(v)) throw conflict('PlaynX must approve this venue before you can add playing areas', 'venue_not_approved');
     const b = parse(areaSchema.extend({ defaultPrice: z.number().gt(0, 'Enter a default price above ₹0').max(100000).optional() }), req.body);
     const a = await ctx.db.tx(async (q) => {
       const a = (await q.query(
