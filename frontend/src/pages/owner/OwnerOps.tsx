@@ -49,7 +49,7 @@ export function OverviewPage() {
                     : <Link to={i.link} className="flex items-center gap-2.5 rounded-xl border border-line px-3 py-2 text-sm font-semibold transition hover:border-brand hover:bg-surface2"><span aria-hidden="true" className="h-5 w-5 rounded-full border-2 border-line" /><span className="sr-only">To do: </span>{i.label}<span aria-hidden="true" className="ml-auto text-brand">→</span></Link>}</li>))}</ol>
               </section>)}
             <div className="flex flex-wrap justify-end gap-2" aria-label="Quick actions">
-              <Link to="/owner/bookings/new" className="btn-primary">Add Booking</Link><Link to="/owner/reports?tab=payments&status=pending" className="btn-ghost">Record Payment</Link></div>
+              <Link to="/owner/reports?tab=payments&status=pending" className="btn-primary">Record Payment</Link></div>
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               <Stat index={0} to="/owner/venues" label="Total Venues" count={d.counts.venues} /><Stat index={1} to="/owner/areas" label="Total Playing Areas" count={d.counts.areas} />
               <Stat index={2} to="/owner/bookings?preset=today" label="Today's Bookings" count={d.today.bookings} /><Stat index={3} to="/owner/bookings/upcoming" label="Upcoming Bookings" count={d.upcoming} />

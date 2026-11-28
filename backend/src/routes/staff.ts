@@ -4,8 +4,6 @@ import { z } from 'zod';
 import type { Ctx } from '../types.js';
 import { authenticate, requireActiveOwner, requireRole } from '../middleware/auth.js';
 import { conflict, forbidden, notFound } from '../errors.js';
-import { createOfflineBooking } from '../lib/bookings.js';
-import { normalizePhone, INDIAN_MOBILE, INDIAN_MOBILE_MESSAGE } from '../lib/phone.js';
 import { parse } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
 
@@ -15,7 +13,6 @@ const MAX_STAFF = 10;
 export const STAFF_PERMISSIONS: { id: string; label: string; hint: string }[] = [
   { id: 'CHECK_IN', label: 'Check players in', hint: 'Look up a booking reference and mark the player as arrived' },
   { id: 'BOOKING_VIEW', label: 'View bookings', hint: "See today's and upcoming bookings (no payment amounts)" },
-  { id: 'BOOKING_CREATE', label: 'Add walk-in bookings', hint: 'Book a slot for someone at the counter' },
   { id: 'DASHBOARD_VIEW', label: 'View dashboard', hint: 'Counts for today and the coming days' },
   { id: 'VENUE_VIEW', label: 'View venues', hint: 'See your venues and their details' },
   { id: 'PLAYING_AREA_VIEW', label: 'View playing areas', hint: 'See the playing areas, sports and slot lengths' },
@@ -184,17 +181,6 @@ export function staffRoutes(ctx: Ctx) {
          FROM pricing_rules pr JOIN playing_areas a ON a.id=pr.area_id JOIN venues v ON v.id=a.venue_id LEFT JOIN sports s ON s.id=pr.sport_id WHERE v.owner_id=$1${only(o)} ORDER BY v.name, a.name, s.name, pr.start_time`, [o.owner_id]);
     res.json({ prices: rows });
   });
-  /** What the counter needs to book a walk-in: live venues, their areas and sports. */
-  r.get('/booking-options', async (req, res) => {
-    const o = await ownerOf(req); need(o, 'BOOKING_CREATE');
-    const { rows } = await ctx.db.query(
-      `SELECT v.id, v.name, v.timezone,
-              (SELECT COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name, 'slotMinutes', a.slot_minutes, 'minDuration', a.min_duration_minutes, 'maxDuration', a.max_duration_minutes,
-                  'sports', (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.sort_order, sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id)) ORDER BY a.name), '[]')
-                 FROM playing_areas a WHERE a.venue_id=v.id AND a.is_active) AS areas
-         FROM venues v WHERE v.owner_id=$1${only(o)} AND v.status='approved' ORDER BY v.name`, [o.owner_id]);
-    res.json({ venues: rows });
-  });
   r.get('/calendar', async (req, res) => {
     const o = await ownerOf(req); need(o, 'CALENDAR_VIEW');
     const { date } = parse(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }), req.query);
@@ -212,17 +198,6 @@ export function staffRoutes(ctx: Ctx) {
          FROM bookings b JOIN venues v ON v.id=b.venue_id WHERE v.owner_id=$1${only(o)} AND b.block_kind IS NULL AND lower(b.during) >= now() - interval '30 days' AND lower(b.during) < now() + interval '1 day'
         GROUP BY v.name ORDER BY v.name`, [o.owner_id]);
     res.json({ days: 30, venues: rows, totals: { bookings: rows.reduce((n: number, x: any) => n + x.bookings, 0), cancelled: rows.reduce((n: number, x: any) => n + x.cancelled, 0), revenue: rows.reduce((n: number, x: any) => n + x.revenue, 0) } });
-  });
-  r.post('/bookings/offline', async (req, res) => {
-    const o = await ownerOf(req); need(o, 'BOOKING_CREATE');
-    const b = parse(z.object({
-      areaId: z.uuid(), sportId: z.number().int().positive(), startsAt: z.iso.datetime({ offset: true }), durationMinutes: z.number().int().min(30).max(720),
-      customerName: z.string().trim().min(2).max(100), customerPhone: z.string().regex(INDIAN_MOBILE, INDIAN_MOBILE_MESSAGE), paymentMethod: z.enum(['cash', 'upi', 'card', 'unpaid']).default('cash'),
-    }), req.body);
-    if (o.venue_ids) { const a = (await ctx.db.query('SELECT venue_id FROM playing_areas WHERE id=$1', [b.areaId])).rows[0]; if (!a || !o.venue_ids.includes(a.venue_id)) throw forbidden('You do not work in this venue'); }
-    const out = await createOfflineBooking(ctx, { ...req.user!, id: o.owner_id, role: 'owner' } as any, { ...b, customerPhone: normalizePhone(b.customerPhone) });
-    await audit(ctx.db, req, 'booking.offline_created_by_staff', 'booking', out.bookingId, { reference: out.reference });
-    res.status(201).json(out);
   });
   return r;
 }

@@ -3,7 +3,7 @@ import { OwnerPayoutsPage } from './pages/owner/OwnerPayouts';
 import { AreaDetailsPage } from './pages/owner/AreaDetails';
 import { Suspense, lazy, useEffect, type ComponentType } from 'react';
 import { WalletPage } from './pages/customer/Wallet';
-import { StaffBookings, StaffCalendar, StaffDashboard, StaffHome, StaffLayout, StaffNewBooking, StaffPricing, StaffProfile, StaffReports, StaffVenues } from './pages/staff/StaffPortal';
+import { StaffBookings, StaffCalendar, StaffDashboard, StaffHome, StaffLayout, StaffPricing, StaffProfile, StaffReports, StaffVenues } from './pages/staff/StaffPortal';
 import { PaymentCelebrationHost } from './lib/paymentCelebration';
 import { Link, Navigate, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -16,7 +16,6 @@ import { ReceiptPage, MyReviewsPage, NearbyPage, OffersPage, PaymentsPage as Cus
 import { BookingDetailPage, BookingsPage, FavouritesPage, NotificationsPage, ProfilePage, SupportPage } from './pages/customer/Account';
 import { AboutPage, CancellationPage, ContactPage, CookiePage, HelpPage, OwnerAgreementPage, PrivacyPage, TermsPage } from './pages/customer/InfoPages';
 import { Loading } from './components/ui';
-import { OfflineBookingPage } from './pages/owner/OfflineBooking';
 import { useAuth } from './lib/auth';
 
 const OwnerVenuesPage = lazy(() => import('./pages/owner/VenueEditor').then((m) => ({ default: m.OwnerVenuesPage })));
@@ -93,7 +92,7 @@ export default function App() {
           <Route path="venues" element={<OwnerVenuesPage />} /><Route path="venues/:id" element={<VenueEditorPage />} />
           <Route path="areas" element={<AreasPage />} /><Route path="areas/:id" element={<AreaDetailsPage />} /><Route path="media" element={<Navigate to="/owner/venues" replace />} /><Route path="documents" element={<Navigate to="/owner/account/business" replace />} /><Route path="hours" element={<HoursPage />} />
           <Route path="calendar" element={<CalendarPage />} /><Route path="slots" element={<SlotsPage />} /><Route path="blocked" element={<BlockedPage />} />
-          <Route path="bookings" element={<OwnerBookings view="all" />} /><Route path="bookings/new" element={<OfflineBookingPage />} /><Route path="bookings/upcoming" element={<OwnerBookings view="upcoming" />} />
+          <Route path="bookings" element={<OwnerBookings view="all" />} /><Route path="bookings/upcoming" element={<OwnerBookings view="upcoming" />} />
           <Route path="bookings/history" element={<OwnerBookings view="history" />} /><Route path="bookings/cancelled" element={<OwnerBookings view="cancelled" />} />
           <Route path="pricing" element={<PricingPage />} /><Route path="offers" element={<OwnerOffersPage />} /><Route path="reports" element={<AnalyticsPage />} />
           <Route path="payments" element={<Navigate to="/owner/reports?tab=payments" replace />} /><Route path="settlements" element={<Navigate to="/owner/payments" replace />} /><Route path="refunds" element={<Navigate to="/owner/reports?tab=payments&status=refunds" replace />} />
@@ -103,7 +102,7 @@ export default function App() {
           <Route path="earnings" element={<Navigate to="/owner/reports" replace />} /><Route path="profile" element={<Navigate to="/owner/account/business" replace />} />
         </Route>
 
-        <Route path="staff" element={<RequireRole role="staff"><StaffLayout /></RequireRole>}><Route index element={<StaffHome />} /><Route path="bookings" element={<StaffBookings />} /><Route path="dashboard" element={<StaffDashboard />} /><Route path="venues" element={<StaffVenues />} /><Route path="pricing" element={<StaffPricing />} /><Route path="new-booking" element={<StaffNewBooking />} /><Route path="calendar" element={<StaffCalendar />} /><Route path="reports" element={<StaffReports />} /><Route path="profile" element={<StaffProfile />} /></Route>
+        <Route path="staff" element={<RequireRole role="staff"><StaffLayout /></RequireRole>}><Route index element={<StaffHome />} /><Route path="bookings" element={<StaffBookings />} /><Route path="dashboard" element={<StaffDashboard />} /><Route path="venues" element={<StaffVenues />} /><Route path="pricing" element={<StaffPricing />} /><Route path="calendar" element={<StaffCalendar />} /><Route path="reports" element={<StaffReports />} /><Route path="profile" element={<StaffProfile />} /></Route>
         <Route path="admin" element={<RequireRole role="admin"><PortalLayout adminTheme groups={adminGroups} subtitle="Admin Portal" notificationsPath="/admin/notifications" /></RequireRole>}>
           <Route index element={<AdminDashboard />} />
           <Route path="venues" element={<AdminVenues />} /><Route path="owners" element={<AdminOwners />} /><Route path="users" element={<AdminUsers />} />

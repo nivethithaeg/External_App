@@ -14,7 +14,7 @@ import { isIndianMobile, MOBILE_MESSAGE } from '../../lib/phone';
 const TABS: { to: string; label: string; any: string[] }[] = [
   { to: '/staff', label: 'Check-in', any: ['CHECK_IN'] }, { to: '/staff/bookings', label: 'Bookings', any: ['BOOKING_VIEW'] }, { to: '/staff/dashboard', label: 'Dashboard', any: ['DASHBOARD_VIEW'] },
   { to: '/staff/venues', label: 'Venues', any: ['VENUE_VIEW', 'PLAYING_AREA_VIEW'] }, { to: '/staff/pricing', label: 'Pricing', any: ['PRICING_VIEW'] },
-  { to: '/staff/new-booking', label: 'New booking', any: ['BOOKING_CREATE'] }, { to: '/staff/calendar', label: 'Calendar', any: ['CALENDAR_VIEW'] }, { to: '/staff/reports', label: 'Reports', any: ['REPORTS_VIEW'] },
+  { to: '/staff/calendar', label: 'Calendar', any: ['CALENDAR_VIEW'] }, { to: '/staff/reports', label: 'Reports', any: ['REPORTS_VIEW'] },
 ];
 export const useStaffMe = () => useQuery({ queryKey: ['staff-me'], queryFn: () => get<{ business: string; permissions: string[] }>('/staff/me') });
 /** Only the pages the owner ticked for this person are shown. */
@@ -124,41 +124,6 @@ export function StaffPricing() {
 
 /* ---- counter booking, calendar and reports ---- */
 const todayISO = () => new Date().toISOString().slice(0, 10);
-export function StaffNewBooking() {
-  const { toast } = useToast();
-  const opts = useQuery({ queryKey: ['staff-booking-options'], queryFn: () => get<{ venues: any[] }>('/staff/booking-options') });
-  const [venueId, setVenueId] = useState(''); const [areaId, setAreaId] = useState(''); const [sportId, setSportId] = useState(''); const [date, setDate] = useState(todayISO()); const [duration, setDuration] = useState('');
-  const [slot, setSlot] = useState<string>(''); const [f, setF] = useState({ name: '', phone: '', method: 'cash' }); const [err, setErr] = useState(''); const [done, setDone] = useState<string | null>(null);
-  const venue = opts.data?.venues.find((v) => v.id === venueId) ?? opts.data?.venues[0];
-  const area = venue?.areas.find((a: any) => a.id === areaId) ?? venue?.areas[0];
-  const sport = sportId || String(area?.sports[0]?.id ?? '');
-  const durations = area ? DURATIONS.filter((d) => d >= area.minDuration && d <= area.maxDuration && d % area.slotMinutes === 0) : [];
-  const dur = duration && (durations as number[]).includes(+duration) ? duration : String(durations[0] ?? '');
-  const slots = useQuery({ queryKey: ['staff-slots', area?.id, sport, date, dur], enabled: !!area && !!sport && !!dur, queryFn: () => get<{ slots: { startsAt: string; endsAt: string; price: number; available: boolean }[] }>(`/areas/${area.id}/slots`, { date, sportId: sport, duration: dur }) });
-  const book = useMutation({
-    mutationFn: () => post<{ reference: string }>('/staff/bookings/offline', { areaId: area.id, sportId: +sport, startsAt: slot, durationMinutes: +dur, customerName: f.name.trim(), customerPhone: f.phone.replace(/[\s-]/g, ''), paymentMethod: f.method }),
-    onSuccess: (r) => { setDone(r.reference); setSlot(''); setF({ name: '', phone: '', method: 'cash' }); slots.refetch(); toast('Booked', 'success'); }, onError: (e) => setErr(apiError(e)),
-  });
-  const go = () => { setErr(''); setDone(null); if (!slot) return setErr('Choose a slot'); if (f.name.trim().length < 2) return setErr('Enter the customer name'); if (!isIndianMobile(f.phone.replace(/[\s-]/g, ''))) return setErr(MOBILE_MESSAGE); book.mutate(); };
-  return (<div className="space-y-4"><PageHeader title="New booking" subtitle="Book a slot for someone at the counter." />
-    <QueryBoundary q={opts} empty={(d) => d.venues.length === 0 && <p className="text-sm text-muted">No live venues to book.</p>}>{() => (
-      <Card className="space-y-3 p-5">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Select label="Venue" value={venue?.id ?? ''} onChange={(e) => { setVenueId(e.target.value); setAreaId(''); setSlot(''); }}>{opts.data!.venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</Select>
-          <Select label="Playing area" value={area?.id ?? ''} onChange={(e) => { setAreaId(e.target.value); setSportId(''); setSlot(''); }}>{(venue?.areas ?? []).map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
-          <Select label="Sport" value={sport} onChange={(e) => { setSportId(e.target.value); setSlot(''); }}>{(area?.sports ?? []).map((x: any) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select>
-          <Input label="Date" type="date" min={todayISO()} value={date} onChange={(e) => { setDate(e.target.value); setSlot(''); }} />
-          <Select label="Duration" value={dur} onChange={(e) => { setDuration(e.target.value); setSlot(''); }}>{durations.map((d) => <option key={d} value={d}>{durationLabel(d)}</option>)}</Select></div>
-        <div role="listbox" aria-label="Slots" className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(slots.data?.slots ?? []).map((x) => (
-          <button key={x.startsAt} type="button" role="option" aria-selected={slot === x.startsAt} disabled={!x.available} onClick={() => setSlot(x.startsAt)}
-            className={`rounded-xl border-2 p-2 text-sm ${slot === x.startsAt ? 'border-brand bg-brand/10' : 'border-line'} disabled:opacity-40`}>{fmtRange(x.startsAt, x.endsAt, venue?.timezone ?? 'Asia/Kolkata')}<br /><b>{money(x.price)}</b></button>))}
-          {slots.data && slots.data.slots.length === 0 && <p className="col-span-full text-sm text-muted">No slots on this day.</p>}</div>
-        <div className="grid gap-3 sm:grid-cols-3"><Input mandatory label="Customer name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /><Input mandatory label="Mobile" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
-          <Select label="Payment received as" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="unpaid">Not paid yet</option></Select></div>
-        {err && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
-        {done && <p role="status" className="rounded-xl bg-ok/10 px-3 py-2 text-sm font-semibold text-ok">Booked. Reference {done}</p>}
-        <Button loading={book.isPending} onClick={go}>Book slot</Button></Card>)}</QueryBoundary></div>);
-}
 export function StaffCalendar() {
   const [date, setDate] = useState(todayISO());
   const q = useQuery({ queryKey: ['staff-calendar', date], queryFn: () => get<{ items: any[] }>('/staff/calendar', { date }), placeholderData: (p) => p });

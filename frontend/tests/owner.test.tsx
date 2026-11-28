@@ -64,7 +64,7 @@ beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); calls = []; routes_
 
 const PAGES: [string, RegExp][] = [
   ['/owner', /^Good (morning|afternoon|evening),/], ['/owner/venues', /Your venues/], ['/owner/areas', /^Playing areas$/], ['/owner/hours', /Operating hours/],
-  ['/owner/calendar', /Calendar/], ['/owner/slots', /Slot management/], ['/owner/blocked', /Blocked slots/], ['/owner/bookings', /^Bookings$/], ['/owner/bookings/new', /Add offline booking/], ['/owner/bookings/upcoming', /Upcoming bookings/],
+  ['/owner/calendar', /Calendar/], ['/owner/slots', /Slot management/], ['/owner/blocked', /Blocked slots/], ['/owner/bookings', /^Bookings$/], ['/owner/bookings/upcoming', /Upcoming bookings/],
   ['/owner/bookings/history', /Booking history/], ['/owner/bookings/cancelled', /Cancelled bookings/], ['/owner/pricing', /Pricing & rates/], ['/owner/offers', /^Offers$/], ['/owner/reports', /^Report & Payments$/],
   ['/owner/payments', /^Report & Payments$/], ['/owner/refunds', /^Report & Payments$/], ['/owner/notifications', /^Notifications$/], ['/owner/support', /^Admin Support$/],
   ['/owner/announcements', /^Announcements$/], ['/owner/reviews', /^Reviews$/], ['/owner/account/staff', /^Staff$/], ['/owner/account/profile', /^Profile$/], ['/owner/account/payouts', /^Payouts$/], ['/owner/account/business', /Business information/], ['/owner/account/bank', /Bank account details/], ['/owner/account/payment-settings', /^Payment settings$/],
@@ -530,7 +530,7 @@ describe('owner pages show real data and handle states', () => {
   it('overview shows the JusGo eight figures and three buttons, and an empty-state when there is no revenue', async () => {
     renderAt('/owner');
     for (const l of ['Total Venues', 'Total Playing Areas', "Today's Bookings", 'Upcoming Bookings', 'Completed Bookings', 'Cancelled Bookings', 'Total Revenue (GTV)', 'Open Slots Today']) expect(await screen.findByText(l), l).toBeInTheDocument();
-    for (const l of ['Add Booking', 'Record Payment']) expect(screen.getByRole('link', { name: l })).toBeInTheDocument(); expect(screen.queryByRole('link', { name: 'Add event/Academic booking' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Record Payment' })).toBeInTheDocument(); expect(screen.queryByRole('link', { name: 'Add Booking' })).toBeNull(); // offline bookings were removed expect(screen.queryByRole('link', { name: 'Add event/Academic booking' })).toBeNull();
     expect(screen.getByText('Under approval')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Weekly' }));
     expect(await screen.findByText(/No revenue recorded for this period yet/)).toBeInTheDocument();
@@ -652,7 +652,7 @@ describe('owner pages show real data and handle states', () => {
     renderAt('/owner/reports');
     expect(await screen.findByRole('heading', { level: 1, name: 'Report & Payments' })).toBeInTheDocument();
     expect(screen.getByText('How your venues and playing areas are performing.')).toBeInTheDocument();
-    for (const l of ['From date', 'To date', 'Venue', 'Playing area', 'Sport', 'Booking status', 'Source']) expect(await screen.findByLabelText(l), l).toBeInTheDocument();
+    for (const l of ['From date', 'To date', 'Venue', 'Playing area', 'Sport', 'Booking status']) expect(await screen.findByLabelText(l), l).toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Payments' }));
     expect(await screen.findByText(/What each booking costs, what has been paid/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Refunds' }));

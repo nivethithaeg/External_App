@@ -272,7 +272,6 @@ export function AnalyticsPage() {
         <Select label="Playing area" value={f.areaId} onChange={(e) => setF({ ...f, areaId: e.target.value })}><option value="">All playing areas</option>{(areasQ.data?.areas ?? []).filter((x) => !f.venueId || x.venue_id === f.venueId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select>
         <Select label="Sport" value={f.sportId} onChange={(e) => setF({ ...f, sportId: e.target.value })}><option value="">All sports</option>{sports.data?.sports.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
         <Select label="Booking status" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}><option value="">All statuses</option>{['confirmed', 'completed', 'cancelled', 'pending'].map((x) => <option key={x} value={x}>{titleCase(x)}</option>)}</Select>
-        <Select label="Source" value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}><option value="">All sources</option><option value="online">PlaynX</option><option value="offline">Offline</option></Select>
         <Select label="Group by" value={f.groupBy} onChange={(e) => setF({ ...f, groupBy: e.target.value })}><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></Select></div>
       {f.from > f.to ? <ErrorBox error={new Error('The start date must be before the end date')} /> : (
         <QueryBoundary q={q}>{(d) => (<div className="space-y-6">

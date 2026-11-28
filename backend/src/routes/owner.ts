@@ -7,7 +7,7 @@ import { HttpError, badRequest, conflict, forbidden, notFound } from '../errors.
 import { csv, page, parse } from '../lib/http.js';
 import { checkedFile, upload } from '../lib/upload.js';
 import { audit } from '../lib/audit.js';
-import { cancelBooking, createOfflineBooking } from '../lib/bookings.js';
+import { cancelBooking } from '../lib/bookings.js';
 import { normalizePhone, INDIAN_MOBILE, INDIAN_MOBILE_MESSAGE } from '../lib/phone.js';
 import { loadAreaContext, quote } from '../lib/slots.js';
 import { BOOKING_SELECT } from './bookings.js';
@@ -864,19 +864,6 @@ export function ownerRoutes(ctx: Ctx) {
   });
 
   /** A walk-in: the owner books a slot for someone who is not using the app. It is confirmed at once and no online payment is taken. */
-  r.post('/bookings/offline', async (req, res) => {
-    const b = parse(z.object({
-      areaId: z.uuid(), sportId: z.number().int().positive(), startsAt: z.iso.datetime({ offset: true }), durationMinutes: z.number().int().min(30).max(720),
-      customerName: z.string().trim().min(2, "Enter the customer's name").max(100), customerPhone: z.string().regex(INDIAN_MOBILE, INDIAN_MOBILE_MESSAGE),
-      customerEmail: z.union([z.email().max(254), z.literal('')]).optional(), amount: z.number().min(0).max(1000000).optional(), amountPaid: z.number().min(0).max(1000000).optional(),
-      opponentName: z.string().trim().min(2).max(100).optional(), opponentPhone: z.string().regex(INDIAN_MOBILE, INDIAN_MOBILE_MESSAGE).optional(), opponentCity: z.string().trim().min(2).max(80).optional(),
-      customerCity: z.string().trim().min(2).max(80).optional(), opponent1Name: z.string().trim().min(2).max(100).optional(), opponent1Phone: z.string().regex(INDIAN_MOBILE, INDIAN_MOBILE_MESSAGE).optional(), opponent1City: z.string().trim().min(2).max(80).optional(),
-      eventKind: z.enum(['event', 'academic']).optional(), eventTitle: z.string().trim().min(2).max(120).optional(),
-      paymentMethod: z.enum(['cash', 'upi', 'card', 'unpaid', 'online', 'offline']).default('cash'), notes: z.string().trim().max(300).optional(),
-    }).refine((x) => !x.opponent1Phone || !!x.opponent1Name, { message: 'Enter the name of opponent 1', path: ['opponent1Name'] }).refine((x) => !x.opponentPhone || !!x.opponentName, { message: 'Enter the name of the opponent', path: ['opponentName'] }).refine((x) => !x.eventKind || !!x.eventTitle, { message: 'Give the event a name', path: ['eventTitle'] }), req.body);
-    const out = await createOfflineBooking(ctx, req.user!, { ...b, customerPhone: normalizePhone(b.customerPhone), opponentPhone: b.opponentPhone ? normalizePhone(b.opponentPhone) : undefined, opponent1Phone: b.opponent1Phone ? normalizePhone(b.opponent1Phone) : undefined });
-    res.status(201).json(out);
-  });
   // ---------------- edit, delete and restore a booking the owner made (walk-in / phone bookings), and record a refund given on a cancelled one
   const loadOwn = async (q: any, id: string, ownerId: string) => {
     const b = (await q.query(`SELECT b.*, v.owner_id, lower(b.during) AS s, upper(b.during) AS e FROM bookings b JOIN venues v ON v.id=b.venue_id WHERE b.id=$1 FOR UPDATE OF b`, [id])).rows[0];

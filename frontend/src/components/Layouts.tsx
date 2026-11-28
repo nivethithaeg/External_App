@@ -547,7 +547,7 @@ export const ownerGroups: NavGroup[] = [
     { to: '/owner/venues', label: 'My venues', icon: '🏟️' }, { to: '/owner/areas', label: 'Playing areas', icon: '🥅' },
     { to: '/owner/hours', label: 'Operating hours', icon: '🕒' }] },
   { label: 'Booking management', items: [
-    { to: '/owner/bookings', label: 'All bookings', icon: '📅', end: true }, { to: '/owner/bookings/new', label: 'Add offline booking', icon: '➕' }, { to: '/owner/bookings/upcoming', label: 'Upcoming bookings', icon: '⏭️' },
+    { to: '/owner/bookings', label: 'All bookings', icon: '📅', end: true }, { to: '/owner/bookings/upcoming', label: 'Upcoming bookings', icon: '⏭️' },
     { to: '/owner/bookings/history', label: 'Booking history', icon: '🕘' }, { to: '/owner/bookings/cancelled', label: 'Cancelled bookings', icon: '🚫' }, { to: '/owner/customers', label: 'Customers', icon: '👥' }] },
   { label: 'Scheduling', items: [
     { to: '/owner/calendar', label: 'Calendar', icon: '🗓️' }, { to: '/owner/slots', label: 'Slot management', icon: '🧩' }, { to: '/owner/blocked', label: 'Blocked slots', icon: '⛔' }] },

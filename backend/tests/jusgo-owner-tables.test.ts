@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { forgetPricedCache } from '../src/middleware/auth.js';
 import { approveOwner, createAdmin, createApprovedVenue, ist, pay, registerUser, setup, startBooking, type TestEnv } from './helpers.js';
+import { walkIn } from './walkin.js';
 const dayAhead = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 
 let env: TestEnv;
@@ -103,17 +104,6 @@ describe('venue-owner tables carry JusGo names and fields', () => {
     expect((await slots(normal)).length).toBe(24);
     expect(await slots(closed)).toHaveLength(24);
   });
-  it('an offline booking keeps the customer city, both opponents with their cities, and an online or offline payment mode', async () => {
-    const admin = await createAdmin(env);
-    const f: any = await createApprovedVenue(env, admin);
-    const r = await request(env.app).post('/api/owner/bookings/offline').set(f.owner.auth).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(6), '10:00'), durationMinutes: 60,
-      customerName: 'Ravi Kumar', customerPhone: '9876543210', customerCity: 'Erode', opponent1Name: 'Karthik', opponent1Phone: '9123456780', opponent1City: 'Salem', opponentName: 'Arun', opponentPhone: '9123456781', opponentCity: 'Madurai', paymentMethod: 'online', amountPaid: 300 }).expect(201);
-    const row = (await env.db.query(`SELECT walkin_city, opponent1_name, opponent1_city, opponent_name, opponent_city, payment_method, amount_paid::float8 AS paid FROM bookings WHERE id=$1`, [r.body.bookingId])).rows[0];
-    expect(row).toMatchObject({ walkin_city: 'Erode', opponent1_name: 'Karthik', opponent1_city: 'Salem', opponent_name: 'Arun', opponent_city: 'Madurai', payment_method: 'online', paid: 300 });
-    const cust = (await env.db.query(`SELECT name, city FROM owner_customers WHERE owner_id=$1 AND source='opponent' ORDER BY name`, [f.owner.id])).rows;
-    expect(cust).toEqual([{ name: 'Arun', city: 'Madurai' }, { name: 'Karthik', city: 'Salem' }]);
-    await request(env.app).post('/api/owner/bookings/offline').set(f.owner.auth).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(6), '12:00'), durationMinutes: 60, customerName: 'Ravi', customerPhone: '9876543210', opponent1Phone: '9123456780' }).expect(400); // an opponent needs a name
-  });
   it('a staff login can be created inactive (it cannot sign in) and switched on later; the status follows in owner_staff', async () => {
     const admin = await createAdmin(env);
     const f: any = await createApprovedVenue(env, admin);
@@ -129,7 +119,7 @@ describe('venue-owner tables carry JusGo names and fields', () => {
     const admin = await createAdmin(env);
     const f: any = await createApprovedVenue(env, admin);
     const own = f.owner.auth; const day = dayAhead(12);
-    const book = (t: string) => request(env.app).post('/api/owner/bookings/offline').set(own).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(day, t), durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876543210', customerCity: 'Erode', paymentMethod: 'unpaid' });
+    const book = (t: string) => walkIn(env, own).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(day, t), durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876543210', customerCity: 'Erode', paymentMethod: 'unpaid' });
     const b = (await book('10:00').expect(201)).body.bookingId;
     const row = async () => (await env.db.query(`SELECT status, walkin_name, walkin_city, notes, total::float8 AS total, amount_paid::float8 AS paid, payment_method, lower(during) AS s, refund_amount::float8 AS refund, refund_mode, deleted_at FROM bookings WHERE id=$1`, [b])).rows[0];
     await request(env.app).patch(`/api/owner/bookings/${b}`).set(own).send({ customerName: 'Ravi K', customerCity: 'Salem', note: 'birthday' }).expect(200);
@@ -186,7 +176,7 @@ describe('venue-owner tables carry JusGo names and fields', () => {
     const f1: any = await createApprovedVenue(env, admin);
     const f2: any = await createApprovedVenue(env, admin, f1.owner);
     const own = f1.owner.auth;
-    const book = async (f: any, t: string) => (await request(env.app).post('/api/owner/bookings/offline').set(own).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(3), t), durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876543210', customerCity: 'Erode', paymentMethod: 'unpaid' }).expect(201)).body.reference;
+    const book = async (f: any, t: string) => (await walkIn(env, own).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(3), t), durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876543210', customerCity: 'Erode', paymentMethod: 'unpaid' }).expect(201)).body.reference;
     const ref1 = await book(f1, '10:00'), ref2 = await book(f2, '11:00');
     await request(env.app).post('/api/owner/staff').set(own).send({ fullName: 'Gate One', email: 'gate.one@example.com', password: 'Passw0rd!xyz', permissions: ['CHECK_IN', 'VENUE_VIEW'], allVenues: false, venueIds: [] }).expect(400); // some venue, or all
     const st = (await request(env.app).post('/api/owner/staff').set(own).send({ fullName: 'Gate One', email: 'gate.one@example.com', password: 'Passw0rd!xyz', permissions: ['CHECK_IN', 'VENUE_VIEW'], allVenues: false, venueIds: [f1.venue.id] }).expect(201)).body.staff;

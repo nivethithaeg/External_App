@@ -1,11 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createAdmin, createApprovedVenue, dateIn, ist, registerUser, setup, startBooking, type TestEnv } from './helpers.js';
+import { walkIn } from './walkin.js';
 
 let env: TestEnv; let admin: Awaited<ReturnType<typeof createAdmin>>;
 beforeAll(async () => { env = await setup(); admin = await createAdmin(env); });
 type Fx = Awaited<ReturnType<typeof createApprovedVenue>>;
-const offline = (f: Fx, date: string) => request(env.app).post('/api/owner/bookings/offline').set(f.owner.auth)
+const offline = (f: Fx, date: string) => walkIn(env, f.owner.auth)
   .send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(date, '10:00'), durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876543210', paymentMethod: 'cash' });
 const area = async (id: string) => (await env.db.query('SELECT * FROM playing_areas WHERE id=$1', [id])).rows[0];
 

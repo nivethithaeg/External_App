@@ -121,12 +121,12 @@ const POPUP: Record<Exclude<Pending, null>, { title: string; icon: string; text:
   changes: { title: 'Update your application first', icon: '✏️', text: 'The PlaynX team asked for changes to your application. Update it from the application status page; adding or changing anything in the portal opens once it is approved.' },
   rejected: { title: 'Application not approved', icon: '⛔', text: 'Your application was not approved, so adding or changing anything in the portal is closed. Open the application status page to see why and what you can do.' },
 };
-const CREATE_PAGES = ['/owner/venues/new', '/owner/bookings/new'];
+const CREATE_PAGES = ['/owner/venues/new'];
 function PendingFrame({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false); const nav = useNavigate(); const state = useContext(PendingCtx) ?? 'waiting'; const pop = POPUP[state];
   // Every page can be opened and looked at. Anything that would add or change something is refused by the server, and that opens the pop-up.
   useEffect(() => { setNotApprovedHandler((code) => { if (code === 'owner_not_approved') setOpen(true); }); return () => setNotApprovedHandler(null); }, []);
-  // The pages that exist only to add something (a new venue, a new offline booking) do not open at all until the application is approved: the pop-up opens instead.
+  // The pages that exist only to add something (a new venue) do not open at all until the application is approved: the pop-up opens instead.
   const loc = useLocation();
   useEffect(() => {
     const click = (e: MouseEvent) => {

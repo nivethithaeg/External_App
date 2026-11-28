@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createAdmin, createApprovedVenue, ist, pay, registerUser, setup, startBooking, type TestEnv } from './helpers.js';
+import { walkIn } from './walkin.js';
 const dayAhead = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 
 let env: TestEnv;
@@ -49,7 +50,7 @@ describe('pending payments and record payment', () => {
     const f: any = await createApprovedVenue(env, admin);
     const own = f.owner.auth;
     const startsAt = ist(dayAhead(3), '10:00');
-    const make = (extra: object) => request(env.app).post('/api/owner/bookings/offline').set(own).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876501234', ...extra });
+    const make = (extra: object) => walkIn(env, own).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Ravi Kumar', customerPhone: '9876501234', ...extra });
     const made = await make({ amount: 1000, amountPaid: 400, paymentMethod: 'cash' }).expect(201);
     let p = (await request(env.app).get('/api/owner/pending-payments').set(own).expect(200)).body;
     expect(p.customers).toHaveLength(1); expect(p.customers[0]).toMatchObject({ name: 'Ravi Kumar', total: 1000, paid: 400, pending: 600 }); expect(p.totalPending).toBe(600);
@@ -67,7 +68,7 @@ describe('pending payments and record payment', () => {
     const admin = await createAdmin(env);
     const f: any = await createApprovedVenue(env, admin);
     const startsAt = ist(dayAhead(4), '10:00');
-    await request(env.app).post('/api/owner/bookings/offline').set(f.owner.auth).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Meena', customerPhone: '9876505555', paymentMethod: 'unpaid' }).expect(201);
+    await walkIn(env, f.owner.auth).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Meena', customerPhone: '9876505555', paymentMethod: 'unpaid' }).expect(201);
     const p = (await request(env.app).get('/api/owner/pending-payments').set(f.owner.auth)).body;
     expect(p.totalPending).toBeGreaterThan(0); expect(p.customers[0].paid).toBe(0);
   });
@@ -79,7 +80,8 @@ describe('staff permissions', () => {
     const f: any = await createApprovedVenue(env, admin);
     const own = f.owner.auth;
     const cat = (await request(env.app).get('/api/owner/staff').set(own).expect(200)).body.permissions.map((p: any) => p.id);
-    expect(cat).toEqual(expect.arrayContaining(['CHECK_IN', 'BOOKING_VIEW', 'BOOKING_CREATE', 'DASHBOARD_VIEW', 'VENUE_VIEW', 'PLAYING_AREA_VIEW', 'PRICING_VIEW']));
+    expect(cat).not.toContain('BOOKING_CREATE'); // walk-in bookings were removed
+    expect(cat).toEqual(expect.arrayContaining(['CHECK_IN', 'BOOKING_VIEW', 'DASHBOARD_VIEW', 'VENUE_VIEW', 'PLAYING_AREA_VIEW', 'PRICING_VIEW']));
     await request(env.app).post('/api/owner/staff').set(own).send({ fullName: 'Gate Guy', email: 'gate@test.dev', password: 'GatePassword1', permissions: ['CHECK_IN'] }).expect(201);
     await request(env.app).post('/api/owner/staff').set(own).send({ fullName: 'Bad Perm', email: 'bad@test.dev', password: 'GatePassword1', permissions: ['EVERYTHING'] }).expect(400);
     const login = (await request(env.app).post('/api/auth/login').send({ email: 'gate@test.dev', password: 'GatePassword1' }).expect(200)).body;
@@ -95,19 +97,16 @@ describe('staff permissions', () => {
     expect((await request(env.app).get('/api/staff/dashboard').set(staff).expect(200)).body).toMatchObject({ venues: 1, areas: 1 });
     expect((await request(env.app).get('/api/staff/pricing').set(staff).expect(200)).body.prices.length).toBeGreaterThan(0);
     await request(env.app).post('/api/staff/check-in').set(staff).send({ reference: 'ABCDEF12' }).expect(403); // CHECK_IN was taken away
-    await request(env.app).post('/api/staff/bookings/offline').set(staff).send({}).expect(403);
-    // add counter booking rights: staff can book a walk-in, and it shows on the owner's side
-    await request(env.app).patch(`/api/owner/staff/${staffId}`).set(own).send({ permissions: ['BOOKING_CREATE', 'BOOKING_VIEW'] }).expect(200);
+    // a booking at the venue shows up for staff who can view bookings
+    await request(env.app).patch(`/api/owner/staff/${staffId}`).set(own).send({ permissions: ['BOOKING_VIEW'] }).expect(200);
     const startsAt = ist(dayAhead(5), '11:00');
-    const made = await request(env.app).post('/api/staff/bookings/offline').set(staff).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Walk In', customerPhone: '9876509999' }).expect(201);
-    expect(made.body.reference).toBeTruthy();
+    await walkIn(env, own).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Walk In', customerPhone: '9876509999' }).expect(201);
     expect((await request(env.app).get('/api/staff/bookings').set(staff).expect(200)).body.bookings).toHaveLength(1);
+    await request(env.app).post('/api/staff/bookings/offline').set(staff).send({}).expect(404); // staff cannot add bookings any more
     // counter options, calendar and reports are separate permissions
     await request(env.app).get('/api/staff/calendar?date=2030-01-01').set(staff).expect(403);
     await request(env.app).get('/api/staff/reports').set(staff).expect(403);
-    await request(env.app).patch(`/api/owner/staff/${staffId}`).set(own).send({ permissions: ['BOOKING_CREATE', 'BOOKING_VIEW', 'CALENDAR_VIEW', 'REPORTS_VIEW'] }).expect(200);
-    const opts = (await request(env.app).get('/api/staff/booking-options').set(staff).expect(200)).body.venues;
-    expect(opts[0].areas[0].sports.length).toBeGreaterThan(0);
+    await request(env.app).patch(`/api/owner/staff/${staffId}`).set(own).send({ permissions: ['BOOKING_VIEW', 'CALENDAR_VIEW', 'REPORTS_VIEW'] }).expect(200);
     const cal = (await request(env.app).get(`/api/staff/calendar?date=${dayAhead(5)}`).set(staff).expect(200)).body.items;
     expect(cal).toHaveLength(1); expect(cal[0].customer_name).toBe('Walk In');
     const rep = (await request(env.app).get('/api/staff/reports').set(staff).expect(200)).body;
@@ -122,9 +121,7 @@ describe('opponents, event bookings and manual customers', () => {
     const admin = await createAdmin(env);
     const f: any = await createApprovedVenue(env, admin);
     const own = f.owner.auth;
-    const book = (extra: object, day = 6) => request(env.app).post('/api/owner/bookings/offline').set(own).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(day), '12:00'), durationMinutes: 60, customerName: 'Home Team', customerPhone: '9876511111', ...extra });
-    await book({ opponentPhone: '9876522222' }).expect(400); // an opponent number needs a name
-    await book({ eventKind: 'event' }).expect(400); // an event needs a title
+    const book = (extra: object, day = 6) => walkIn(env, own).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(day), '12:00'), durationMinutes: 60, customerName: 'Home Team', customerPhone: '9876511111', ...extra });
     const m = await book({ opponentName: 'Away Team', opponentPhone: '9876522222' }).expect(201);
     const row = (await env.db.query('SELECT opponent_name, opponent_phone, event_kind FROM bookings WHERE id=$1', [m.body.bookingId])).rows[0];
     expect(row).toEqual({ opponent_name: 'Away Team', opponent_phone: '+919876522222', event_kind: null });
@@ -167,7 +164,7 @@ describe('instant booking switch and price check', () => {
     const lock = await request(env.app).post('/api/slots/lock').set(c.auth).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60 }).expect(409);
     expect(lock.body.error.code).toBe('request_only');
     // the owner can still book for them, and turning it back on reopens online booking
-    await request(env.app).post('/api/owner/bookings/offline').set(own).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Phone Caller', customerPhone: '9876500001' }).expect(201);
+    await walkIn(env, own).send({ areaId: f.area.id, sportId: f.football.id, startsAt, durationMinutes: 60, customerName: 'Phone Caller', customerPhone: '9876500001' }).expect(201);
     await request(env.app).put(`/api/owner/areas/${f.area.id}`).set(own).send({ instantBooking: true }).expect(200);
     await request(env.app).post('/api/slots/lock').set(c.auth).send({ areaId: f.area.id, sportId: f.football.id, startsAt: ist(dayAhead(3), '14:00'), durationMinutes: 60 }).expect(201);
   });
