@@ -13,6 +13,7 @@ export function createJusgoFake() {
   const fake: JusgoClient & { requests: typeof requests; profiles: typeof profiles; files: typeof files; calls: string[]; rateLimited: boolean; approve(id: string): string; deny(id: string): void; last(): string; pending: JusgoChange[]; catalog: typeof catalog; busy: typeof busy } = {
     configured: true, requests, profiles, files, calls, rateLimited: false, pending, catalog, busy,
     async venues() { calls.push('venues'); return catalog; },
+    async pricing(id) { calls.push(`pricing:${id}`); return { pricing: catalog.venues.flatMap((v: any) => v.playingAreas).find((p: any) => p.id === id)?.pricing ?? null }; },
     async availability(id) { calls.push(`availability:${id}`); return { busy: busy.get(id) ?? [] }; },
     async changes(limit = 200) { calls.push('changes'); const page = pending.splice(0, limit); return { changes: page, hasMore: pending.length > 0, nextAfter: null }; },
     async requestLink(email, ownerCode) {

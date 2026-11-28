@@ -87,4 +87,41 @@ describe('JusGo -> PlaynX: a booking on JusGo closes the slot here', () => {
     expect(at(await slotsOf(f, day), day, '18:00').available).toBe(true);
     env.jusgo.catalog.venues = [];
   });
+
+  it('a playing area or venue renamed on JusGo is renamed on PlaynX, by its change and by the minute check', async () => {
+    const admin = await createAdmin(env); const f: any = await createApprovedVenue(env, admin);
+    const name = async () => (await env.db.query('SELECT a.name AS area, v.name AS venue, a.is_active FROM playing_areas a JOIN venues v ON v.id=a.venue_id WHERE a.id=$1', [f.area.id])).rows[0];
+    env.jusgo.pending.push({ ...change('playing_area.updated', f, null), entityType: 'playing_area', changedFields: ['name'], newValues: { name: 'Main Turf' } });
+    env.jusgo.pending.push({ ...change('venue.updated', f, null), entityType: 'venue', externalVenueId: f.venue.id, changedFields: ['venue_name'], newValues: { venue_name: 'Green Field Arena' } });
+    await pollJusgoChanges(env.ctx);
+    expect(await name()).toMatchObject({ area: 'Main Turf', venue: 'Green Field Arena', is_active: true });
+    // a change that never arrived: the minute check reads the names from JusGo
+    env.jusgo.catalog.venues = [{ id: 'v-7', externalId: f.venue.id, name: 'Green Field Sports', playingAreas: [{ id: 'pa-7', externalId: f.area.id, name: 'Turf One' }] }];
+    await reconcileJusgoAvailability(env.ctx);
+    expect(await name()).toMatchObject({ area: 'Turf One', venue: 'Green Field Sports' });
+    env.jusgo.catalog.venues = [];
+  });
+
+  it('every detail changed on JusGo lands on PlaynX: venue address, court settings, sports, hours, special days and prices', async () => {
+    const admin = await createAdmin(env); const f: any = await createApprovedVenue(env, admin);
+    const ch = (type: string, fields: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ ...change(type, f, null), entityType: type.split('.')[0], externalVenueId: f.venue.id, changedFields: Object.keys(fields), newValues: fields, ...extra });
+    env.jusgo.pending.push(ch('venue.updated', { city: 'Coimbatore', postal_code: '641001', description: 'Floodlit' }));
+    env.jusgo.pending.push(ch('playing_area.updated', { capacity: 10, ground_type: 'OPEN_GROUND', turf_shape: 'ROUND', sport_types: ['cricket'],
+      slot_configuration: { duration_in_minutes: 60, min_duration_minutes: 60, max_duration_minutes: 120, advance_booking_limit_hours: 240, instant_booking: false },
+      operating_hours: [{ day_of_week: 1, open_time: '07:00:00', close_time: '22:00:00' }], hour_exceptions: [{ date: '2030-01-26', closed: true, open_time: null, close_time: null, reason: 'Republic Day' }] }));
+    env.jusgo.catalog.venues = [{ id: 'v-8', externalId: f.venue.id, name: 'Green Arena', playingAreas: [{ id: 'pa-8', externalId: f.area.id, name: 'Turf A', pricing: { pricePerHour: 1200, separatePrice: false, rules: [{ days: [5, 6], start: '18:00', end: '22:00', pricePerHour: 1500 }] } }] }];
+    env.jusgo.pending.push(ch('pricing.updated', { price_per_hour: 1200 }, { playingAreaId: 'pa-8' }));
+    await pollJusgoChanges(env.ctx);
+    const v = (await env.db.query('SELECT city, pincode, description FROM venues WHERE id=$1', [f.venue.id])).rows[0];
+    expect(v).toEqual({ city: 'Coimbatore', pincode: '641001', description: 'Floodlit' });
+    const a = (await env.db.query('SELECT capacity, environment, turf_shape, max_duration_minutes, advance_booking_days, instant_booking FROM playing_areas WHERE id=$1', [f.area.id])).rows[0];
+    expect(a).toEqual({ capacity: 10, environment: 'outdoor', turf_shape: 'round', max_duration_minutes: 120, advance_booking_days: 10, instant_booking: false });
+    expect((await env.db.query('SELECT s.slug FROM playing_area_sports x JOIN sports s ON s.id=x.sport_id WHERE x.playing_area_id=$1', [f.area.id])).rows).toEqual([{ slug: 'cricket' }]);
+    const hours = (await env.db.query(`SELECT day_of_week AS d, to_char(open_time,'HH24:MI') AS o, to_char(close_time,'HH24:MI') AS c, is_closed FROM playing_area_hours WHERE playing_area_id=$1 ORDER BY day_of_week`, [f.area.id])).rows;
+    expect(hours.find((h: any) => h.d === 1)).toEqual({ d: 1, o: '07:00', c: '22:00', is_closed: false }); expect(hours.find((h: any) => h.d === 0).is_closed).toBe(true);
+    expect((await env.db.query('SELECT closed, reason FROM playing_area_hour_exceptions WHERE playing_area_id=$1', [f.area.id])).rows).toEqual([{ closed: true, reason: 'Republic Day' }]);
+    const prices = (await env.db.query('SELECT day_of_week, price_per_hour::float8 AS p FROM pricing_rules WHERE area_id=$1 ORDER BY p, day_of_week NULLS FIRST', [f.area.id])).rows;
+    expect(prices).toEqual([{ day_of_week: null, p: 1200 }, { day_of_week: 5, p: 1500 }, { day_of_week: 6, p: 1500 }]);
+    env.jusgo.catalog.venues = [];
+  });
 });

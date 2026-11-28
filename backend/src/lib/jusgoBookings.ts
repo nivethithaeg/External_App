@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { Ctx } from '../types.js';
 import type { JusgoChange } from './jusgo.js';
+import { applyJusgoCatalog, applyJusgoDetailChange } from './jusgoDetails.js';
 
 /*
  * JusGo -> PlaynX: a booking made anywhere else on JusGo (walk-in, phone, another app) closes the same slot on PlaynX, so it is never sold twice.
@@ -14,7 +15,7 @@ const HOLDS_SLOT = new Set(['HELD', 'CONFIRMED']);
 const FREES_SLOT = new Set(['CANCELLED', 'EXPIRED']);
 const isUuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
-export type ApplyResult = 'blocked' | 'moved' | 'freed' | 'duplicate' | 'ignored' | 'unmapped' | 'conflict';
+export type ApplyResult = 'blocked' | 'moved' | 'freed' | 'duplicate' | 'ignored' | 'unmapped' | 'conflict' | 'updated';
 
 async function removeBlock(ctx: Ctx, jusgoId: string): Promise<ApplyResult> {
   const m = (await ctx.db.query(
@@ -54,9 +55,10 @@ async function holdSlot(ctx: Ctx, jusgoId: string, areaId: string, start: string
 
 /** Apply one change from JusGo, once (by its eventId). */
 export async function applyJusgoChange(ctx: Ctx, c: JusgoChange): Promise<ApplyResult> {
-  if (!c?.eventId || !String(c.type ?? '').startsWith('booking.')) return 'ignored';
+  const kind = String(c?.type ?? '').split('.')[0];
+  if (!c?.eventId || !['booking', 'playing_area', 'venue', 'pricing'].includes(kind)) return 'ignored';
   if ((await ctx.db.query('SELECT 1 FROM jusgo_webhook_deliveries WHERE delivery_id=$1', [c.eventId])).rows[0]) return 'duplicate';
-  const out = await apply(ctx, c);
+  const out = kind === 'booking' ? await apply(ctx, c) : (await applyJusgoDetailChange(ctx, c)) ? 'updated' : 'unmapped';
   await ctx.db.query('INSERT INTO jusgo_webhook_deliveries (delivery_id, event) VALUES ($1,$2) ON CONFLICT DO NOTHING', [c.eventId, c.type]);
   return out;
 }
@@ -135,6 +137,7 @@ export async function reconcileJusgoAvailability(ctx: Ctx, days = 30): Promise<n
   try {
     const now = ctx.now(); const from = new Date(now.getTime() - 3600_000).toISOString(); const to = new Date(now.getTime() + days * 86400_000).toISOString();
     const { venues } = await ctx.jusgo.venues();
+    try { await applyJusgoCatalog(ctx, venues ?? []); } catch (e) { console.error('[jusgo] details update failed', e); } // details first, so a court switched on/off is right
     for (const v of venues ?? []) for (const court of v.playingAreas ?? []) {
       if (!isUuid(court.externalId)) continue; // not paired with a PlaynX playing area
       const areaId = court.externalId;
