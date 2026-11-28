@@ -51,6 +51,8 @@ export function partnerSyncRoutes(ctx: Ctx) {
   r.use(async (req: any, _res, next) => {
     try {
       const raw = String(req.get('authorization') ?? '').trim().replace(/^Bearer\s+/i, '');
+      // the venues list is public (the same venues and playing areas the website shows); bookings always need a key
+      if (!raw && req.method === 'GET' && req.path === '/venues') { req.syncOwnerId = null; return next(); }
       if (!raw) throw new HttpError(401, 'Send the PlaynX API key in the Authorization header: "Bearer <key>"', 'missing_key');
       const k = (await ctx.db.query('UPDATE owner_sync_keys SET last_used_at=now() WHERE key_hash=$1 RETURNING owner_id', [hashKey(raw)])).rows[0];
       if (!k) throw new HttpError(401, 'This API key is not valid. Make a new one in the PlaynX owner portal (JusGo sync).', 'invalid_key');
@@ -65,7 +67,10 @@ export function partnerSyncRoutes(ctx: Ctx) {
               COALESCE((SELECT json_agg(json_build_object('id', a.id, 'name', a.name, 'slotMinutes', a.slot_minutes, 'isActive', a.is_active,
                   'sports', (SELECT COALESCE(json_agg(json_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.name), '[]') FROM playing_area_sports s JOIN sports sp ON sp.id=s.sport_id WHERE s.playing_area_id=a.id))
                   ORDER BY a.name) FROM playing_areas a WHERE a.venue_id=v.id), '[]') AS courts
-         FROM venues v WHERE v.owner_id=$1 AND v.status IN ('ready','approved') ORDER BY v.name`, [req.syncOwnerId]);
+         FROM venues v
+        WHERE CASE WHEN $1::uuid IS NULL THEN v.status = 'approved'                          -- no key: every published venue
+                   ELSE v.owner_id = $1::uuid AND v.status IN ('ready','approved') END        -- a key: that owner's approved venues
+        ORDER BY v.name`, [req.syncOwnerId]);
     // a venue's playing areas, under both names: "courts" as partner apps call them, "playingAreas" as PlaynX does
     res.json({ venues: rows.map((v: any) => ({ ...v, playingAreas: v.courts })) });
   });

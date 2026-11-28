@@ -14,6 +14,16 @@ async function ownerWithKey() {
 }
 
 describe('booking sync for partner apps (JusGo)', () => {
+  it('lists published venues with their playing areas without a key; bookings still need one', async () => {
+    const { f } = await ownerWithKey();
+    const draft = (await request(env.app).post('/api/owner/venues').set(f.owner.auth).send({ name: 'Hidden Draft Arena', address: '1 Lake Road, Erode', city: 'Erode', pincode: '638001', lat: 11.34, lng: 77.71 }).expect(201)).body.venue;
+    const v = (await request(env.app).get('/api/playnx/venues').expect(200)).body.venues;
+    const mine = v.find((x: any) => x.id === f.venue.id);
+    expect(mine.playingAreas).toEqual([expect.objectContaining({ id: f.area.id, name: 'Turf A' })]);
+    expect(v.some((x: any) => x.id === draft.id)).toBe(false); // a venue that is not published stays hidden
+    await request(env.app).get('/api/playnx/bookings').expect(401);
+  });
+
   it('needs a valid key in the Authorization header', async () => {
     await request(env.app).get('/api/playnx/bookings').expect(401);
     await request(env.app).get('/api/playnx/bookings').set({ Authorization: 'Bearer pnx_wrong' }).expect(401);
