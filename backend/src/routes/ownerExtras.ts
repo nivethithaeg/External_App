@@ -46,8 +46,17 @@ export function ownerExtraRoutes(ctx: Ctx) {
     if (f.to) { params.push(f.to); where += ` AND a.created_at < ($${params.length}::date + 1)`; }
     params.push(f.limit);
     const { rows } = await ctx.db.query(
-      `SELECT a.id, a.action, a.entity, a.entity_id, a.metadata, a.ip, a.created_at, u.full_name AS actor_name, u.role AS actor_role
+      `SELECT a.id, a.action, a.entity, a.entity_id, a.metadata, a.ip, a.created_at, u.full_name AS actor_name, u.role AS actor_role,
+              CASE a.entity
+                WHEN 'booking' THEN (SELECT json_build_object('reference', b.reference, 'venue', v.name, 'area', pa.name, 'startsAt', lower(b.during), 'endsAt', upper(b.during), 'timezone', v.timezone,
+                                       'customer', COALESCE(cu.full_name, b.walkin_name), 'title', b.event_title, 'blockReason', CASE WHEN b.status = 'blocked' THEN b.notes END)
+                                       FROM bookings b JOIN venues v ON v.id = b.venue_id JOIN playing_areas pa ON pa.id = b.area_id LEFT JOIN users cu ON cu.id = b.customer_id WHERE b.id::text = a.entity_id)
+                WHEN 'venue' THEN (SELECT json_build_object('venue', v.name) FROM venues v WHERE v.id::text = a.entity_id)
+                WHEN 'area' THEN (SELECT json_build_object('area', pa.name, 'venue', v.name) FROM playing_areas pa JOIN venues v ON v.id = pa.venue_id WHERE pa.id::text = a.entity_id)
+                WHEN 'user' THEN (SELECT json_build_object('person', x.full_name, 'role', x.role) FROM users x WHERE x.id::text = a.entity_id)
+              END AS target
          FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id WHERE ${where} ORDER BY a.created_at DESC LIMIT $${params.length}`, params);
+    // target: what the action was about, in names a person recognises (a booking reference, a venue, a playing area, a person)
     const resources = (await ctx.db.query(`SELECT DISTINCT a.entity FROM audit_logs a WHERE (a.actor_id = $1 OR a.actor_id IN (SELECT staff_id FROM owner_staff WHERE owner_id = $1)) AND a.entity IS NOT NULL ORDER BY 1`, [id])).rows.map((x: any) => x.entity);
     res.json({ activity: rows, categories: Object.keys(CATEGORIES), resources });
   });

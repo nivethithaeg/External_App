@@ -526,11 +526,27 @@ describe('venue category dropdown', () => {
   });
 });
 
+describe('activity log', () => {
+  it('shows the IP address column, and a row opens a plain sentence with the booking it was about', async () => {
+    routes_override['/owner/activity'] = { categories: [], resources: [], activity: [
+      { id: 1, action: 'user.login', entity: 'user', entity_id: 'u9', metadata: {}, ip: '2405:201:e07a::1', created_at: '2030-01-05T06:53:00Z', actor_name: 'Sample', actor_role: 'staff', target: { person: 'Sample', role: 'staff' } },
+      { id: 2, action: 'booking.check_in', entity: 'booking', entity_id: 'b1', metadata: {}, ip: '49.36.1.2', created_at: '2030-01-05T07:00:00Z', actor_name: 'Sample', actor_role: 'staff',
+        target: { reference: 'PX-AB12CD', venue: 'Green Arena', area: 'Turf A', customer: 'Priya Nair', startsAt: '2030-01-05T10:00:00Z', endsAt: '2030-01-05T11:00:00Z', timezone: 'Asia/Kolkata' } }] };
+    renderAt('/owner/activity');
+    expect(await screen.findByRole('columnheader', { name: 'IP address' })).toBeInTheDocument(); expect(screen.queryByRole('columnheader', { name: 'From' })).toBeNull();
+    await userEvent.click(await screen.findByText('49.36.1.2'));
+    const pop = await screen.findByRole('dialog', { name: 'Activity details' });
+    expect(within(pop).getByRole('note')).toHaveTextContent('Sample checked in Priya Nair for booking PX-AB12CD at Turf A, Green Arena.');
+    for (const t of ['PX-AB12CD', 'Green Arena', 'Turf A', 'Priya Nair']) expect(within(pop).getAllByText(new RegExp(t)).length).toBeGreaterThan(0);
+    expect(within(pop).getByText(/not an exact location/)).toBeInTheDocument();
+  });
+});
+
 describe('owner pages show real data and handle states', () => {
   it('overview shows the JusGo eight figures and three buttons, and an empty-state when there is no revenue', async () => {
     renderAt('/owner');
     for (const l of ['Total Venues', 'Total Playing Areas', "Today's Bookings", 'Upcoming Bookings', 'Completed Bookings', 'Cancelled Bookings', 'Total Revenue (GTV)', 'Open Slots Today']) expect(await screen.findByText(l), l).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Record Payment' })).toBeInTheDocument(); expect(screen.queryByRole('link', { name: 'Add Booking' })).toBeNull(); // offline bookings were removed expect(screen.queryByRole('link', { name: 'Add event/Academic booking' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Record Payment' })).toBeInTheDocument(); expect(screen.queryByRole('link', { name: 'Add Booking' })).toBeNull(); /* offline bookings were removed */ expect(screen.queryByRole('link', { name: 'Add event/Academic booking' })).toBeNull();
     expect(screen.getByText('Under approval')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Weekly' }));
     expect(await screen.findByText(/No revenue recorded for this period yet/)).toBeInTheDocument();
