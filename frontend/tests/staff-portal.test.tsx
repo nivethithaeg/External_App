@@ -54,3 +54,53 @@ describe('staff portal', () => {
     expect(await screen.findByRole('dialog', { name: 'Log out?' })).toBeInTheDocument();
   });
 });
+
+describe('staff: block slots, customers, event payments', () => {
+  const as = (permissions: string[], extra: Record<string, any> = {}) => {
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation((async (url: string, params?: any) => (url === '/staff/me' ? { business: 'Green Arena Pvt', permissions } : url in extra ? extra[url] : base(url, params))) as any);
+  };
+
+  it('shows a tab only for each permission the owner ticked', async () => {
+    as(['BLOCK_SLOTS', 'CUSTOMER_VIEW', 'PAYMENT_RECORD'], { '/staff/blocks': { areas: [], blocks: [] } });
+    renderAt('/staff/blocks');
+    const nav = await screen.findByRole('navigation', { name: 'Staff pages' });
+    for (const t of ['Block slots', 'Customers', 'Event payments']) expect(await within(nav).findByRole('link', { name: t })).toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Check-in' })).toBeNull();
+  });
+
+  it('blocks a slot with a reason and opens it again', async () => {
+    as(['BLOCK_SLOTS'], { '/staff/blocks': { areas: [{ id: 'a1', name: 'Turf A', venue_name: 'Green Arena' }], blocks: [{ id: 'k1', reason: 'Rain', starts_at: '2030-01-05T10:00:00Z', ends_at: '2030-01-05T11:00:00Z', venue_name: 'Green Arena', area_name: 'Turf A', timezone: 'Asia/Kolkata' }] } });
+    vi.mocked(api.post).mockResolvedValue({ block: {} }); vi.mocked(api.del).mockResolvedValue(undefined as any);
+    renderAt('/staff/blocks');
+    await userEvent.click(await screen.findByRole('button', { name: 'Block slot' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter the start and end time'); expect(api.post).not.toHaveBeenCalled();
+    await userEvent.type(screen.getByLabelText('From'), '18:00'); await userEvent.type(screen.getByLabelText('To'), '19:00'); await userEvent.type(screen.getByLabelText('Reason'), 'Maintenance');
+    await userEvent.click(screen.getByRole('button', { name: 'Block slot' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/staff/blocks', expect.objectContaining({ areaId: 'a1', reason: 'Maintenance', startsAt: expect.stringMatching(/T18:00:00\+05:30$/), endsAt: expect.stringMatching(/T19:00:00\+05:30$/) })));
+    await userEvent.click(screen.getByRole('button', { name: 'Open again' }));
+    await waitFor(() => expect(api.del).toHaveBeenCalledWith('/staff/blocks/k1'));
+  });
+
+  it('lists customers with a call link and no amounts', async () => {
+    as(['CUSTOMER_VIEW'], { '/staff/customers': { customers: [{ name: 'Ravi Kumar', mobile: '+919876543210', city: 'Erode', bookings: 3, last_booking: '2030-01-05T10:00:00Z' }] } });
+    renderAt('/staff/customers');
+    expect(await screen.findByText('Ravi Kumar')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '+919876543210' })).toHaveAttribute('href', 'tel:+919876543210');
+    expect(screen.queryByText(/₹/)).toBeNull();
+  });
+
+  it('records a payment for an event, never more than is pending', async () => {
+    as(['PAYMENT_RECORD'], { '/staff/event-payments': { events: [{ id: 'e1', title: 'Cup final', name: 'Erode FC', mobile: '+919876500011', venue_name: 'Green Arena', area_name: 'Turf A', starts_at: '2030-01-05T10:00:00Z', total: 3000, paid: 1000, pending: 2000 }] } });
+    vi.mocked(api.post).mockResolvedValue({ paid: 3000, pending: 0 });
+    renderAt('/staff/payments');
+    await userEvent.click(await screen.findByRole('button', { name: 'Record payment' }));
+    const amount = screen.getByLabelText('Amount received (₹)'); expect(amount).toHaveValue(2000);
+    await userEvent.clear(amount); await userEvent.type(amount, '2500'); await userEvent.selectOptions(screen.getByLabelText('Mode of payment'), 'upi');
+    await userEvent.click(screen.getByRole('button', { name: 'Save payment' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Only ₹2,000 is pending/); expect(api.post).not.toHaveBeenCalled();
+    await userEvent.clear(amount); await userEvent.type(amount, '2000');
+    await userEvent.click(screen.getByRole('button', { name: 'Save payment' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/staff/event-payments/e1', { amount: 2000, mode: 'upi' }));
+  });
+});

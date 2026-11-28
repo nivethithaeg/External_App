@@ -3,7 +3,7 @@ import { OwnerPayoutsPage } from './pages/owner/OwnerPayouts';
 import { AreaDetailsPage } from './pages/owner/AreaDetails';
 import { Suspense, lazy, useEffect, type ComponentType } from 'react';
 import { WalletPage } from './pages/customer/Wallet';
-import { StaffBookings, StaffCalendar, StaffDashboard, StaffHome, StaffLayout, StaffPricing, StaffProfile, StaffReports, StaffVenues } from './pages/staff/StaffPortal';
+import { StaffBookings, StaffCalendar, StaffDashboard, StaffHome, StaffLayout, StaffPricing, StaffBlocks, StaffCustomers, StaffEventPayments, StaffProfile, StaffReports, StaffVenues } from './pages/staff/StaffPortal';
 import { PaymentCelebrationHost } from './lib/paymentCelebration';
 import { Link, Navigate, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -102,7 +102,7 @@ export default function App() {
           <Route path="earnings" element={<Navigate to="/owner/reports" replace />} /><Route path="profile" element={<Navigate to="/owner/account/business" replace />} />
         </Route>
 
-        <Route path="staff" element={<RequireRole role="staff"><StaffLayout /></RequireRole>}><Route index element={<StaffHome />} /><Route path="bookings" element={<StaffBookings />} /><Route path="dashboard" element={<StaffDashboard />} /><Route path="venues" element={<StaffVenues />} /><Route path="pricing" element={<StaffPricing />} /><Route path="calendar" element={<StaffCalendar />} /><Route path="reports" element={<StaffReports />} /><Route path="profile" element={<StaffProfile />} /></Route>
+        <Route path="staff" element={<RequireRole role="staff"><StaffLayout /></RequireRole>}><Route index element={<StaffHome />} /><Route path="bookings" element={<StaffBookings />} /><Route path="dashboard" element={<StaffDashboard />} /><Route path="venues" element={<StaffVenues />} /><Route path="pricing" element={<StaffPricing />} /><Route path="calendar" element={<StaffCalendar />} /><Route path="reports" element={<StaffReports />} /><Route path="blocks" element={<StaffBlocks />} /><Route path="customers" element={<StaffCustomers />} /><Route path="payments" element={<StaffEventPayments />} /><Route path="profile" element={<StaffProfile />} /></Route>
         <Route path="admin" element={<RequireRole role="admin"><PortalLayout adminTheme groups={adminGroups} subtitle="Admin Portal" notificationsPath="/admin/notifications" /></RequireRole>}>
           <Route index element={<AdminDashboard />} />
           <Route path="venues" element={<AdminVenues />} /><Route path="owners" element={<AdminOwners />} /><Route path="users" element={<AdminUsers />} />

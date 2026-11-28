@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import type { Ctx } from '../types.js';
 import { authenticate, requireActiveOwner, requireRole } from '../middleware/auth.js';
-import { conflict, forbidden, notFound } from '../errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { parse } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
 
@@ -19,6 +19,9 @@ export const STAFF_PERMISSIONS: { id: string; label: string; hint: string }[] = 
   { id: 'PRICING_VIEW', label: 'View pricing', hint: 'See the prices (cannot change them)' },
   { id: 'CALENDAR_VIEW', label: 'View calendar', hint: 'See what is booked or blocked on any day' },
   { id: 'REPORTS_VIEW', label: 'View reports', hint: 'Bookings and revenue for the last 30 days' },
+  { id: 'BLOCK_SLOTS', label: 'Block slots', hint: 'Close a slot for maintenance or rain, and open it again' },
+  { id: 'CUSTOMER_VIEW', label: 'View customers', hint: 'Customer names and mobile numbers (no payment amounts)' },
+  { id: 'PAYMENT_RECORD', label: 'Record event payments', hint: 'Record cash, UPI or card received for a venue event' },
 ];
 /** What a staff login may do is one row per permission (staff_permissions), checked against staff_permission_catalog. */
 async function setPermissions(q: { query: (sql: string, p?: unknown[]) => Promise<any> }, staffId: string, ownerId: string, codes: string[]) {
@@ -198,6 +201,94 @@ export function staffRoutes(ctx: Ctx) {
          FROM bookings b JOIN venues v ON v.id=b.venue_id WHERE v.owner_id=$1${only(o)} AND b.block_kind IS NULL AND lower(b.during) >= now() - interval '30 days' AND lower(b.during) < now() + interval '1 day'
         GROUP BY v.name ORDER BY v.name`, [o.owner_id]);
     res.json({ days: 30, venues: rows, totals: { bookings: rows.reduce((n: number, x: any) => n + x.bookings, 0), cancelled: rows.reduce((n: number, x: any) => n + x.cancelled, 0), revenue: rows.reduce((n: number, x: any) => n + x.revenue, 0) } });
+  });
+  // ---------------- block slots (maintenance, rain): only plain blocks, never a venue event
+  const areaFor = async (o: { owner_id: string; venue_ids: string[] | null }, areaId: string) => {
+    const a = (await ctx.db.query(`SELECT a.id, a.venue_id FROM playing_areas a JOIN venues v ON v.id=a.venue_id WHERE a.id=$1 AND v.owner_id=$2${only(o)}`, [areaId, o.owner_id])).rows[0];
+    if (!a) throw forbidden('You do not work at this venue');
+    return a as { id: string; venue_id: string };
+  };
+  r.get('/blocks', async (req, res) => {
+    const o = await ownerOf(req); need(o, 'BLOCK_SLOTS');
+    const areas = (await ctx.db.query(
+      `SELECT a.id, a.name, v.id AS venue_id, v.name AS venue_name, v.timezone FROM playing_areas a JOIN venues v ON v.id=a.venue_id
+        WHERE v.owner_id=$1${only(o)} AND a.is_active AND v.status IN ('ready','approved') ORDER BY v.name, a.name`, [o.owner_id])).rows;
+    const blocks = (await ctx.db.query(
+      `SELECT b.id, lower(b.during) AS starts_at, upper(b.during) AS ends_at, b.notes AS reason, a.name AS area_name, v.name AS venue_name, v.timezone
+         FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN playing_areas a ON a.id=b.area_id
+        WHERE v.owner_id=$1${only(o)} AND b.status='blocked' AND b.block_kind='blocked' AND b.event_kind IS NULL AND upper(b.during) > now() ORDER BY lower(b.during)`, [o.owner_id])).rows;
+    res.json({ areas, blocks });
+  });
+  r.post('/blocks', async (req, res) => {
+    const o = await ownerOf(req); need(o, 'BLOCK_SLOTS');
+    const b = parse(z.object({ areaId: z.uuid(), startsAt: z.iso.datetime({ offset: true }), endsAt: z.iso.datetime({ offset: true }), reason: z.string().trim().min(2, 'Enter the reason').max(200) })
+      .refine((x) => new Date(x.endsAt) > new Date(x.startsAt), { message: 'The end time must be after the start time', path: ['endsAt'] }), req.body);
+    if (new Date(b.endsAt) <= ctx.now()) throw badRequest('That time has already passed', 'past');
+    const a = await areaFor(o, b.areaId);
+    try {
+      const { rows } = await ctx.db.query(
+        `INSERT INTO bookings (reference, venue_id, area_id, during, status, notes, block_kind) VALUES ($1,$2,$3,tstzrange($4::timestamptz,$5::timestamptz,'[)'),'blocked',$6,'blocked')
+         RETURNING id, lower(during) AS starts_at, upper(during) AS ends_at, notes AS reason`,
+        [`BLK-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 1000)}`, a.venue_id, a.id, b.startsAt, b.endsAt, b.reason]);
+      await audit(ctx.db, req, 'block.created_by_staff', 'booking', rows[0].id, { areaId: a.id, reason: b.reason });
+      ctx.realtime.toVenue(a.venue_id, 'slots:changed', { areaId: a.id });
+      res.status(201).json({ block: rows[0] });
+    } catch (e: any) { if (e?.code === '23P01') throw conflict('That time is already booked or blocked', 'slot_unavailable'); throw e; }
+  });
+  r.delete('/blocks/:id', async (req, res) => {
+    const o = await ownerOf(req); need(o, 'BLOCK_SLOTS');
+    const { rows } = await ctx.db.query(
+      `DELETE FROM bookings b USING venues v WHERE b.id=$1 AND b.status='blocked' AND b.block_kind='blocked' AND b.event_kind IS NULL AND v.id=b.venue_id AND v.owner_id=$2${only(o)} RETURNING b.venue_id, b.area_id`,
+      [parse(z.uuid(), req.params.id), o.owner_id]);
+    if (!rows[0]) throw notFound('Block not found');
+    await audit(ctx.db, req, 'block.removed_by_staff', 'booking', req.params.id, {});
+    ctx.realtime.toVenue(rows[0].venue_id, 'slots:changed', { areaId: rows[0].area_id });
+    res.status(204).end();
+  });
+
+  // ---------------- customers: names and numbers only, no money
+  r.get('/customers', async (req, res) => {
+    const o = await ownerOf(req); need(o, 'CUSTOMER_VIEW');
+    const { search } = parse(z.object({ search: z.string().trim().max(80).optional() }), req.query);
+    const { rows } = await ctx.db.query(
+      `SELECT COALESCE(max(u.full_name), max(b.walkin_name)) AS name, COALESCE(max(u.phone), max(b.walkin_phone)) AS mobile, max(cp.city) AS city,
+              count(*)::int AS bookings, max(lower(b.during)) AS last_booking
+         FROM bookings b JOIN venues v ON v.id=b.venue_id LEFT JOIN users u ON u.id=b.customer_id LEFT JOIN customer_profiles cp ON cp.user_id=b.customer_id
+        WHERE v.owner_id=$1${only(o)} AND b.deleted_at IS NULL AND (b.block_kind IS NULL OR b.event_kind IS NOT NULL) AND b.status IN ('confirmed','completed','cancelled','no_show','blocked')
+        GROUP BY COALESCE(b.customer_id::text, b.walkin_phone) ORDER BY max(lower(b.during)) DESC LIMIT 500`, [o.owner_id]);
+    const t = (search ?? '').toLowerCase();
+    res.json({ customers: t ? rows.filter((c: any) => [c.name, c.mobile, c.city].some((x) => x && String(x).toLowerCase().includes(t))) : rows });
+  });
+
+  // ---------------- payments for venue events (paid at the venue, never through PlaynX)
+  r.get('/event-payments', async (req, res) => {
+    const o = await ownerOf(req); need(o, 'PAYMENT_RECORD');
+    const { rows } = await ctx.db.query(
+      `SELECT b.id, b.reference, b.event_title AS title, b.walkin_name AS name, b.walkin_phone AS mobile, lower(b.during) AS starts_at, v.name AS venue_name, a.name AS area_name, v.timezone,
+              b.total::float8 AS total, COALESCE(b.amount_paid,0)::float8 AS paid, (b.total - COALESCE(b.amount_paid,0) - COALESCE(b.payment_discount,0))::float8 AS pending
+         FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN playing_areas a ON a.id=b.area_id
+        WHERE v.owner_id=$1${only(o)} AND b.deleted_at IS NULL AND b.source='offline' AND b.event_kind IS NOT NULL AND b.status IN ('confirmed','completed','blocked')
+          AND b.total - COALESCE(b.amount_paid,0) - COALESCE(b.payment_discount,0) > 0 ORDER BY lower(b.during)`, [o.owner_id]);
+    res.json({ events: rows });
+  });
+  r.post('/event-payments/:id', async (req, res) => {
+    const o = await ownerOf(req); need(o, 'PAYMENT_RECORD');
+    const id = parse(z.uuid(), req.params.id);
+    const b = parse(z.object({ amount: z.number().gt(0, 'Enter the amount received').max(1000000), mode: z.enum(['cash', 'upi', 'card'], 'Choose the mode of payment'), note: z.string().trim().max(200).optional() }), req.body);
+    const out = await ctx.db.tx(async (q) => {
+      const bk = (await q.query(
+        `SELECT b.id, b.total, COALESCE(b.amount_paid,0) AS paid, COALESCE(b.payment_discount,0) AS disc FROM bookings b JOIN venues v ON v.id=b.venue_id
+          WHERE b.id=$1 AND v.owner_id=$2${only(o)} AND b.deleted_at IS NULL AND b.source='offline' AND b.event_kind IS NOT NULL AND b.status IN ('confirmed','completed','blocked') FOR UPDATE OF b`, [id, o.owner_id])).rows[0];
+      if (!bk) throw notFound('Event not found');
+      const due = Math.round((Number(bk.total) - Number(bk.paid) - Number(bk.disc)) * 100) / 100;
+      if (b.amount > due + 0.001) throw badRequest(`Only ₹${due} is pending on this event`, 'overpayment');
+      await q.query(`INSERT INTO booking_payments (booking_id, amount, discount, mode, note, recorded_by) VALUES ($1,$2,0,$3,$4,$5)`, [id, b.amount, b.mode, b.note ?? null, req.user!.id]);
+      const u = (await q.query(`UPDATE bookings SET amount_paid = COALESCE(amount_paid,0) + $2, payment_method = CASE WHEN payment_method='unpaid' THEN $3 ELSE payment_method END WHERE id=$1
+        RETURNING total::float8 AS total, amount_paid::float8 AS paid, COALESCE(payment_discount,0)::float8 AS discount`, [id, b.amount, b.mode])).rows[0];
+      await audit(q, req, 'booking.payment_recorded_by_staff', 'booking', id, { amount: b.amount, mode: b.mode });
+      return { total: u.total, paid: u.paid, pending: Math.round((u.total - u.paid - u.discount) * 100) / 100 };
+    });
+    res.json(out);
   });
   return r;
 }

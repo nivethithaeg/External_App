@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiError, get, post } from '../../lib/api';
+import { apiError, del, get, post } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Logo } from '../../components/Logo';
@@ -15,6 +15,7 @@ const TABS: { to: string; label: string; any: string[] }[] = [
   { to: '/staff', label: 'Check-in', any: ['CHECK_IN'] }, { to: '/staff/bookings', label: 'Bookings', any: ['BOOKING_VIEW'] }, { to: '/staff/dashboard', label: 'Dashboard', any: ['DASHBOARD_VIEW'] },
   { to: '/staff/venues', label: 'Venues', any: ['VENUE_VIEW', 'PLAYING_AREA_VIEW'] }, { to: '/staff/pricing', label: 'Pricing', any: ['PRICING_VIEW'] },
   { to: '/staff/calendar', label: 'Calendar', any: ['CALENDAR_VIEW'] }, { to: '/staff/reports', label: 'Reports', any: ['REPORTS_VIEW'] },
+  { to: '/staff/blocks', label: 'Block slots', any: ['BLOCK_SLOTS'] }, { to: '/staff/customers', label: 'Customers', any: ['CUSTOMER_VIEW'] }, { to: '/staff/payments', label: 'Event payments', any: ['PAYMENT_RECORD'] },
 ];
 export const useStaffMe = () => useQuery({ queryKey: ['staff-me'], queryFn: () => get<{ business: string; permissions: string[] }>('/staff/me') });
 /** Only the pages the owner ticked for this person are shown. */
@@ -164,4 +165,67 @@ export function StaffProfile() {
             {err && <p role="alert" className="text-sm text-danger">{err}</p>}
             <Button type="submit" loading={change.isPending}>Change password</Button></form></Card>
       </div></div>);
+}
+
+/** Close a slot for maintenance or rain, and open it again. Venue events added by the owner are not shown here. */
+export function StaffBlocks() {
+  const { toast } = useToast(); const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['staff-blocks'], queryFn: () => get<{ areas: any[]; blocks: any[] }>('/staff/blocks') });
+  const [f, setF] = useState({ areaId: '', date: todayISO(), from: '', to: '', reason: '' }); const [err, setErr] = useState('');
+  const areaId = f.areaId || q.data?.areas[0]?.id || '';
+  const add = useMutation({ mutationFn: () => post('/staff/blocks', { areaId, startsAt: `${f.date}T${f.from}:00+05:30`, endsAt: `${f.date}T${f.to}:00+05:30`, reason: f.reason.trim() }),
+    onSuccess: () => { toast('Slot blocked'); setF({ ...f, from: '', to: '', reason: '' }); qc.invalidateQueries({ queryKey: ['staff-blocks'] }); }, onError: (e) => setErr(apiError(e)) });
+  const remove = useMutation({ mutationFn: (id: string) => del(`/staff/blocks/${id}`), onSuccess: () => { toast('Slot opened again'); qc.invalidateQueries({ queryKey: ['staff-blocks'] }); }, onError: (e) => toast(apiError(e), 'error') });
+  const go = () => { setErr(''); if (!areaId) return setErr('Choose the playing area'); if (!f.from || !f.to) return setErr('Enter the start and end time'); if (f.to <= f.from) return setErr('The end time must be after the start time'); if (f.reason.trim().length < 2) return setErr('Enter the reason, e.g. Rain or Maintenance'); add.mutate(); };
+  return (<div className="space-y-4"><PageHeader title="Block slots" subtitle="Close a slot for maintenance or rain. Customers cannot book it until you open it again." />
+    <QueryBoundary q={q}>{(d) => (<>
+      <Card className="grid gap-3 p-4 sm:grid-cols-2">
+        <Select label="Playing area" value={areaId} onChange={(e) => setF({ ...f, areaId: e.target.value })}>{d.areas.map((a) => <option key={a.id} value={a.id}>{a.venue_name} · {a.name}</option>)}</Select>
+        <Input label="Date" type="date" min={todayISO()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+        <Input label="From" type="time" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} />
+        <Input label="To" type="time" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} />
+        <div className="sm:col-span-2"><Input label="Reason" placeholder="e.g. Rain, Maintenance" maxLength={200} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} /></div>
+        <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><Button loading={add.isPending} onClick={go}>Block slot</Button>{err && <p role="alert" className="text-sm text-danger">{err}</p>}</div>
+      </Card>
+      <h2 className="text-xl font-bold">Blocked slots</h2>
+      {d.blocks.length === 0 ? <p className="text-sm text-muted">No slots are blocked.</p> : <ul className="space-y-2">{d.blocks.map((b) => (
+        <li key={b.id} className="card flex items-center justify-between gap-3 p-3"><span><b className="block">{b.reason || 'Blocked'}</b><span className="text-xs text-muted">{b.venue_name} · {b.area_name} · {fmtRange(b.starts_at, b.ends_at, b.timezone)}</span></span>
+          <Button variant="ghost" className="!py-1.5" loading={remove.isPending && remove.variables === b.id} onClick={() => remove.mutate(b.id)}>Open again</Button></li>))}</ul>}
+    </>)}</QueryBoundary></div>);
+}
+
+/** Customer names and mobile numbers, to call someone who is late. No payment amounts. */
+export function StaffCustomers() {
+  const [search, setSearch] = useState('');
+  const q = useQuery({ queryKey: ['staff-customers'], queryFn: () => get<{ customers: any[] }>('/staff/customers') });
+  return (<div className="space-y-4"><PageHeader title="Customers" subtitle="Names and mobile numbers of the people who booked." />
+    <div className="max-w-sm"><Input label="Search" placeholder="Name, mobile or city" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+    <QueryBoundary q={q} empty={(d) => d.customers.length === 0 && <p className="text-sm text-muted">No customers yet.</p>}>{(d) => {
+      const t = search.trim().toLowerCase(); const rows = t ? d.customers.filter((c) => [c.name, c.mobile, c.city].some((x) => x && String(x).toLowerCase().includes(t))) : d.customers;
+      return rows.length === 0 ? <p className="text-sm text-muted">No customer matches.</p> : <Table rows={rows.map((c, i) => ({ ...c, id: c.mobile ?? String(i) }))} columns={[
+        { key: 'name', header: 'Name', render: (c: any) => <b>{c.name ?? '—'}</b> },
+        { key: 'mobile', header: 'Mobile', render: (c: any) => c.mobile ? <a className="underline" href={`tel:${c.mobile}`}>{c.mobile}</a> : '—' },
+        { key: 'city', header: 'City', render: (c: any) => c.city ?? '—' }, { key: 'bookings', header: 'Bookings', render: (c: any) => c.bookings },
+        { key: 'last', header: 'Last booking', render: (c: any) => (c.last_booking ? fmtDateTime(c.last_booking) : '—') }]} />;
+    }}</QueryBoundary></div>);
+}
+
+/** Money received at the venue for an event the owner added: cash, UPI or card. */
+export function StaffEventPayments() {
+  const { toast } = useToast(); const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['staff-event-payments'], queryFn: () => get<{ events: any[] }>('/staff/event-payments') });
+  const [open, setOpen] = useState<any>(null); const [f, setF] = useState({ amount: '', mode: '', note: '' }); const [err, setErr] = useState('');
+  const save = useMutation({ mutationFn: () => post(`/staff/event-payments/${open.id}`, { amount: Number(f.amount), mode: f.mode, ...(f.note.trim() ? { note: f.note.trim() } : {}) }),
+    onSuccess: () => { toast('Payment recorded'); setOpen(null); qc.invalidateQueries({ queryKey: ['staff-event-payments'] }); }, onError: (e) => setErr(apiError(e)) });
+  const go = () => { setErr(''); const a = Number(f.amount); if (!(a > 0)) return setErr('Enter the amount received'); if (a > open.pending) return setErr(`Only ${money(open.pending)} is pending`); if (!f.mode) return setErr('Choose the mode of payment'); save.mutate(); };
+  return (<div className="space-y-4"><PageHeader title="Event payments" subtitle="Events the owner added that are not fully paid. Record money as you receive it." />
+    <QueryBoundary q={q} empty={(d) => d.events.length === 0 && <p className="text-sm text-muted">Nothing pending. Every event is fully paid.</p>}>{(d) => <ul className="space-y-2">{d.events.map((e) => (
+      <li key={e.id} className="card space-y-3 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><span><b className="block">{e.title || e.name}</b><span className="text-xs text-muted">{e.name}{e.mobile ? ` · ${e.mobile}` : ''} · {e.venue_name} · {e.area_name} · {fmtDateTime(e.starts_at)}</span></span>
+        <span className="text-right text-sm"><span className="block font-bold text-danger">{money(e.pending)} pending</span><span className="text-xs text-muted">{money(e.paid)} of {money(e.total)} paid</span></span></div>
+        {open?.id === e.id ? (<div className="grid gap-3 sm:grid-cols-3">
+          <Input label="Amount received (₹)" type="number" min={0} inputMode="decimal" value={f.amount} onChange={(x) => setF({ ...f, amount: x.target.value })} />
+          <Select label="Mode of payment" value={f.mode} onChange={(x) => setF({ ...f, mode: x.target.value })}><option value="" disabled>Select mode</option><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option></Select>
+          <Input label="Note (optional)" maxLength={200} value={f.note} onChange={(x) => setF({ ...f, note: x.target.value })} />
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-3"><Button loading={save.isPending} onClick={go}>Save payment</Button><Button variant="ghost" onClick={() => setOpen(null)}>Cancel</Button>{err && <p role="alert" className="text-sm text-danger">{err}</p>}</div></div>)
+          : <Button variant="ghost" className="!py-1.5" onClick={() => { setOpen(e); setF({ amount: String(e.pending), mode: '', note: '' }); setErr(''); }}>Record payment</Button>}</li>))}</ul>}</QueryBoundary></div>);
 }
