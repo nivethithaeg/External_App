@@ -43,7 +43,10 @@ export function StaffPage() {
   const newPw = useMutation({ mutationFn: () => patch(`/owner/staff/${reset!.id}`, { password: pw }), onSuccess: () => { toast('Password changed. They have been signed out.'); setReset(null); setPw(''); }, onError: (e) => toast(apiError(e), 'error') });
   const savePerms = useMutation({ mutationFn: () => patch(`/owner/staff/${editPerms!.s.id}`, { permissions: editPerms!.v }), onSuccess: () => { toast('Permissions saved'); setEditPerms(null); refresh(); }, onError: (e) => toast(apiError(e), 'error') });
   const saveAccess = useMutation({ mutationFn: () => patch(`/owner/staff/${editAccess!.s.id}`, { allVenues: editAccess!.all, venueIds: editAccess!.all ? [] : editAccess!.ids }), onSuccess: () => { toast('Venue access saved'); setEditAccess(null); refresh(); }, onError: (e) => toast(apiError(e), 'error') });
-  const okForm = f.fullName.trim().length >= 2 && /\S+@\S+\.\S+/.test(f.email) && f.password.length >= 10 && f.confirm === f.password && (f.allVenues || f.venueIds.length > 0);
+  // what still stops Save, said next to the button
+  const missing = [f.fullName.trim().length < 2 && 'the staff name', !/\S+@\S+\.\S+/.test(f.email) && 'a valid email', f.password.length < 10 && 'a password of at least 10 characters',
+    f.password.length >= 10 && f.confirm !== f.password && 'the same password in Confirm Password', !(f.allVenues || f.venueIds.length > 0) && 'which venues they can access'].filter(Boolean) as string[];
+  const okForm = missing.length === 0;
   return (
     <div className="max-w-3xl space-y-5"><PageHeader title="Staff" subtitle="Manage your venue staff and control what they can access." />
       <Card className="space-y-4 p-5"><h2 className="text-2xl font-bold">Add Staff</h2>
@@ -55,7 +58,7 @@ export function StaffPage() {
           <label className="flex items-start gap-2 text-sm sm:col-span-2"><input type="checkbox" role="switch" aria-label="Active" className="mt-0.5 h-4 w-4 accent-brand" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /><span><b>Active</b><span className="block text-xs text-muted">An inactive account cannot sign in. You can switch it on later.</span></span></label>
           <div className="sm:col-span-3"><VenueAccess venues={venuesQ.data?.venues ?? []} all={f.allVenues} ids={f.venueIds} onChange={(all, ids) => setF({ ...f, allVenues: all, venueIds: ids })} /></div>
           <div className="sm:col-span-3">{q.data && <PermissionPicker all={q.data.permissions} value={perms} onChange={setPerms} />}</div>
-          <div className="sm:col-span-3 flex flex-wrap items-center gap-3"><Button type="submit" loading={add.isPending} disabled={!okForm}>Save</Button>{err && <p role="alert" className="text-sm text-danger">{err}</p>}
+          <div className="sm:col-span-3 flex flex-wrap items-center gap-3"><Button type="submit" loading={add.isPending} disabled={!okForm}>Save</Button>{!okForm && <p className="text-sm text-muted" role="status">To save, enter {missing.join(', ')}.</p>}{err && <p role="alert" className="text-sm text-danger">{err}</p>}
             <p className="text-xs text-muted">They sign in at the same owner login page and land on a check-in screen.</p></div></form></Card>
       <div className="grid gap-3 sm:grid-cols-2"><Input label="Search staff (optional)" placeholder="Search by name or email" maxLength={80} value={search} onChange={(e) => setSearch(e.target.value)} /><Select label="Status" value={statusF} onChange={(e) => setStatusF(e.target.value)}><option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option></Select></div>
       <QueryBoundary q={q} empty={(d) => d.staff.length === 0 && <Empty icon="🧑‍💼" title="No staff logins yet" hint="Add someone above and they can start checking players in." />}>{(d) => (
