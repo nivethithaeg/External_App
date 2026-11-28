@@ -263,6 +263,9 @@ export function AdminVenues() {
               {v.status === 'pending' && <><Button variant="danger" disabled={!reason.trim()} loading={decision.isPending && decision.variables === 'reject'} onClick={() => decision.mutate('reject')}>Reject</Button><Button loading={decision.isPending && decision.variables === 'approve'} onClick={() => { if (ready.data?.checklist && !ready.data.checklist.ready && !window.confirm(`${ready.data.checklist.blocking} approval check${ready.data.checklist.blocking === 1 ? ' is' : 's are'} not complete. Approve anyway?`)) return; decision.mutate('approve'); }}>Approve</Button></>}
               {(v.status === 'approved' || v.status === 'ready') && <Button variant="danger" disabled={!reason.trim()} loading={decision.isPending && decision.variables === 'suspend'} onClick={() => decision.mutate('suspend')}>Suspend</Button>}
               {v.status === 'suspended' && <Button loading={decision.isPending && decision.variables === 'reinstate'} onClick={() => decision.mutate('reinstate')}>Reinstate</Button>}</div>
+            {(v.status === 'draft' || v.status === 'rejected') && <p role="note" className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm">{v.status === 'draft'
+              ? <><b>Not sent for approval yet.</b> The owner is still filling in this venue. The Approve button appears here once they press Send for approval.</>
+              : <><b>This venue was rejected.</b> The Approve button appears here once the owner fixes it and sends it for approval again.</>}</p>}
           </div>); })()}
       </Modal></div>
   );
